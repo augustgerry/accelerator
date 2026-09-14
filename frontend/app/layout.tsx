@@ -3,7 +3,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
 
 export const metadata: Metadata = {
-  title: "Internal Knowledge & Proposal Accelerator",
+  title: "Internal Knowledge & Proposal Synapse",
   description: "AI-powered cross-divisional knowledge base and drafting assistant",
 };
 

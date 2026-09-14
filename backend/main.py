@@ -2,12 +2,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import query, draft, documents, health, research
+from app.services.embeddings import warm_up
 
 app = FastAPI(
     title="Internal Knowledge & Proposal Accelerator",
     description="RAG-based internal knowledge base and drafting assistant",
     version="0.1.0",
 )
+
+
+@app.on_event("startup")
+def _warm_up_embedding_model():
+    warm_up()
 
 app.add_middleware(
     CORSMiddleware,

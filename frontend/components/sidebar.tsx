@@ -8,9 +8,9 @@ import {
   FileEdit,
   FolderOpen,
   Settings,
-  BrainCircuit,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/logo";
 
 const navItems = [
   { href: "/", label: "Dasbor", icon: LayoutGrid },
@@ -26,11 +26,9 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-64 flex-col bg-ink-950 text-white/90">
       <div className="flex items-center gap-2.5 px-5 py-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent">
-          <BrainCircuit size={17} className="text-white" />
-        </div>
+        <Logo />
         <div>
-          <p className="text-sm font-semibold text-white">Accelerator</p>
+          <p className="text-sm font-semibold text-white">Synapse</p>
           <p className="text-[11px] text-white/40">Internal Knowledge · v0.1</p>
         </div>
       </div>

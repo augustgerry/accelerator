@@ -15,6 +15,14 @@ def _get_model():
     return SentenceTransformer("paraphrase-multilingual-mpnet-base-v2")
 
 
+def warm_up() -> None:
+    """Load the model on the calling (main) thread. torch's first import has a
+    known circular-import race when it happens lazily inside a worker thread
+    (e.g. FastAPI's threadpool on the first /documents/sync request) — call
+    this at app startup instead."""
+    _get_model()
+
+
 def embed_text(text: str) -> list[float]:
     model = _get_model()
     return model.encode(text).tolist()
