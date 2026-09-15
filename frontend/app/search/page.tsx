@@ -33,6 +33,8 @@ const DOC_TYPE_COLORS: Record<string, string> = {
   other: "bg-surface border-surface-border text-text-muted",
 };
 
+type ConversationMessage = { role: "user" | "assistant"; content: string };
+
 function highlightKeywords(text: string, query: string): string {
   if (!query.trim()) return text;
   const words = query.trim().split(/\s+/).filter((w) => w.length > 2);
@@ -69,12 +71,15 @@ function SearchContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedChunkIdx, setSelectedChunkIdx] = useState<number | null>(null);
+  const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [docTypeFilter, setDocTypeFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const doSearch = async (q: string, nextDocType = docTypeFilter, nextDivision = divisionFilter) => {
     if (!q.trim()) return;
+    const previousConversation = conversation.slice(-6);
+    setConversation((previous) => [...previous, { role: "user", content: q } as ConversationMessage].slice(-8));
     setQuery(q);
     setInputValue(q);
     setLoading(true);
@@ -92,8 +97,9 @@ function SearchContent() {
     } catch { /* private mode */ }
 
     try {
-      const res = await searchKnowledgeBase(q, { docType: nextDocType, division: nextDivision });
+      const res = await searchKnowledgeBase(q, { docType: nextDocType, division: nextDivision }, previousConversation);
       setResult(res);
+      setConversation((previous) => [...previous, { role: "assistant", content: res.answer } as ConversationMessage].slice(-8));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Pencarian gagal. Pastikan server API aktif.");
     } finally {
@@ -311,6 +317,19 @@ function SearchContent() {
 
           {!loading && result && (
             <div className="max-w-3xl mx-auto w-full space-y-5">
+              {conversation.length > 2 && (
+                <div className="rounded-lg border border-surface-border bg-surface px-4 py-3">
+                  <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-text-muted">Percakapan aktif</p>
+                  <div className="space-y-2">
+                    {conversation.slice(0, -1).map((message, index) => (
+                      <div key={`${message.role}-${index}`} className={`text-xs ${message.role === "user" ? "text-text-primary" : "text-text-muted"}`}>
+                        <span className="mr-1 font-semibold">{message.role === "user" ? "Anda:" : "Synapse:"}</span>{message.content}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* AI Answer Card */}
               <div className="rounded-xl border border-surface-border bg-surface-raised p-6 shadow-subtle">
                 <div className="flex items-center gap-2 mb-4">

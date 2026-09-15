@@ -16,6 +16,7 @@ class QueryRequest(BaseModel):
     workspace_id: str = settings.default_workspace_id
     doc_type: Optional[str] = None
     division: Optional[str] = None
+    conversation: list[dict[str, str]] = []
 
 
 class ChunkResult(BaseModel):
@@ -39,10 +40,20 @@ class QueryResponse(BaseModel):
 def query_knowledge_base(
     payload: QueryRequest, session: Session = Depends(get_session)
 ):
+    conversation_context = "\n".join(
+        f"{message.get('role', 'user')}: {message.get('content', '')}"
+        for message in payload.conversation[-6:]
+        if message.get("content")
+    )
+    retrieval_question = (
+        f"Percakapan sebelumnya:\n{conversation_context}\n\nPertanyaan terbaru: {payload.question}"
+        if conversation_context
+        else payload.question
+    )
     chunk_records = retrieve_chunks_with_full_metadata(
         session,
         payload.workspace_id,
-        payload.question,
+        retrieval_question,
         top_k=6,
         doc_type=payload.doc_type,
         division=payload.division,
@@ -51,7 +62,7 @@ def query_knowledge_base(
 
     try:
         provider = get_llm_provider()
-        answer = provider.answer(payload.question, chunks_text, mode="qa")
+        answer = provider.answer(retrieval_question, chunks_text, mode="qa")
     except Exception as e:
         answer = (
             f"[LLM tidak tersedia: {format_llm_error(e)}] "

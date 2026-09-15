@@ -118,11 +118,13 @@ export type SearchResult = {
 export async function searchKnowledgeBase(
   question: string,
   filters?: { docType?: string; division?: string },
+  conversation?: Array<{ role: "user" | "assistant"; content: string }>,
 ): Promise<SearchResult> {
   return postJson<SearchResult>("/query", {
     question,
     doc_type: filters?.docType || undefined,
     division: filters?.division || undefined,
+    conversation,
   });
 }
 

@@ -133,7 +133,7 @@ export default function DashboardPage() {
           >
             <span className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary-soft text-secondary"><Database size={17} /></span>
-              <span><span className="block text-sm font-semibold">Open Library</span><span className="block text-[11px] text-text-muted">Documents, templates, dan projects</span></span>
+              <span><span className="block text-sm font-semibold">Open Google Drive</span><span className="block text-[11px] text-text-muted">Dokumen dan template yang sudah diindeks</span></span>
             </span>
             <ArrowRight size={15} className="text-text-muted transition-transform group-hover:translate-x-0.5" />
           </button>

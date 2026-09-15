@@ -159,6 +159,7 @@ export default function DraftPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [savingSession, setSavingSession] = useState(false);
   const [sessionSaved, setSessionSaved] = useState<string | null>(null);
+  const [outputType, setOutputType] = useState<"matrix" | "narrative" | "sow" | "solution_brief" | "mom" | "pptx" | "pdf">("narrative");
   const autoSavedSignature = useRef<string | null>(null);
 
   // ── Restore from localStorage on mount ──────────────────────────────────
@@ -291,6 +292,37 @@ export default function DraftPage() {
       if (requirementItems.length > 0) {
         setSelectedItemId(requirementItems[0].id);
       }
+
+      setIsDraftingAll(true);
+      for (let index = 0; index < requirementItems.length; index += 3) {
+        const batch = requirementItems.slice(index, index + 3);
+        const generated = await Promise.all(
+          batch.map(async (item) => {
+            try {
+              const result = await generateItemDraft(
+                item.id,
+                item.requirement_text,
+                undefined,
+                extractedText.slice(0, 1500),
+              );
+              return { itemId: item.id, result };
+            } catch {
+              return { itemId: item.id, result: null };
+            }
+          }),
+        );
+        setItems((previous) => previous.map((item) => {
+          const generatedItem = generated.find((entry) => entry.itemId === item.id);
+          if (!generatedItem?.result) return item;
+          return {
+            ...item,
+            draft_text: generatedItem.result.draft_text,
+            status: "draft",
+            sources: generatedItem.result.sources,
+          };
+        }));
+      }
+      setIsDraftingAll(false);
     } catch (err) {
       setErrorMessage(
         err instanceof Error
@@ -526,13 +558,29 @@ export default function DraftPage() {
                   {uploading
                     ? "Mengekstrak teks dokumen..."
                     : segmenting
-                    ? "Mendeteksi butir-butir pertanyaan tender..."
-                    : "Upload Dokumen Tender (TOR / RFP)"}
+                    ? "Menganalisis kebutuhan dan menyiapkan dokumen..."
+                    : "Buat Dokumen dari TOR / RFP"}
                 </h3>
                 <p className="mt-1 text-sm text-text-muted max-w-md">
-                  Tarik berkas PDF atau Word tender ke sini. Sistem akan otomatis
-                  membedah dokumen tebal menjadi butir-butir soal yang rapi.
+                  Pilih jenis dokumen, upload TOR/RFP, lalu Synapse menyusun isi berdasarkan knowledge base internal.
                 </p>
+
+                <div className="mt-5 w-full max-w-md text-left">
+                  <label className="mb-1.5 block text-xs font-semibold text-text-primary">Dokumen yang ingin dibuat</label>
+                  <select
+                    value={outputType}
+                    onChange={(e) => setOutputType(e.target.value as typeof outputType)}
+                    className="w-full rounded-md border border-surface-border bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-accent"
+                  >
+                    <option value="narrative">Proposal Teknis</option>
+                    <option value="sow">Statement of Work (SoW)</option>
+                    <option value="solution_brief">Solution Brief</option>
+                    <option value="mom">Klarifikasi Teknis / MoM</option>
+                    <option value="matrix">Matriks Kepatuhan Tender</option>
+                    <option value="pptx">Pitch Deck PowerPoint</option>
+                    <option value="pdf">Proposal PDF</option>
+                  </select>
+                </div>
 
                 <div className="mt-3 flex items-center gap-2 text-xs text-text-secondary">
                   <span className="rounded bg-surface border border-surface-border px-2 py-0.5 font-mono">
@@ -1070,6 +1118,7 @@ export default function DraftPage() {
             onClose={() => setIsExportOpen(false)}
             documentTitle={fileName}
             items={items}
+            initialOutputType={outputType}
           />
         </div>
       )}

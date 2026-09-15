@@ -41,6 +41,7 @@ interface ExportModalProps {
   onClose: () => void;
   documentTitle: string;
   items: RequirementItem[];
+  initialOutputType?: "matrix" | "narrative" | "sow" | "solution_brief" | "mom" | "pptx" | "pdf";
 }
 
 type ExportTab = "standard" | "template" | "text";
@@ -69,6 +70,7 @@ export function ExportModal({
   onClose,
   documentTitle,
   items,
+  initialOutputType = "matrix",
 }: ExportModalProps) {
   // ── Standard tab state
   const [onlyFinal, setOnlyFinal] = useState(false);
@@ -96,8 +98,9 @@ export function ExportModal({
     if (isOpen) {
       setExportStep(1);
       setActiveTab("standard");
+      setTemplateType(initialOutputType);
     }
-  }, [isOpen]);
+  }, [initialOutputType, isOpen]);
 
   // ── Tab state
   const [activeTab, setActiveTab] = useState<ExportTab>("standard");

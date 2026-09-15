@@ -301,6 +301,14 @@ knowledge-accelerator/
 
 **STATUS ROADMAP: SELESAI.** PDF branded, preview, preflight, dan full-fidelity template PDF sudah tersedia.
 
+### ✅ Product Workflow Redesign: Conversational Search + Document Generator
+- `backend/app/routers/query.py` dan `frontend/app/search/page.tsx`: Search sekarang mendukung follow-up conversation dengan konteks beberapa pesan terakhir, tetap grounded ke citation baru setiap turn.
+- `frontend/app/draft/page.tsx`: user memilih target output sebelum upload (`Proposal Teknis`, `SoW`, `Solution Brief`, `Klarifikasi Teknis/MoM`, Matriks, PPTX, atau PDF). Segmentasi TOR tetap berjalan internal dan tidak lagi menjadi konsep yang harus dipahami user.
+- Setelah TOR selesai dianalisis, Synapse otomatis generate jawaban per klausul dalam batch maksimal 3 request; user masuk ke workspace untuk review, bukan mengisi semuanya manual.
+- `frontend/components/draft/export-modal.tsx`: target output dari awal dibawa ke Export Wizard; template Word/PPTX tetap tersedia sebagai landasan opsional.
+- `frontend/app/library/page.tsx`, `frontend/components/sidebar.tsx`, dan dashboard: Library direframe menjadi Google Drive Workspace/Drive, karena dokumen dan template berasal dari hasil indexing Google Drive. Projects tetap merepresentasikan pekerjaan yang dibuat di Synapse.
+- Verifikasi: `npm run build` exit 0, backend compile bersih, dan diagnostics workflow bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

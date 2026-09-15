@@ -18,8 +18,8 @@ import type { IndexedDocument } from "@/lib/types";
 type LibraryTab = "documents" | "templates" | "projects";
 
 const TAB_LABELS: Record<LibraryTab, { label: string; icon: typeof FileText }> = {
-  documents: { label: "Documents", icon: FileText },
-  templates: { label: "Templates", icon: LayoutTemplate },
+  documents: { label: "Drive Docs", icon: FileText },
+  templates: { label: "Drive Templates", icon: LayoutTemplate },
   projects: { label: "Projects", icon: FolderOpen },
 };
 
@@ -96,14 +96,14 @@ export default function LibraryPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-surface font-sans text-text-primary">
-      <Topbar title="Library" subtitle="Semua dokumen, template, dan project proposal di satu tempat" />
+      <Topbar title="Google Drive" subtitle="Sumber knowledge base dan template Synapse" />
       <div className="mx-auto w-full max-w-6xl flex-1 p-4 sm:p-6">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-text-muted">Workspace Presales</p>
-            <h2 className="mt-1 text-xl font-bold tracking-tight sm:text-2xl">Knowledge Library</h2>
+            <h2 className="mt-1 text-xl font-bold tracking-tight sm:text-2xl">Drive Workspace</h2>
             <p className="mt-1 text-xs text-text-muted">
-              {summary ? `${summary.totalDocuments} dokumen terindeks` : "Dokumen internal dan pekerjaan aktif"}
+              {summary ? `${summary.totalDocuments} dokumen dari Google Drive terindeks` : "Dokumen dan template dari Google Drive"}
             </p>
           </div>
           <Button
