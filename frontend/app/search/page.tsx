@@ -79,6 +79,15 @@ function SearchContent() {
     setResult(null);
     setSelectedChunkIdx(null);
     router.replace(`/search?q=${encodeURIComponent(q)}`, { scroll: false });
+
+    // Persist to search history (max 10, no duplicates)
+    try {
+      const LS_HISTORY_KEY = "synapse-search-history";
+      const existing: string[] = JSON.parse(localStorage.getItem(LS_HISTORY_KEY) ?? "[]");
+      const updated = [q, ...existing.filter((h) => h !== q)].slice(0, 10);
+      localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(updated));
+    } catch { /* private mode */ }
+
     try {
       const res = await searchKnowledgeBase(q);
       setResult(res);
