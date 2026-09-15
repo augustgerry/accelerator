@@ -24,6 +24,7 @@ import { searchKnowledgeBase, type SearchResult } from "@/lib/api";
 import { CitationDrawer } from "@/components/search/citation-drawer";
 import { HighlightedText } from "@/components/search/highlighted-text";
 import { AnswerWithCitations } from "@/components/search/answer-with-citations";
+import { DOC_TYPE_COLORS } from "@/components/search/doc-type-colors";
 
 const LS_HISTORY_KEY = "synapse-search-history";
 const LS_BOOKMARKS_KEY = "synapse-search-bookmarks";
@@ -54,15 +55,6 @@ const SUGGESTED_QUERIES = [
   "Sertifikasi Project Manager implementasi DC",
 ];
 
-const DOC_TYPE_COLORS: Record<string, string> = {
-  checklist: "bg-blue-50 border-blue-200 text-blue-700",
-  TOR: "bg-purple-50 border-purple-200 text-purple-700",
-  SoW: "bg-orange-50 border-orange-200 text-orange-700",
-  TCO: "bg-emerald-50 border-emerald-200 text-emerald-700",
-  deck: "bg-pink-50 border-pink-200 text-pink-700",
-  other: "bg-surface border-surface-border text-text-muted",
-};
-
 type ConversationMessage = { role: "user" | "assistant"; content: string };
 
 function SearchContent() {
@@ -82,6 +74,7 @@ function SearchContent() {
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
   const [answerCopied, setAnswerCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     setHistory(loadHistory());
@@ -110,6 +103,7 @@ function SearchContent() {
 
   const doSearch = async (q: string, nextDocType = docTypeFilter, nextDivision = divisionFilter) => {
     if (!q.trim()) return;
+    const myRequestId = ++requestIdRef.current;
     const previousConversation = conversation.slice(-6);
     setConversation((previous) => [...previous, { role: "user", content: q } as ConversationMessage].slice(-8));
     setQuery(q);
@@ -130,12 +124,14 @@ function SearchContent() {
 
     try {
       const res = await searchKnowledgeBase(q, { docType: nextDocType, division: nextDivision }, previousConversation);
+      if (myRequestId !== requestIdRef.current) return; // a newer search superseded this one
       setResult(res);
       setConversation((previous) => [...previous, { role: "assistant", content: res.answer } as ConversationMessage].slice(-8));
     } catch (e) {
+      if (myRequestId !== requestIdRef.current) return;
       setError(e instanceof Error ? e.message : "Pencarian gagal. Pastikan server API aktif.");
     } finally {
-      setLoading(false);
+      if (myRequestId === requestIdRef.current) setLoading(false);
     }
   };
 
@@ -319,15 +315,31 @@ function SearchContent() {
         {/* LEFT: Document Citation Cards */}
         <div className="flex w-[420px] shrink-0 flex-col border-r border-surface-border bg-surface-raised overflow-y-auto">
           {loading && (
-            <div className="flex flex-col items-center justify-center p-10 gap-3 text-text-muted">
-              <Loader2 size={28} className="animate-spin text-accent-ink" />
-              <p className="text-xs text-center">Mencari di seluruh arsip dokumen presales...</p>
+            <div className="animate-in fade-in duration-200">
+              <div className="flex flex-col items-center gap-2 p-4 text-text-muted">
+                <Loader2 size={20} className="animate-spin text-accent-ink" />
+                <p className="text-[11px] text-center">Mencari di seluruh arsip dokumen presales...</p>
+              </div>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="border-b border-surface-border p-4 space-y-2">
+                  <div className="h-3 w-2/3 rounded bg-surface-border/60 animate-pulse" />
+                  <div className="h-2.5 w-1/3 rounded bg-surface-border/40 animate-pulse" />
+                  <div className="h-2 w-full rounded bg-surface-border/40 animate-pulse" />
+                  <div className="h-2 w-5/6 rounded bg-surface-border/40 animate-pulse" />
+                </div>
+              ))}
             </div>
           )}
 
           {error && (
-            <div className="m-4 rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700">
-              {error}
+            <div className="m-4 rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700 space-y-2">
+              <p>{error}</p>
+              <button
+                onClick={() => doSearch(query || inputValue)}
+                className="rounded-md border border-red-300 bg-white px-2.5 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 transition-colors"
+              >
+                Coba lagi
+              </button>
             </div>
           )}
 
@@ -343,7 +355,8 @@ function SearchContent() {
                 <div
                   key={`${src.id}-${idx}`}
                   onClick={() => setSelectedChunkIdx(idx)}
-                  className={`cursor-pointer border-b border-surface-border p-4 transition-all ${
+                  style={{ animationDelay: `${Math.min(idx, 8) * 40}ms` }}
+                  className={`animate-in fade-in slide-in-from-bottom-1 fill-mode-both duration-300 cursor-pointer border-b border-surface-border p-4 transition-all ${
                     selectedChunkIdx === idx
                       ? "bg-accent-soft/50 border-l-4 border-l-accent"
                       : "hover:bg-surface/60 border-l-4 border-l-transparent"
@@ -427,7 +440,7 @@ function SearchContent() {
               )}
 
               {/* AI Answer Card */}
-              <div className="rounded-xl border border-surface-border bg-surface-raised p-6 shadow-subtle">
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 rounded-xl border border-surface-border bg-surface-raised p-6 shadow-subtle">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft text-accent-ink">
                     <Sparkles size={16} />
@@ -463,7 +476,11 @@ function SearchContent() {
                     onClick={copyAnswer}
                     className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-primary transition-colors hover:border-accent hover:bg-accent-soft"
                   >
-                    {answerCopied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                    {answerCopied ? (
+                      <Check size={14} className="text-emerald-500 animate-in zoom-in duration-200" />
+                    ) : (
+                      <Copy size={14} />
+                    )}
                     {answerCopied ? "Tersalin!" : "Salin Jawaban"}
                   </button>
                   <button
@@ -474,7 +491,11 @@ function SearchContent() {
                         : "border-surface-border bg-surface text-text-primary hover:border-accent hover:bg-accent-soft"
                     }`}
                   >
-                    {isBookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+                    {isBookmarked ? (
+                      <BookmarkCheck size={14} className="animate-in zoom-in duration-200" />
+                    ) : (
+                      <Bookmark size={14} />
+                    )}
                     {isBookmarked ? "Tersimpan" : "Bookmark"}
                   </button>
                 </div>

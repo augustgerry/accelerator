@@ -19,4 +19,45 @@
     background-color: #d0d5dd;
     border-radius: 999px;
   }
+
+  /* ponytail: minimal hand-rolled subset of tailwindcss-animate (fade/zoom/slide
+     "enter" transitions only) so `animate-in` classes actually run without adding
+     the npm dependency. Extend the --tw-enter-* vars here if more variants are
+     ever needed instead of pulling in the full plugin. */
+  @keyframes enter {
+    from {
+      opacity: var(--tw-enter-opacity, 1);
+      transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+        scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1));
+    }
+  }
+  .animate-in {
+    animation-name: enter;
+    animation-duration: 150ms;
+    animation-fill-mode: both;
+  }
+  .fade-in {
+    --tw-enter-opacity: 0;
+  }
+  .zoom-in {
+    --tw-enter-scale: 0.95;
+  }
+  .slide-in-from-bottom-1 {
+    --tw-enter-translate-y: 0.25rem;
+  }
+  .slide-in-from-bottom-2 {
+    --tw-enter-translate-y: 0.5rem;
+  }
+  .slide-in-from-right {
+    --tw-enter-translate-x: 100%;
+  }
+  .fill-mode-both {
+    animation-fill-mode: both;
+  }
+  .duration-200 {
+    animation-duration: 200ms;
+  }
+  .duration-300 {
+    animation-duration: 300ms;
+  }
 }

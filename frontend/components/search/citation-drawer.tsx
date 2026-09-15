@@ -5,15 +5,7 @@ import { X, Download, ExternalLink, Loader2, Copy, Check, ChevronLeft, ChevronRi
 import { downloadDriveDocument, type SearchResultChunk } from "@/lib/api";
 import { getFileExtension } from "@/lib/utils";
 import { HighlightedText } from "@/components/search/highlighted-text";
-
-const DOC_TYPE_COLORS: Record<string, string> = {
-  checklist: "bg-blue-50 border-blue-200 text-blue-700",
-  TOR: "bg-purple-50 border-purple-200 text-purple-700",
-  SoW: "bg-orange-50 border-orange-200 text-orange-700",
-  TCO: "bg-emerald-50 border-emerald-200 text-emerald-700",
-  deck: "bg-pink-50 border-pink-200 text-pink-700",
-  other: "bg-surface border-surface-border text-text-muted",
-};
+import { DOC_TYPE_COLORS } from "@/components/search/doc-type-colors";
 
 export function CitationDrawer({
   chunk,
@@ -33,6 +25,7 @@ export function CitationDrawer({
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [pulse, setPulse] = useState(false);
 
   const open = !!chunk;
   const ext = chunk ? getFileExtension(chunk.title) : "";
@@ -48,6 +41,14 @@ export function CitationDrawer({
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, index, total]);
+
+  // Brief highlight pulse on the snippet each time the drawer opens on a new chunk
+  useEffect(() => {
+    if (!chunk) return;
+    setPulse(true);
+    const timer = setTimeout(() => setPulse(false), 700);
+    return () => clearTimeout(timer);
+  }, [chunk?.id, chunk?.chunk_text]);
 
   const formattedDate = chunk?.updated_at
     ? new Date(chunk.updated_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
@@ -172,8 +173,8 @@ export function CitationDrawer({
                 >
                   {copied ? (
                     <>
-                      <Check size={12} className="text-emerald-500" />
-                      <span className="text-emerald-600">Tersalin!</span>
+                      <Check size={12} className="text-emerald-500 animate-in zoom-in duration-200" />
+                      <span className="text-emerald-600 animate-in fade-in duration-200">Tersalin!</span>
                     </>
                   ) : (
                     <>
@@ -183,7 +184,11 @@ export function CitationDrawer({
                   )}
                 </button>
               </div>
-              <div className="rounded-lg border border-surface-border bg-surface-raised p-4">
+              <div
+                className={`rounded-lg border p-4 transition-colors duration-700 ${
+                  pulse ? "border-accent bg-accent-soft/40" : "border-surface-border bg-surface-raised"
+                }`}
+              >
                 <p className="whitespace-pre-wrap text-xs leading-relaxed text-text-primary">
                   <HighlightedText text={chunk.chunk_text} query={query} />
                 </p>
