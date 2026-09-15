@@ -42,6 +42,22 @@ interface ExportModalProps {
 
 type ExportTab = "standard" | "template" | "text";
 
+type CorporateBranding = {
+  companyName: string;
+  primaryColor: string;
+  accentColor: string;
+  footerText: string;
+};
+
+const DEFAULT_BRANDING: CorporateBranding = {
+  companyName: "PT Solusi Mitra Gemilang (SMG)",
+  primaryColor: "#111827",
+  accentColor: "#2F5FE0",
+  footerText: "PT Solusi Mitra Gemilang (SMG)",
+};
+
+const BRANDING_STORAGE_KEY = "synapse-corporate-branding";
+
 export function ExportModal({
   isOpen,
   onClose,
@@ -57,6 +73,16 @@ export function ExportModal({
   const [copied, setCopied] = useState(false);
   const [downloadingDocx, setDownloadingDocx] = useState(false);
   const [previewingPdf, setPreviewingPdf] = useState(false);
+  const [branding, setBranding] = useState<CorporateBranding>(DEFAULT_BRANDING);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(BRANDING_STORAGE_KEY);
+      if (raw) setBranding({ ...DEFAULT_BRANDING, ...JSON.parse(raw) });
+    } catch {
+      setBranding(DEFAULT_BRANDING);
+    }
+  }, []);
 
   // ── Tab state
   const [activeTab, setActiveTab] = useState<ExportTab>("standard");
@@ -157,7 +183,7 @@ export function ExportModal({
       if (templateType === "pptx") {
         const blob = await exportProposalPptx({
           document_title: documentTitle,
-          company_name: "PT Solusi Mitra Gemilang (SMG)",
+          company_name: branding.companyName,
           items: mappedItems,
         });
         const url = URL.createObjectURL(blob);
@@ -171,7 +197,10 @@ export function ExportModal({
         const blob = await exportProposalPdf({
           document_title: documentTitle,
           template_type: "narrative",
-          company_name: "PT Solusi Mitra Gemilang (SMG)",
+          company_name: branding.companyName,
+          primary_color: branding.primaryColor,
+          accent_color: branding.accentColor,
+          footer_text: branding.footerText,
           items: mappedItems,
         });
         const url = URL.createObjectURL(blob);
@@ -219,7 +248,10 @@ export function ExportModal({
       const blob = await exportProposalPdf({
         document_title: documentTitle,
         template_type: "narrative",
-        company_name: "PT Solusi Mitra Gemilang (SMG)",
+        company_name: branding.companyName,
+        primary_color: branding.primaryColor,
+        accent_color: branding.accentColor,
+        footer_text: branding.footerText,
         items: targetItems.map((it) => ({
           id: it.id,
           title: it.title,

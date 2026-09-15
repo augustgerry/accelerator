@@ -301,6 +301,9 @@ export async function exportProposalPdf(payload: {
   document_title: string;
   template_type: "matrix" | "narrative" | "sow" | "solution_brief" | "mom";
   company_name?: string;
+  primary_color?: string;
+  accent_color?: string;
+  footer_text?: string;
   items: Array<{
     id: string;
     title: string;

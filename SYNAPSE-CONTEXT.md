@@ -205,6 +205,13 @@ knowledge-accelerator/
 - Popup blocker ditangani dengan pesan yang jelas; object URL dibersihkan setelah satu menit.
 - Verifikasi: `npx tsc --noEmit` exit 0 dan diagnostics `export-modal.tsx` bersih.
 
+### ✅ Enhancement Step 2B: Corporate Branding
+- `frontend/app/settings/page.tsx`: profil branding lokal untuk nama perusahaan, warna utama, warna aksen, dan teks footer.
+- `frontend/components/draft/export-modal.tsx`: profil branding otomatis dipakai saat download dan preview PDF.
+- `backend/app/routers/draft.py`: `POST /draft/export-pdf` menerima warna/footer custom dengan fallback aman jika hex color invalid.
+- Reset data lokal ikut menghapus profil branding.
+- Verifikasi: `npx tsc --noEmit` exit 0, backend compile/import bersih, dan sample PDF dengan branding custom menghasilkan response `application/pdf`.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

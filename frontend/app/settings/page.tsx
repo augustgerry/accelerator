@@ -19,6 +19,7 @@ import {
   Database,
   FolderSync,
   Info,
+  Palette,
 } from "lucide-react";
 import { syncDocuments } from "@/lib/api";
 
@@ -47,6 +48,21 @@ const PROVIDER_INFO: Record<LLMProvider, { label: string; model: string; note: s
 
 const LS_PROVIDER_KEY = "synapse-llm-provider";
 const LS_HISTORY_KEY = "synapse-search-history";
+const LS_BRANDING_KEY = "synapse-corporate-branding";
+
+type CorporateBranding = {
+  companyName: string;
+  primaryColor: string;
+  accentColor: string;
+  footerText: string;
+};
+
+const DEFAULT_BRANDING: CorporateBranding = {
+  companyName: "PT Solusi Mitra Gemilang (SMG)",
+  primaryColor: "#111827",
+  accentColor: "#2F5FE0",
+  footerText: "PT Solusi Mitra Gemilang (SMG)",
+};
 
 export default function SettingsPage() {
   const [researchEnabled, setResearchEnabled] = useState(false);
@@ -58,6 +74,8 @@ export default function SettingsPage() {
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [branding, setBranding] = useState<CorporateBranding>(DEFAULT_BRANDING);
+  const [brandingSaved, setBrandingSaved] = useState(false);
 
   // Load from localStorage
   useEffect(() => {
@@ -69,8 +87,18 @@ export default function SettingsPage() {
       }
       const h = localStorage.getItem(LS_HISTORY_KEY);
       if (h) setSearchHistory(JSON.parse(h));
+      const b = localStorage.getItem(LS_BRANDING_KEY);
+      if (b) setBranding({ ...DEFAULT_BRANDING, ...JSON.parse(b) });
     } catch {}
   }, []);
+
+  const handleSaveBranding = () => {
+    try {
+      localStorage.setItem(LS_BRANDING_KEY, JSON.stringify(branding));
+      setBrandingSaved(true);
+      setTimeout(() => setBrandingSaved(false), 2000);
+    } catch {}
+  };
 
   const handleSaveProvider = () => {
     try {
@@ -247,6 +275,68 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* ── Corporate Branding ────────────────────────────────────────────── */}
+        <Card>
+          <CardHeader
+            title="Corporate Branding"
+            eyebrow="Format Dokumen"
+            action={<Badge tone="accent">PDF & Preview</Badge>}
+          />
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-text-secondary">
+              Identitas ini dipakai pada cover, warna heading, tabel, dan footer PDF proposal.
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1.5 text-xs font-semibold text-text-primary">
+                Nama perusahaan
+                <input
+                  value={branding.companyName}
+                  onChange={(e) => setBranding({ ...branding, companyName: e.target.value })}
+                  className="w-full rounded-md border border-surface-border bg-surface-raised px-3 py-2 text-xs font-normal outline-none focus:border-accent"
+                />
+              </label>
+              <label className="space-y-1.5 text-xs font-semibold text-text-primary">
+                Teks footer
+                <input
+                  value={branding.footerText}
+                  onChange={(e) => setBranding({ ...branding, footerText: e.target.value })}
+                  className="w-full rounded-md border border-surface-border bg-surface-raised px-3 py-2 text-xs font-normal outline-none focus:border-accent"
+                />
+              </label>
+              <label className="flex items-center gap-3 rounded-md border border-surface-border bg-surface p-3 text-xs font-semibold text-text-primary">
+                <input
+                  type="color"
+                  value={branding.primaryColor}
+                  onChange={(e) => setBranding({ ...branding, primaryColor: e.target.value })}
+                  className="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
+                />
+                <span>Warna utama <span className="font-mono font-normal text-text-muted">{branding.primaryColor}</span></span>
+              </label>
+              <label className="flex items-center gap-3 rounded-md border border-surface-border bg-surface p-3 text-xs font-semibold text-text-primary">
+                <input
+                  type="color"
+                  value={branding.accentColor}
+                  onChange={(e) => setBranding({ ...branding, accentColor: e.target.value })}
+                  className="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
+                />
+                <span>Warna aksen <span className="font-mono font-normal text-text-muted">{branding.accentColor}</span></span>
+              </label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleSaveBranding}
+                className="flex items-center gap-1.5 border-surface-border"
+              >
+                <Palette size={13} />
+                {brandingSaved ? "Tersimpan" : "Simpan Branding"}
+              </Button>
+              <span className="text-[11px] text-text-muted">Disimpan lokal di browser, tanpa API key.</span>
+            </div>
+          </div>
+        </Card>
+
         {/* ── External Research Toggle ───────────────────────────────────────── */}
         <Card>
           <CardHeader
@@ -327,7 +417,7 @@ export default function SettingsPage() {
               <button
                 onClick={() => {
                   try {
-                    ["synapse-draft-session", "synapse-search-history", "synapse-llm-provider"].forEach(k => localStorage.removeItem(k));
+                    ["synapse-draft-session", "synapse-search-history", "synapse-llm-provider", LS_BRANDING_KEY, "synapse-proposal-session-id"].forEach(k => localStorage.removeItem(k));
                     setSearchHistory([]);
                     alert("Semua data lokal dihapus.");
                   } catch {}

@@ -495,6 +495,9 @@ class ExportPdfRequest(BaseModel):
     document_title: str
     template_type: str = "narrative"
     company_name: str = "PT Solusi Mitra Gemilang (SMG)"
+    primary_color: str = "#111827"
+    accent_color: str = "#2F5FE0"
+    footer_text: str = ""
     items: list[ExportDocxItem]
 
 
@@ -510,6 +513,12 @@ def export_proposal_pdf(payload: ExportPdfRequest):
     from reportlab.lib.units import mm
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     from xml.sax.saxutils import escape
+
+    hex_color_pattern = re.compile(r"^#[0-9A-Fa-f]{6}$")
+    primary_hex = payload.primary_color if hex_color_pattern.match(payload.primary_color) else "#111827"
+    accent_hex = payload.accent_color if hex_color_pattern.match(payload.accent_color) else "#2F5FE0"
+    primary_color = colors.HexColor(primary_hex)
+    accent_color = colors.HexColor(accent_hex)
 
     type_labels = {
         "matrix": "Matriks Kepatuhan Tender",
@@ -533,12 +542,12 @@ def export_proposal_pdf(payload: ExportPdfRequest):
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         "SynapseTitle", parent=styles["Title"], fontName="Helvetica-Bold",
-        fontSize=18, leading=23, textColor=colors.HexColor("#111827"),
+        fontSize=18, leading=23, textColor=primary_color,
         alignment=TA_CENTER, spaceAfter=8,
     )
     subtitle_style = ParagraphStyle(
         "SynapseSubtitle", parent=styles["Normal"], fontName="Helvetica",
-        fontSize=10, leading=14, textColor=colors.HexColor("#2F5FE0"),
+        fontSize=10, leading=14, textColor=accent_color,
         alignment=TA_CENTER, spaceAfter=4,
     )
     meta_style = ParagraphStyle(
@@ -593,7 +602,7 @@ def export_proposal_pdf(payload: ExportPdfRequest):
             repeatRows=1,
         )
         table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+            ("BACKGROUND", (0, 0), (-1, 0), primary_color),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D1D5DB")),
@@ -627,7 +636,7 @@ def export_proposal_pdf(payload: ExportPdfRequest):
         canvas.saveState()
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(colors.HexColor("#6B7280"))
-        canvas.drawString(18 * mm, 10 * mm, payload.company_name)
+        canvas.drawString(18 * mm, 10 * mm, payload.footer_text or payload.company_name)
         canvas.drawRightString(192 * mm, 10 * mm, f"Halaman {document.page}")
         canvas.restoreState()
 
