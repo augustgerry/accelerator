@@ -742,15 +742,57 @@ export function ExportModal({
                 </p>
 
                 {!pptxTemplateFile ? (
-                  <div
-                    onClick={() => pptxTemplateInputRef.current?.click()}
-                    className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-surface-border bg-surface p-6 cursor-pointer hover:border-accent hover:bg-accent-soft/30 transition-all group"
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent-ink group-hover:scale-105 transition-transform">
-                      <UploadCloud size={18} />
+                  <>
+                    <div className="mb-3">
+                      <span className="text-xs font-semibold text-text-primary block mb-1.5">
+                        Pilih Template dari Library Drive
+                      </span>
+                      {libraryLoading ? (
+                        <div className="flex items-center gap-2 text-xs text-text-muted">
+                          <Loader2 size={13} className="animate-spin" /> Memuat daftar template...
+                        </div>
+                      ) : pptxTemplateLibrary.length > 0 ? (
+                        <select
+                          value=""
+                          disabled={pickingPptxLibraryId !== null}
+                          onChange={(e) => {
+                            const doc = pptxTemplateLibrary.find((d) => d.id === e.target.value);
+                            if (doc) handlePickLibraryPptx(doc);
+                          }}
+                          className="w-full rounded border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent disabled:opacity-60"
+                        >
+                          <option value="" disabled>
+                            {pickingPptxLibraryId ? "Mengambil template..." : "— Pilih dari Drive —"}
+                          </option>
+                          {pptxTemplateLibrary.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.title}{d.division ? ` (${d.division})` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <p className="text-xs text-text-muted">
+                          Belum ada template PPTX di library. Sync Google Drive dulu, atau upload manual di bawah.
+                        </p>
+                      )}
                     </div>
-                    <p className="text-sm font-semibold text-text-primary">Klik atau seret file template .pptx</p>
-                  </div>
+
+                    <div className="flex items-center gap-3 text-[11px] text-text-muted mb-3">
+                      <div className="h-px flex-1 bg-surface-border" />
+                      atau
+                      <div className="h-px flex-1 bg-surface-border" />
+                    </div>
+
+                    <div
+                      onClick={() => pptxTemplateInputRef.current?.click()}
+                      className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-surface-border bg-surface p-6 cursor-pointer hover:border-accent hover:bg-accent-soft/30 transition-all group"
+                    >
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent-ink group-hover:scale-105 transition-transform">
+                        <UploadCloud size={18} />
+                      </div>
+                      <p className="text-sm font-semibold text-text-primary">Klik atau seret file template .pptx</p>
+                    </div>
+                  </>
                 ) : (
                   <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-3 mb-3">
                     <div className="flex items-center gap-2">
