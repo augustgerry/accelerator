@@ -33,10 +33,10 @@ while ($true) {
         $pushResult = git push origin main 2>&1
         $commitCount++
 
-        Write-Host "[$timestamp] ✅ Commit #$commitCount pushed ($changedFiles files)" -ForegroundColor Green
+        Write-Host "[$timestamp] OK Commit #$commitCount pushed ($changedFiles files)" -ForegroundColor Green
     } else {
         $timestamp = Get-Date -Format "HH:mm:ss"
-        Write-Host "[$timestamp] — No changes" -ForegroundColor DarkGray
+        Write-Host "[$timestamp] - No changes" -ForegroundColor DarkGray
     }
 
     Start-Sleep -Seconds $interval
