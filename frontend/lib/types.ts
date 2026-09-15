@@ -49,6 +49,7 @@ export type RequirementItem = {
   category: string;
   draft_text: string;
   status: RequirementStatus;
+  rationale?: string;
   sources?: SourceCitation[];
   isGenerating?: boolean;
   error?: string;

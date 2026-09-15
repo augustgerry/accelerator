@@ -4,15 +4,14 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Sesi terakhir (Antigravity):** Seluruh 5 poin enhancement proposal accelerator TELAH SELESAI, diverifikasi, di-commit, dan di-push ke remote `origin/main` (commit `2ec1551`). Tidak ada task aktif menggantung — status *ready* untuk instruksi berikutnya dari user.
-- **Ringkasan kerjaan 5 Poin Sesi Ini:**
-  1. **Integrasi Sumber Referensi → Template:** Dokumen `.docx` / `.pptx` yang dipilih user sebagai Sumber Referensi otomatis muncul sebagai kartu quick-access di Export Modal Step 2 dengan tombol 1-klik "Gunakan Sebagai Template".
-  2. **Logo Perusahaan & Logo Customer di DOCX:** `export_proposal_docx` menyisipkan header table 2-kolom tanpa border di cover Word (kiri: logo SMG, kanan: logo customer).
-  3. **Fleksibilitas Sub-Bab di UI:** User dapat menambah sub-bab baru (`+ Tambah Bagian`), mengedit judul/kategori/tujuan (`Edit Info`), serta menghapus bagian (`Hapus`) secara dinamis.
-  4. **Grounding Semantik Cuplikan TOR:** Menggantikan keyword matching biasa di frontend, backend menggunakan model embedding lokal `sentence-transformers` (`paraphrase-multilingual-mpnet-base-v2` di CPU) via `semantic_select_tor_excerpt()` untuk merangking paragraf paling relevan secara semantik sesuai urutan dokumen asli hingga 3.500 karakter. Frontend meneruskan teks acuan penuh hingga 35.000 karakter.
-  5. **Layout Khusus Pitch Deck untuk DOCX & PDF:** Format "Pitch Deck For Customer / Internal" kini memiliki layout tersendiri (bukan narrative proposal biasa). DOCX menghasilkan *Executive Pitch Deck Briefing Paper* (Executive Summary, Slide Breakdown Table, Talking Points per slide, Next Steps/CTA), dan PDF menghasilkan slide briefing kartu dan tabel berulang dengan tajuk warna primer.
-- **Status Git:** Clean, up to date with `origin/main`.
-- **Status Service:** Backend aktif di port 8000 (`http://127.0.0.1:8000/health` 200 OK, LLM: `gemini-3.6-flash`), Frontend aktif di port 3000.
+- **Sesi terakhir (Antigravity):** Fitur Sub-Bab Adaptif dari Dokumen Acuan (TOR/RKS/KAK) dengan Layar Kurasi & Diskusi AI, Presales Quality & Compliance Auditor, Real-time Drafting Progress Bar, dan PPTX Table Clone TELAH SELESAI diimplementasikan, diverifikasi, dan lolos uji end-to-end.
+- **Ringkasan Fitur yang Baru Selesai:**
+  1. **Sub-Bab Adaptif Berdasarkan Dokumen Acuan:** Synapse membaca dokumen acuan (TOR, RKS, KAK, RFP) dan merekomendasikan urutan sub-bab kontekstual lengkap dengan alasan rekomendasi (*rationale*) per butir melalui endpoint `POST /draft/recommend-structure`.
+  2. **Layar Kurasi & Diskusi Struktur Sebelum Drafting:** Sebelum draf isi dibuat, user masuk ke tampilan kurasi untuk melihat ringkasan AI, membaca alasan pemilihan sub-bab, mengatur urutan (▲ / ▼), mengedit cakupan/judul, menambah sub-bab manual, atau berdiskusi dengan AI (*"Revisi Struktur dengan AI"*) hingga susunan disetujui (*fixed*).
+  3. **Presales Quality & Compliance Auditor:** Endpoint `POST /draft/quality-check` diperluas dengan skor kepatuhan (0-100), deteksi komitmen ambigu/tentatif, audit SLA eksplisit, pemenuhan metrik angka, serta rekomendasi presales per sub-bab (`suggestions`) yang ditampilkan dalam Auditor Modal interaktif.
+  4. **Progress Bar Real-Time & Reordering di Workspace:** Banner progres dinamis saat drafting berjalan bertahap, dan tombol panah mini (▲ / ▼) pada navigator kiri untuk fleksibilitas susunan proposal.
+  5. **PPTX Template Clone Table Support:** Mesin kloning PPTX kini memindai dan menggantikan token di dalam shape tabel (`shape.has_table`).
+- **Status Service:** Backend aktif di port 8000 (`http://127.0.0.1:8000/health` 200 OK, LLM: `gemini-3.6-flash`), Frontend aktif di port 3000. TypeScript compilation `npx tsc --noEmit` exit code 0.
 
 ---
 

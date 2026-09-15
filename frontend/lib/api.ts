@@ -200,6 +200,7 @@ export type QualityCheckResult = {
   results: Array<{
     item_id: string;
     title: string;
+    category?: string;
     status: "pass" | "warning" | "fail";
     score: number;
     issues: string[];

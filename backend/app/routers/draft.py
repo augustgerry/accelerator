@@ -89,10 +89,12 @@ class QualityCheckRequest(BaseModel):
 class QualityCheckItem(BaseModel):
     item_id: str
     title: str
+    category: str = ""
     status: str
     score: int
     issues: list[str] = []
     missing_values: list[str] = []
+    suggestions: list[str] = []
 
 
 class QualityCheckResponse(BaseModel):
@@ -102,54 +104,124 @@ class QualityCheckResponse(BaseModel):
     results: list[QualityCheckItem]
 
 
+class RecommendStructureRequest(BaseModel):
+    tor_text: str
+    doc_type: str = "narrative"
+    document_title: str = ""
+    instruction: str = ""
+
+
+class RecommendedSection(BaseModel):
+    id: str
+    title: str
+    category: str
+    requirement_text: str
+    rationale: str = ""
+
+
+class RecommendStructureResponse(BaseModel):
+    items: list[RecommendedSection]
+    summary: str = ""
+
+
+@router.post("/recommend-structure", response_model=RecommendStructureResponse)
+def recommend_document_structure(payload: RecommendStructureRequest):
+    """Analyze the uploaded source document (TOR/RKS/KAK) and recommend an adaptive,
+    grounded section structure with specific rationales before drafting begins."""
+    provider = get_llm_provider()
+    raw_sections = provider.recommend_structure(
+        tor_text=payload.tor_text,
+        doc_type=payload.doc_type,
+        document_title=payload.document_title,
+        instruction=payload.instruction,
+    )
+    items: list[RecommendedSection] = []
+    for idx, sec in enumerate(raw_sections, start=1):
+        items.append(RecommendedSection(
+            id=str(sec.get("id") or f"sec-{idx}"),
+            title=str(sec.get("title") or f"Bagian {idx}"),
+            category=str(sec.get("category") or "Teknis"),
+            requirement_text=str(sec.get("requirement_text") or ""),
+            rationale=str(sec.get("rationale") or f"Disusun berdasarkan analisis kebutuhan dokumen {payload.document_title or 'tender'}."),
+        ))
+    summary = (
+        f"Berhasil menyusun {len(items)} rekomendasi sub-bab yang diselaraskan dengan kebutuhan "
+        f"'{payload.document_title or 'dokumen tender'}' ({payload.doc_type})."
+    )
+    return RecommendStructureResponse(items=items, summary=summary)
+
+
 @router.post("/quality-check", response_model=QualityCheckResponse)
 def quality_check_draft(payload: QualityCheckRequest):
-    """Run deterministic preflight checks before a proposal is exported."""
+    """Run intelligent presales preflight checks & compliance scoring before a proposal is exported."""
     placeholder_pattern = re.compile(
-        r"\[\s*(?:belum|isi|fill|content|tanggapan|solusi)|\{\{.*?\}\}",
+        r"\[\s*(?:belum|isi|fill|content|tanggapan|solusi)|\{\{.*?\}\}|\b(?:TBD|TODO|FIXME)\b",
         re.IGNORECASE,
     )
     number_pattern = re.compile(r"\b\d+(?:[.,]\d+)?(?:\s?[xX]\s?\d+)?%?\b")
+    vague_pattern = re.compile(
+        r"\b(?:akan diusahakan|diupayakan sebisanya|bila memungkinkan|jika ada waktu|sebisanya|belum ditentukan|tentatif|dapat berubah sewaktu-waktu)\b",
+        re.IGNORECASE,
+    )
     results: list[QualityCheckItem] = []
 
     for item in payload.items:
         draft = (item.draft_text or "").strip()
         requirement = item.requirement_text or ""
+        category = item.category or "Teknis"
         issues: list[str] = []
         missing_values: list[str] = []
+        suggestions: list[str] = []
 
         if not draft:
-            issues.append("Jawaban masih kosong")
-        elif len(draft) < 30:
-            issues.append("Jawaban terlalu singkat untuk review teknis")
+            issues.append("Draf bagian ini masih kosong.")
+            suggestions.append("Gunakan tombol 'Generate dengan AI' untuk membuat draf awal berbasis dokumen acuan.")
+        elif len(draft) < 40:
+            issues.append("Penjelasan terlalu singkat untuk review teknis tender.")
+            suggestions.append("Elaborasi dengan menambahkan detail spesifikasi arsitektur atau metodologi kerja.")
 
         if placeholder_pattern.search(draft):
-            issues.append("Masih mengandung placeholder atau teks sementara")
+            issues.append("Masih terdapat placeholder atau penanda teks sementara (TBD/TODO/[belum]).")
+            suggestions.append("Lengkapi nilai yang ditandai tanda kurung atau placeholder sebelum diekspor.")
+
+        if vague_pattern.search(draft):
+            issues.append("Ditemukan komitmen ambigu/tentatif yang berisiko melemahkan posisi kepatuhan tender.")
+            suggestions.append("Ganti kalimat tentatif dengan komitmen tegas (misalnya: 'SMG menjamin pemenuhan...', 'SLA ditetapkan pasti...').")
+
+        # Specific domain audits
+        if category in ("SLA & Support", "Support") or "sla" in requirement.lower() or "pemeliharaan" in requirement.lower():
+            if not re.search(r"\b(?:24x7|24/7|response time|menit|jam|preventive|corrective|pm|cm|eskalasi)\b", draft, re.IGNORECASE):
+                issues.append("Belum mencantumkan parameter Service Level Agreement (SLA) eksplisit.")
+                suggestions.append("Cantumkan response time insiden (misal: 15 menit Sev 1) dan jadwal pemeliharaan berkala (PM/CM).")
 
         for value in number_pattern.findall(requirement):
             normalized = value.replace(" ", "")
             if normalized not in draft.replace(" ", "") and value not in missing_values:
                 missing_values.append(value)
         if missing_values:
-            issues.append("Angka atau target dari brief bagian belum terlihat di jawaban")
+            issues.append(f"Target angka dari brief kebutuhan belum tercantum di draf: {', '.join(missing_values[:3])}")
+            suggestions.append(f"Tegaskan kembali pemenuhan metrik angka ({', '.join(missing_values[:3])}) agar evaluator mudah memberi skor penuh.")
 
         if not issues:
             score = 100
             check_status = "pass"
+            suggestions.append("Kualitas draf sangat baik dan siap diekspor.")
         elif not draft:
             score = 0
             check_status = "fail"
         else:
-            score = max(20, 100 - len(issues) * 25)
-            check_status = "warning"
+            score = max(20, 100 - len(issues) * 20)
+            check_status = "warning" if score >= 60 else "fail"
 
         results.append(QualityCheckItem(
             item_id=item.id,
             title=item.title,
+            category=category,
             status=check_status,
             score=score,
             issues=issues,
             missing_values=missing_values,
+            suggestions=suggestions,
         ))
 
     overall_score = round(sum(result.score for result in results) / len(results)) if results else 0
@@ -1644,6 +1716,11 @@ def _pptx_slide_text(slide) -> str:
     for shape in slide.shapes:
         if shape.has_text_frame:
             parts.append(shape.text_frame.text)
+        if shape.has_table:
+            for row in shape.table.rows:
+                for cell in row.cells:
+                    if cell.text_frame:
+                        parts.append(cell.text_frame.text)
     return "\n".join(parts)
 
 
@@ -1671,6 +1748,11 @@ def _pptx_replace_in_slide(slide, replacements: dict) -> None:
     for shape in slide.shapes:
         if shape.has_text_frame:
             _pptx_replace_in_text_frame(shape.text_frame, replacements)
+        if shape.has_table:
+            for row in shape.table.rows:
+                for cell in row.cells:
+                    if cell.text_frame:
+                        _pptx_replace_in_text_frame(cell.text_frame, replacements)
 
 
 def _duplicate_pptx_slide(prs, slide):
