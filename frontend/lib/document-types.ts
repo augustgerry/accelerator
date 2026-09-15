@@ -3,7 +3,7 @@
 // (Klarifikasi Teknis reuses "mom" wording; Pitch Deck reuses "narrative" as the closest
 // generic style — backend has no dedicated wording for either yet).
 export type DraftDocTypeId = "narrative" | "sow" | "solution_brief" | "mom" | "klarifikasi_teknis" | "pitch_deck";
-export type DraftBackendType = "narrative" | "sow" | "solution_brief" | "mom";
+export type DraftBackendType = "narrative" | "sow" | "solution_brief" | "mom" | "pitch_deck";
 export type DraftFormat = "pdf" | "docx" | "pptx";
 
 export const DOC_TYPES: Array<{
@@ -18,7 +18,7 @@ export const DOC_TYPES: Array<{
   { id: "solution_brief", label: "Solution Brief", fileLabel: "SolutionBrief", backendType: "solution_brief", formats: ["pdf", "docx", "pptx"] },
   { id: "mom", label: "Minutes of Meetings", fileLabel: "MoM", backendType: "mom", formats: ["pdf", "docx"] },
   { id: "klarifikasi_teknis", label: "Klarifikasi Teknis", fileLabel: "KlarifikasiTeknis", backendType: "mom", formats: ["pptx", "docx", "pdf"] },
-  { id: "pitch_deck", label: "Pitch Deck For Customer / Internal", fileLabel: "PitchDeck", backendType: "narrative", formats: ["pptx", "pdf", "docx"] },
+  { id: "pitch_deck", label: "Pitch Deck For Customer / Internal", fileLabel: "PitchDeck", backendType: "pitch_deck", formats: ["pptx", "pdf", "docx"] },
 ];
 
 export const FORMAT_LABELS: Record<DraftFormat, string> = {

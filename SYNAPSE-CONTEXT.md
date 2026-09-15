@@ -55,9 +55,13 @@ User minta lanjutin kerjaan Copilot yang kepotong, lalu iteratif redesign besar 
 - **Integrasi Sumber Referensi → Template (SELESAI):** Dokumen `.docx` / `.pptx` yang dipilih user sebagai Sumber Referensi di layar upload otomatis muncul sebagai kartu quick-access di Step 2 Export Modal ("Ikuti Gaya File Lain") dengan tombol 1-klik "Gunakan Sebagai Template".
 - **Logo Perusahaan & Logo Customer di DOCX (SELESAI):** `export_proposal_docx` kini menyisipkan header table 2 kolom di paling atas dokumen (kiri: logo perusahaan, kanan: logo customer). Di UI Export Modal, input Logo Customer dibuka untuk format PDF maupun DOCX.
 - **Fleksibilitas Sub-Bab di UI (SELESAI):** User dapat menambah sub-bab/bagian baru via tombol `+ Tambah Bagian`, mengedit judul/kategori/tujuan bagian via tombol `Edit Info`, dan menghapus bagian via tombol `Hapus`.
-- Klarifikasi Teknis & Minutes of Meetings share wording backend yang sama (`mom` key, karena wording-nya emang mirip). Pitch Deck docx/pdf reuse wording `narrative` (belum ada style khusus pitch-deck buat docx/pdf, cuma pptx). Kalau nanti mau dibedain, tambah entry baru di `DOC_TYPE_LABELS` (`backend/app/routers/draft.py`, cari `DOC_TYPE_LABELS = {`).
+- **Poin 4: Grounding Semantik Cuplikan TOR (SELESAI):** Menggantikan pemotongan kata kunci biasa di frontend, fungsi `semantic_select_tor_excerpt()` di `backend/app/services/embeddings.py` menggunakan model lokal `sentence-transformers` (`paraphrase-multilingual-mpnet-base-v2`) untuk meng-encode dan merangking paragraf TOR berdasarkan kesesuaian semantik dengan kebutuhan sub-bab, lalu menyusun cuplikan relevan terbaik secara terurut (preserves document order) hingga 3.500 karakter.
+- **Poin 5: Layout Khusus Pitch Deck untuk DOCX & PDF (SELESAI):** Format "Pitch Deck For Customer / Internal" kini memiliki layout khusus tersendiri saat diekspor ke Word (.docx) dan PDF:
+  - **DOCX**: Executive Pitch Deck Briefing Paper yang memuat Ringkasan Eksekutif & Value Proposition, tabel ringkasan struktur slide (Slide #, Topik & Pain Point, Solusi SMG, Kategori/Fokus), Talking Points per slide, serta Rekomendasi Next Steps & Call-to-Action.
+  - **PDF**: Layout slide briefing berformat kartu dan tabel berulang dengan tajuk warna primer/aksen, talking points per slide, dan metadata dokumen yang disesuaikan.
+- **Backend & Model Status:** `LLM_PROVIDER=gemini` dengan model aktif `gemini-3.6-flash`. Server Uvicorn aktif dan telah dites end-to-end via HTTP.
 
-Semua perubahan di atas: `npx tsc --noEmit` clean, backend `py_compile` clean, unit test DOCX header table valid.
+Semua perubahan di atas: `npx tsc --noEmit` clean, backend `py_compile` clean, unit test & integration test HTTP valid.
 
 ---
 

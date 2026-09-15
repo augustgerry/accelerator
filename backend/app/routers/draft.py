@@ -202,9 +202,13 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
         doc_ids=payload.reference_doc_ids or None,
     )
 
+    from app.services.embeddings import semantic_select_tor_excerpt
+
     context = []
     if payload.tor_context and payload.tor_context.strip():
-        context.append(f"Konteks TOR/RFP Tambahan:\n{payload.tor_context[:6000]}")
+        relevant_tor = semantic_select_tor_excerpt(payload.tor_context, query, top_k=5, max_chars=6000)
+        if relevant_tor:
+            context.append(f"Konteks TOR/RFP Terkait:\n{relevant_tor}")
     context.extend(kb_chunks)
 
     user_prompt = f"Brief/Tujuan Bagian Dokumen:\n{payload.requirement_text}"
@@ -566,6 +570,69 @@ def export_proposal_docx(payload: ExportDocxRequest):
             "2. Klien melakukan review internal atas alternatif solusi yang telah disepakati."
         )
 
+    elif payload.template_type == "pitch_deck":
+        # Format Pitch Deck Executive Briefing & Slide Blueprint
+        doc.add_heading("1. Ringkasan Eksekutif & Value Proposition", level=1)
+        doc.add_paragraph(
+            f"Dokumen Executive Pitch Deck Briefing ini dirancang khusus untuk memetakan alur presentasi, "
+            f"pesan strategis, dan keunggulan kompetitif penawaran {payload.company_name} "
+            f"dalam menjawab kebutuhan {payload.document_title}."
+        )
+
+        doc.add_heading("2. Rencana Struktur Slide Presentasi (Slide Breakdown)", level=1)
+        doc.add_paragraph(
+            "Berikut adalah ringkasan struktur slide untuk presentasi kepada stakeholder klien / internal:"
+        )
+
+        table = doc.add_table(rows=1, cols=4)
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        table.autofit = False
+
+        headers = ["Slide #", "Topik & Pain Point Klien", "Pesan Kunci Solusi SMG", "Kategori / Fokus"]
+        hdr_cells = table.rows[0].cells
+        for idx, text in enumerate(headers):
+            cell = hdr_cells[idx]
+            cell.text = text
+            shading = parse_xml(r'<w:shd {} w:fill="111827"/>'.format(nsdecls('w')))
+            cell._tc.get_or_add_tcPr().append(shading)
+            for p in cell.paragraphs:
+                for r in p.runs:
+                    r.bold = True
+                    r.font.size = Pt(9.5)
+                    r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+        col_widths = [Inches(0.8), Inches(2.2), Inches(2.8), Inches(1.2)]
+
+        for item_idx, item in enumerate(payload.items, start=1):
+            row_cells = table.add_row().cells
+            row_cells[0].text = f"Slide {item_idx}"
+            row_cells[1].text = f"{item.title}\n\nKebutuhan:\n{item.requirement_text}"
+            row_cells[2].text = item.draft_text.strip() if item.draft_text.strip() else "[Pesan kunci belum disusun]"
+            row_cells[3].text = f"{item.category}\n({item.status.upper()})"
+
+            for c_idx, c in enumerate(row_cells):
+                c.width = col_widths[c_idx]
+                for p in c.paragraphs:
+                    for r in p.runs:
+                        r.font.size = Pt(9)
+
+        doc.add_heading("3. Rincian Narasi per Slide (Presenter Talking Points)", level=1)
+        for idx, item in enumerate(payload.items, start=1):
+            doc.add_heading(f"Slide {idx}: {item.title}", level=2)
+            p = doc.add_paragraph()
+            p.add_run("Latar Belakang / Kebutuhan Stakeholder:\n").bold = True
+            p.add_run(f"\"{item.requirement_text}\"\n\n")
+            p.add_run("Talking Points & Solusi yang Disampaikan:\n").bold = True
+            p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Talking points belum diisi]")
+            p.paragraph_format.space_after = Pt(10)
+
+        doc.add_heading("4. Rekomendasi Tindak Lanjut & Call to Action", level=1)
+        doc.add_paragraph(
+            f"1. Penyelenggaraan sesi presentasi & live demo interaktif bersama komite pengadaan / C-level Klien.\n"
+            f"2. Validasi lingkup prioritas (Proof of Concept) dan penyesuaian detail arsitektur penawaran.\n"
+            f"3. Penyampaian proposal komersial resmi dan timeline implementasi bertahap oleh {payload.company_name}."
+        )
+
     else:
         # Format Proposal Naratif Bertingkat (Bab & Sub-bab)
         doc.add_heading("1. Ringkasan Eksekutif & Metodologi", level=1)
@@ -611,6 +678,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
         "sow": "Statement-of-Work",
         "solution_brief": "Solution-Brief",
         "mom": "Minutes-of-Meeting",
+        "pitch_deck": "Executive-Pitch-Deck",
     }
     file_prefix = type_labels.get(payload.template_type, "Proposal")
 
@@ -661,6 +729,7 @@ def export_proposal_pdf(payload: ExportPdfRequest):
         "sow": "Statement of Work",
         "solution_brief": "Solution Brief",
         "mom": "Minutes of Meeting",
+        "pitch_deck": "Executive Pitch Deck & Solution Briefing",
     }
     document_type = type_labels.get(payload.template_type, "Proposal Teknis")
     bio = io.BytesIO()
@@ -748,6 +817,60 @@ def export_proposal_pdf(payload: ExportPdfRequest):
             ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ]))
         story.append(table)
+    elif payload.template_type == "pitch_deck":
+        story.append(paragraph("Executive Summary & Presentation Blueprint", heading_style))
+        story.append(paragraph(
+            f"Dokumen Executive Pitch Deck Briefing ini dirancang khusus oleh {payload.company_name} "
+            f"untuk memetakan pesan strategis, pain point kebutuhan, dan solusi unggulan dalam menjawab {payload.document_title}."
+        ))
+        story.append(paragraph("Rencana Struktur Slide Presentasi", heading_style))
+        rows = [[
+            paragraph("Slide #", small_style),
+            paragraph("Judul & Kebutuhan", small_style),
+            paragraph("Pesan Kunci Solusi SMG", small_style),
+            paragraph("Kategori", small_style),
+        ]]
+        for index, item in enumerate(payload.items, start=1):
+            rows.append([
+                paragraph(f"Slide {index}", small_style),
+                paragraph(f"<b>{item.title}</b><br/>{item.requirement_text}", small_style),
+                paragraph(item.draft_text or "[Pesan kunci belum diisi]", small_style),
+                paragraph(f"{item.category}<br/>({item.status.upper()})", small_style),
+            ])
+        deck_table = Table(
+            rows,
+            colWidths=[16 * mm, 52 * mm, 80 * mm, 24 * mm],
+            repeatRows=1,
+        )
+        deck_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), primary_color),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D1D5DB")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F9FAFB")]),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(deck_table)
+        story.append(Spacer(1, 10))
+
+        story.append(paragraph("Presenter Talking Points per Slide", heading_style))
+        for index, item in enumerate(payload.items, start=1):
+            story.append(paragraph(f"Slide {index}: {item.title} [{item.category}]", heading_style))
+            story.append(paragraph(f"<b>Latar Belakang / Kebutuhan Stakeholder:</b><br/>{item.requirement_text}"))
+            story.append(paragraph(
+                f"<b>Talking Points Solusi SMG:</b><br/>{item.draft_text or '[Tanggapan belum disusun]'}"
+            ))
+            story.append(Spacer(1, 4))
+
+        story.append(paragraph("Next Steps & Call to Action", heading_style))
+        story.append(paragraph(
+            f"1. Penyelenggaraan sesi presentasi & live demo interaktif bersama komite pengadaan Klien.<br/>"
+            f"2. Validasi arsitektur dan penyesuaian detail penawaran teknis sesuai kebutuhan prioritas.<br/>"
+            f"3. Penyampaian proposal komersial resmi dan timeline implementasi oleh {payload.company_name}."
+        ))
     else:
         story.append(paragraph("Ringkasan Dokumen", heading_style))
         story.append(paragraph(
@@ -805,10 +928,21 @@ def export_proposal_pdf(payload: ExportPdfRequest):
     clean_name = "".join(
         c for c in payload.document_title if c.isalnum() or c in ("-", "_")
     ).strip() or "Dokumen"
+
+    pdf_prefixes = {
+        "matrix": "Matriks",
+        "narrative": "Proposal",
+        "sow": "StatementOfWork",
+        "solution_brief": "SolutionBrief",
+        "mom": "MinutesOfMeeting",
+        "pitch_deck": "PitchDeck",
+    }
+    file_prefix = pdf_prefixes.get(payload.template_type, "Proposal")
+
     return StreamingResponse(
         bio,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="Proposal-{clean_name}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{file_prefix}-{clean_name}.pdf"'},
     )
 
 

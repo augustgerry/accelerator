@@ -292,7 +292,7 @@ export async function saveProposalSession(
 
 export async function exportProposalDocx(payload: {
   document_title: string;
-  template_type: "matrix" | "narrative" | "sow" | "solution_brief" | "mom";
+  template_type: "matrix" | "narrative" | "sow" | "solution_brief" | "mom" | "pitch_deck";
   font_name?: string;
   company_name?: string;
   logo_data_url?: string;
@@ -344,7 +344,7 @@ export async function exportProposalPptx(payload: {
 
 export async function exportProposalPdf(payload: {
   document_title: string;
-  template_type: "matrix" | "narrative" | "sow" | "solution_brief" | "mom";
+  template_type: "matrix" | "narrative" | "sow" | "solution_brief" | "mom" | "pitch_deck";
   company_name?: string;
   primary_color?: string;
   accent_color?: string;

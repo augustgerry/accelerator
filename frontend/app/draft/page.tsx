@@ -43,32 +43,12 @@ import type { RequirementItem, RequirementStatus, SourceCitation, IndexedDocumen
 import { DOC_TYPES, FORMAT_LABELS, getDocType, type DraftDocTypeId, type DraftFormat } from "@/lib/document-types";
 import { SKELETONS } from "@/lib/skeletons";
 
-// ponytail: keyword-window excerpt, not real retrieval — upgrade to embedding-based
-// local TOR search if section grounding proves weak on long/dense documents.
-function pickRelevantTorExcerpt(torText: string, sectionTitle: string, maxLen = 4000): string {
-  const paragraphs = torText.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
-  if (paragraphs.length === 0) return torText.slice(0, maxLen);
-
-  const keywords = sectionTitle
-    .toLowerCase()
-    .replace(/[()]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length > 3);
-
-  const scored = paragraphs
-    .map((p, idx) => ({
-      p,
-      idx,
-      score: keywords.reduce((acc, kw) => acc + (p.toLowerCase().includes(kw) ? 1 : 0), 0),
-    }))
-    .sort((a, b) => b.score - a.score || a.idx - b.idx);
-
-  let out = "";
-  for (const { p } of scored) {
-    if (out.length >= maxLen) break;
-    out += (out ? "\n\n" : "") + p;
-  }
-  return out.slice(0, maxLen) || torText.slice(0, maxLen);
+// Poin 4: Grounding cuplikan TOR kini diproses secara semantik oleh backend
+// menggunakan model sentence-transformers lokal. Frontend meneruskan konteks TOR
+// hingga 35.000 karakter agar seluruh bab dan paragraf dapat diranking secara akurat.
+function pickRelevantTorExcerpt(torText: string, _sectionTitle?: string, maxLen = 35000): string {
+  if (!torText) return "";
+  return torText.slice(0, maxLen);
 }
 
 const LS_KEY = "synapse-draft-session";
