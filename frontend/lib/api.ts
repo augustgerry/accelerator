@@ -363,6 +363,17 @@ export async function exportProposalPdf(payload: {
   return res.blob();
 }
 
+export async function convertOfficeToPdf(file: Blob, filename: string): Promise<Blob> {
+  const form = new FormData();
+  form.append("file", file, filename);
+  const res = await fetch(`${API_BASE}/draft/convert-office-pdf`, { method: "POST", body: form });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal render PDF full-fidelity (${res.status}): ${detail}`);
+  }
+  return res.blob();
+}
+
 
 export async function uploadTemplate(file: File): Promise<TemplateInfo> {
   const form = new FormData();

@@ -252,6 +252,30 @@ async def upload_tor(file: UploadFile):
     return {"text": text}
 
 
+@router.post("/convert-office-pdf")
+async def convert_office_pdf(file: UploadFile):
+    """Convert generated DOCX/PPTX to PDF using native Microsoft Office."""
+    from fastapi.responses import StreamingResponse
+    from app.services.office_render import convert_office_to_pdf
+
+    filename = file.filename or "document"
+    extension = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if extension not in {".docx", ".pptx"}:
+        raise HTTPException(status_code=400, detail="Only DOCX and PPTX files are supported")
+    try:
+        data = convert_office_to_pdf(await file.read(), extension)
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="pywin32 belum terpasang di backend") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Microsoft Office gagal merender PDF: {exc}") from exc
+
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename.rsplit(".", 1)[0]}.pdf"'},
+    )
+
+
 class ExportDocxItem(BaseModel):
     id: str
     title: str

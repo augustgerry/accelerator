@@ -24,6 +24,7 @@ import {
   exportProposalDocx,
   exportProposalPptx,
   exportProposalPdf,
+  convertOfficeToPdf,
   exportPreflight,
   uploadTemplate,
   exportFromTemplate,
@@ -114,6 +115,7 @@ export function ExportModal({
   const [uploadingTemplate, setUploadingTemplate] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [exportingFromTemplate, setExportingFromTemplate] = useState(false);
+  const [convertingTemplatePdf, setConvertingTemplatePdf] = useState(false);
   const [templateOnlyFinal, setTemplateOnlyFinal] = useState(false);
   const [templateMode, setTemplateMode] = useState<"structure" | "clone">("clone");
   const [templateDocType, setTemplateDocType] = useState<
@@ -124,6 +126,7 @@ export function ExportModal({
   const pptxTemplateInputRef = useRef<HTMLInputElement>(null);
   const [pptxTemplateFile, setPptxTemplateFile] = useState<File | null>(null);
   const [generatingPptxClone, setGeneratingPptxClone] = useState(false);
+  const [convertingPptxPdf, setConvertingPptxPdf] = useState(false);
   const [pptxCloneError, setPptxCloneError] = useState<string | null>(null);
   const [pickingPptxLibraryId, setPickingPptxLibraryId] = useState<string | null>(null);
 
@@ -238,16 +241,13 @@ export function ExportModal({
         link.click();
         document.body.removeChild(link);
       } else if (templateType === "pdf") {
-        const blob = await exportProposalPdf({
+        const docxBlob = await exportProposalDocx({
           document_title: documentTitle,
           template_type: "narrative",
           company_name: branding.companyName,
-          primary_color: branding.primaryColor,
-          accent_color: branding.accentColor,
-          footer_text: branding.footerText,
-          logo_data_url: branding.logoDataUrl,
           items: mappedItems,
         });
+        const blob = await convertOfficeToPdf(docxBlob, `Proposal-${cleanTitle}.docx`);
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -417,6 +417,43 @@ export function ExportModal({
     }
   };
 
+  const handleExportTemplatePdf = async () => {
+    if (!templateInfo || templateTargetItems.length === 0 || convertingTemplatePdf) return;
+    setConvertingTemplatePdf(true);
+    try {
+      const docxBlob = templateMode === "clone" && templateFile
+        ? await cloneTemplate({
+            templateFile,
+            document_title: documentTitle,
+            company_name: branding.companyName,
+            document_type: templateDocType,
+            items: templateTargetItems,
+          })
+        : await exportFromTemplate({
+            document_title: documentTitle,
+            company_name: branding.companyName,
+            template_type: templateDocType,
+            items: templateTargetItems,
+            template_default_font: templateInfo.default_font_name,
+            template_default_font_size: templateInfo.default_font_size_pt,
+            template_sections: templateInfo.sections,
+          });
+      const pdfBlob = await convertOfficeToPdf(docxBlob, `${documentTitle}.docx`);
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Proposal-Template-${documentTitle.replace(/\.[^/.]+$/, "").replace(/\s+/g, "-")}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal membuat PDF full-fidelity dari template");
+    } finally {
+      setConvertingTemplatePdf(false);
+    }
+  };
+
   const handlePptxTemplateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -467,6 +504,33 @@ export function ExportModal({
       setPptxCloneError(err instanceof Error ? err.message : "Gagal clone template PowerPoint");
     } finally {
       setGeneratingPptxClone(false);
+    }
+  };
+
+  const handleGeneratePptxPdf = async () => {
+    if (!pptxTemplateFile || templateTargetItems.length === 0 || convertingPptxPdf) return;
+    setConvertingPptxPdf(true);
+    setPptxCloneError(null);
+    try {
+      const pptxBlob = await cloneTemplatePptx({
+        templateFile: pptxTemplateFile,
+        document_title: documentTitle,
+        company_name: branding.companyName,
+        items: templateTargetItems,
+      });
+      const pdfBlob = await convertOfficeToPdf(pptxBlob, pptxTemplateFile.name);
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `PitchDeck-Cloned-${documentTitle.replace(/\.[^/.]+$/, "").replace(/\s+/g, "-")}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setPptxCloneError(err instanceof Error ? err.message : "Gagal membuat PDF full-fidelity PPTX");
+    } finally {
+      setConvertingPptxPdf(false);
     }
   };
 
@@ -988,42 +1052,64 @@ export function ExportModal({
                 />
 
                 {pptxTemplateFile && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={handleGeneratePptxClone}
-                    disabled={templateTargetItems.length === 0 || generatingPptxClone}
-                    className="bg-ink-900 hover:bg-ink-800 text-white mt-3 w-full"
-                  >
-                    {generatingPptxClone ? (
-                      <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat Slide...</>
-                    ) : (
-                      <><Presentation size={14} className="mr-1.5 text-accent" />Generate Pitch Deck (.pptx)</>
-                    )}
-                  </Button>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleGeneratePptxPdf}
+                      disabled={templateTargetItems.length === 0 || generatingPptxClone || convertingPptxPdf}
+                      className="flex-1 border-surface-border"
+                    >
+                      {convertingPptxPdf ? <><Loader2 size={14} className="mr-1.5 animate-spin" />Render...</> : <><FileDown size={14} className="mr-1.5" />PDF Fidelity</>}
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleGeneratePptxClone}
+                      disabled={templateTargetItems.length === 0 || generatingPptxClone || convertingPptxPdf}
+                      className="flex-1 bg-ink-900 text-white hover:bg-ink-800"
+                    >
+                      {generatingPptxClone ? (
+                        <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat...</>
+                      ) : (
+                        <><Presentation size={14} className="mr-1.5 text-accent" />PPTX</>
+                      )}
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-t border-surface-border px-6 py-4 bg-surface-raised">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-surface-border px-6 py-4 bg-surface-raised">
               <p className="text-xs text-text-muted max-w-xs">
                 {templateInfo
                   ? "Klik Generate untuk membuat Word yang mengikuti struktur dan font dari template Anda."
                   : "Upload template terlebih dahulu untuk mengaktifkan ekspor."}
               </p>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleExportFromTemplate}
-                disabled={!templateInfo || templateTargetItems.length === 0 || exportingFromTemplate}
-                className="bg-ink-900 hover:bg-ink-800 text-white min-w-[200px]"
-              >
-                {exportingFromTemplate ? (
-                  <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat dari Template...</>
-                ) : (
-                  <><Wand2 size={14} className="mr-1.5 text-accent" />Generate dari Template</>
-                )}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleExportTemplatePdf}
+                  disabled={!templateInfo || templateTargetItems.length === 0 || exportingFromTemplate || convertingTemplatePdf}
+                  className="border-surface-border"
+                >
+                  {convertingTemplatePdf ? <><Loader2 size={14} className="mr-1.5 animate-spin" />Render PDF...</> : <><FileDown size={14} className="mr-1.5" />PDF Full Fidelity</>}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleExportFromTemplate}
+                  disabled={!templateInfo || templateTargetItems.length === 0 || exportingFromTemplate}
+                  className="bg-ink-900 hover:bg-ink-800 text-white"
+                >
+                  {exportingFromTemplate ? (
+                    <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat Word...</>
+                  ) : (
+                    <><Wand2 size={14} className="mr-1.5 text-accent" />Generate Word</>
+                  )}
+                </Button>
+              </div>
             </div>
           </>
         )}

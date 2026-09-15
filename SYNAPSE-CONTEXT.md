@@ -289,7 +289,16 @@ knowledge-accelerator/
 
 **STATUS ROADMAP 6-10: SELESAI.** Search filters, evidence/confidence, export visual preflight, dan live smoke verification sudah selesai.
 
-**GAP TERPISAH YANG MASIH TERSISA:** PDF yang benar-benar mengikuti layout Word/PPTX template secara penuh. PDF branded dan preview sudah tersedia; full-fidelity template PDF memerlukan renderer Office/headless conversion atau pipeline khusus.
+
+### ✅ Full-Fidelity Template PDF Renderer
+- `backend/app/services/office_render.py`: DOCX/PPTX dirender melalui Microsoft Word/PowerPoint native dalam child PowerShell process, lalu dikembalikan sebagai PDF.
+- `backend/app/routers/draft.py`: endpoint `POST /draft/convert-office-pdf` menerima hasil DOCX/PPTX dan mengembalikan PDF dengan layout Office asli.
+- `frontend/lib/api.ts` dan `frontend/components/draft/export-modal.tsx`: standard PDF, `PDF Full Fidelity` untuk template Word, dan `PDF Fidelity` untuk cloned PPTX.
+- Child process dipakai agar reference COM tidak meninggalkan file template terkunci.
+- Verifikasi: Word smoke test menghasilkan PDF valid, `npm run build` exit 0, backend compile bersih, dan diagnostics bersih.
+- Requirement runtime: Windows dengan Microsoft Word/PowerPoint terpasang. Fallback PDF ReportLab tetap tersedia untuk environment tanpa Office.
+
+**STATUS ROADMAP: SELESAI.** PDF branded, preview, preflight, dan full-fidelity template PDF sudah tersedia.
 
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
