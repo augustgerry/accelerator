@@ -157,6 +157,17 @@ knowledge-accelerator/
 **File:** `backend/app/routers/draft.py` & `frontend/components/draft/export-modal.tsx`
 - Buat generator SoW, Solution Brief, dan MoM (Minutes of Meeting).
 - Siapkan generator presentasi PPT / Pitch Deck (menggunakan library `python-pptx`).
+- **STATUS: SELESAI** (commit `9f4ae1b`).
+
+### 🟢 PRIORITY 4: Full-Fidelity Template-Following Generator (SEMUA jenis dokumen)
+**File:** `backend/app/routers/draft.py`, `backend/app/services/llm_provider.py`, `frontend/components/draft/export-modal.tsx`
+- User kasih TOR + template (upload manual ATAU pilih dari Template Library Priority 2) → AI generate Proposal Teknis / SoW / Solution Brief / MoM / PPT Pitch Deck yang ikutin template **sampai ke sub-bab, font name, font size, semua detail teknis Word/PPT**, isi otomatis pakai AI dengan minim kesalahan.
+- Sub-task:
+  1. Ganti heuristic keyword-matching di `export-from-template` dengan pemetaan section berbasis LLM (kirim daftar heading template + daftar item TOR ke LLM, minta hasil mapping semantik, bukan cocok kata kunci doang).
+  2. `ExportFromTemplateRequest` / `clone-template` perlu tau `template_type` target (proposal/sow/solution_brief/mom) supaya AI tau gaya bahasa & struktur yang diharapkan per section.
+  3. PPTX template-following (gap terbesar, belum ada sama sekali): terima upload/pilih `.pptx` template dari library, baca slide master/layout & placeholder asli (pakai `python-pptx` baca `slide.slide_layout`, `placeholders`), lalu AI isi teks per placeholder sesuai konten TOR — bukan generate slide baru dari layout fixed hardcoded seperti sekarang.
+  4. Extend Template Library (Priority 2) supaya sync Drive juga tag `.pptx` sebagai `doc_type = "template"` (sekarang cuma docx yang di-tag, lihat `documents.py` `DOCX_MIME` check).
+- **STATUS: BELUM MULAI** — masih scoping, tunggu keputusan user mulai dari sub-task mana.
 
 ---
 
