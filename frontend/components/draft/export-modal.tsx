@@ -16,9 +16,10 @@ import {
   ChevronRight,
   Table2,
   BookOpen,
+  Presentation,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { exportProposalDocx, uploadTemplate, exportFromTemplate, cloneTemplate } from "@/lib/api";
+import { exportProposalDocx, exportProposalPptx, uploadTemplate, exportFromTemplate, cloneTemplate } from "@/lib/api";
 import type { RequirementItem, TemplateInfo } from "@/lib/types";
 
 interface ExportModalProps {
@@ -38,7 +39,9 @@ export function ExportModal({
 }: ExportModalProps) {
   // ── Standard tab state
   const [onlyFinal, setOnlyFinal] = useState(false);
-  const [templateType, setTemplateType] = useState<"matrix" | "narrative">("matrix");
+  const [templateType, setTemplateType] = useState<
+    "matrix" | "narrative" | "sow" | "solution_brief" | "mom" | "pptx"
+  >("matrix");
   const [fontName, setFontName] = useState<string>("Calibri");
   const [copied, setCopied] = useState(false);
   const [downloadingDocx, setDownloadingDocx] = useState(false);
@@ -75,7 +78,16 @@ export function ExportModal({
     })
     .join("\n");
 
-  const fullExportContent = `# Tanggapan Teknis & Proposal: ${documentTitle}\nTanggal Ekspor: ${new Date().toLocaleDateString("id-ID")}\nFormat Template: ${templateType === "matrix" ? "Matriks Tender Resmi" : "Proposal Naratif Bertingkat"}\nTotal Klausul Terjawab: ${targetItems.length} dari ${items.length}\n\n---\n\n${compiledText}`;
+  const formatLabels: Record<string, string> = {
+    matrix: "Matriks Kepatuhan Tender (Tabel)",
+    narrative: "Proposal Teknis Naratif",
+    sow: "Statement of Work (SoW)",
+    solution_brief: "Solution Brief",
+    mom: "Minutes of Meeting (MoM)",
+    pptx: "Slide Presentation (.pptx)",
+  };
+
+  const fullExportContent = `# Tanggapan Teknis & Dokumen: ${documentTitle}\nTanggal Ekspor: ${new Date().toLocaleDateString("id-ID")}\nFormat Dokumen: ${formatLabels[templateType] || templateType}\nTotal Klausul Terjawab: ${targetItems.length} dari ${items.length}\n\n---\n\n${compiledText}`;
 
   const handleCopy = async () => {
     try {
@@ -91,35 +103,60 @@ export function ExportModal({
     if (targetItems.length === 0) return;
     setDownloadingDocx(true);
     try {
-      const blob = await exportProposalDocx({
-        document_title: documentTitle,
-        template_type: templateType,
-        font_name: fontName,
-        company_name: "PT Solusi Mitra Gemilang (SMG)",
-        items: targetItems.map((it) => ({
-          id: it.id,
-          title: it.title,
-          requirement_text: it.requirement_text,
-          category: it.category,
-          draft_text: it.draft_text,
-          status: it.status,
-        })),
-      });
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
       const cleanTitle = documentTitle.replace(/\.[^/.]+$/, "").replace(/\s+/g, "-");
-      link.setAttribute("download", `Proposal-Response-${cleanTitle}.docx`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const mappedItems = targetItems.map((it) => ({
+        id: it.id,
+        title: it.title,
+        requirement_text: it.requirement_text,
+        category: it.category,
+        draft_text: it.draft_text,
+        status: it.status,
+      }));
+
+      if (templateType === "pptx") {
+        const blob = await exportProposalPptx({
+          document_title: documentTitle,
+          company_name: "PT Solusi Mitra Gemilang (SMG)",
+          items: mappedItems,
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `PitchDeck-${cleanTitle}.pptx`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        const blob = await exportProposalDocx({
+          document_title: documentTitle,
+          template_type: templateType,
+          font_name: fontName,
+          company_name: "PT Solusi Mitra Gemilang (SMG)",
+          items: mappedItems,
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        const prefix =
+          templateType === "sow"
+            ? "SoW"
+            : templateType === "solution_brief"
+            ? "SolutionBrief"
+            : templateType === "mom"
+            ? "MoM"
+            : "Proposal";
+        link.setAttribute("download", `${prefix}-${cleanTitle}.docx`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Gagal mengunduh dokumen Word");
+      alert(err instanceof Error ? err.message : "Gagal mengunduh dokumen");
     } finally {
       setDownloadingDocx(false);
     }
   };
+
 
   const handleDownloadMd = () => {
     const blob = new Blob([fullExportContent], { type: "text/markdown;charset=utf-8;" });
@@ -194,8 +231,8 @@ export function ExportModal({
   };
 
   const TABS: { key: ExportTab; label: string; icon: React.ReactNode }[] = [
-    { key: "standard", label: "Word Standar", icon: <Table2 size={14} /> },
-    { key: "template", label: "Gunakan Template", icon: <Wand2 size={14} /> },
+    { key: "standard", label: "Format Dokumen & Slide", icon: <Table2 size={14} /> },
+    { key: "template", label: "Gunakan Template Word", icon: <Wand2 size={14} /> },
     { key: "text", label: "Salin / Markdown", icon: <FileCode2 size={14} /> },
   ];
 
@@ -212,7 +249,7 @@ export function ExportModal({
               Kompilasi &amp; Ekspor Proposal
             </h3>
             <p className="text-xs text-text-muted">
-              Ekspor ke Word standar, ikuti template Anda, atau salin teks
+              Ekspor ke Word (Proposal, SoW, Solution Brief, MoM), Slide PPTX, atau ikuti Template Anda
             </p>
           </div>
           <button
@@ -241,34 +278,41 @@ export function ExportModal({
           ))}
         </div>
 
-        {/* ── Tab: Standard Word Export ─────────────────────────────────────── */}
+        {/* ── Tab: Standard Word / PPTX Export ─────────────────────────────────── */}
         {activeTab === "standard" && (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border bg-surface px-6 py-3 text-xs">
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-text-primary">Gaya:</span>
+                  <span className="font-semibold text-text-primary">Jenis Output:</span>
                   <select
                     value={templateType}
-                    onChange={(e) => setTemplateType(e.target.value as "matrix" | "narrative")}
-                    className="rounded border border-surface-border bg-surface-raised px-2.5 py-1 text-xs text-text-primary outline-none focus:border-accent"
+                    onChange={(e) => setTemplateType(e.target.value as any)}
+                    className="rounded border border-surface-border bg-surface-raised px-2.5 py-1 text-xs text-text-primary font-medium outline-none focus:border-accent cursor-pointer"
                   >
-                    <option value="matrix">Matriks Kepatuhan Tender (Tabel)</option>
-                    <option value="narrative">Proposal Naratif (Bab &amp; Sub-Bab)</option>
+                    <option value="matrix">📋 Matriks Kepatuhan Tender (.docx)</option>
+                    <option value="narrative">📄 Proposal Teknis Naratif (.docx)</option>
+                    <option value="sow">📑 Statement of Work / SoW (.docx)</option>
+                    <option value="solution_brief">💡 Solution Brief (.docx)</option>
+                    <option value="mom">📝 Minutes of Meeting / MoM (.docx)</option>
+                    <option value="pptx">📊 Presentation Pitch Deck (.pptx)</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-text-primary">Font:</span>
-                  <select
-                    value={fontName}
-                    onChange={(e) => setFontName(e.target.value)}
-                    className="rounded border border-surface-border bg-surface-raised px-2.5 py-1 text-xs text-text-primary outline-none focus:border-accent"
-                  >
-                    <option value="Calibri">Calibri</option>
-                    <option value="Arial">Arial</option>
-                    <option value="Times New Roman">Times New Roman</option>
-                  </select>
-                </div>
+
+                {templateType !== "pptx" && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-text-primary">Font:</span>
+                    <select
+                      value={fontName}
+                      onChange={(e) => setFontName(e.target.value)}
+                      className="rounded border border-surface-border bg-surface-raised px-2.5 py-1 text-xs text-text-primary outline-none focus:border-accent"
+                    >
+                      <option value="Calibri">Calibri</option>
+                      <option value="Arial">Arial</option>
+                      <option value="Times New Roman">Times New Roman</option>
+                    </select>
+                  </div>
+                )}
               </div>
               <label className="flex items-center gap-1.5 cursor-pointer text-text-secondary hover:text-text-primary">
                 <input
@@ -292,16 +336,22 @@ export function ExportModal({
                 <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
                   <div className="flex items-center justify-between border-b border-surface-border pb-3 mb-4">
                     <span className="text-xs font-semibold text-text-primary flex items-center gap-1.5">
-                      <FileText size={15} className="text-secondary" />
-                      Pratinjau ({targetItems.length} butir)
+                      {templateType === "pptx" ? (
+                        <Presentation size={15} className="text-amber-500" />
+                      ) : (
+                        <FileText size={15} className="text-secondary" />
+                      )}
+                      Pratinjau Butir ({targetItems.length} butir ditanggapi)
                     </span>
-                    <span className="text-[11px] text-text-muted">Format: {templateType === "matrix" ? "Matriks Tabel" : "Naratif Bab"}</span>
+                    <span className="text-[11px] text-text-muted">
+                      Target: {formatLabels[templateType]}
+                    </span>
                   </div>
                   <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                     {targetItems.map((it, idx) => (
                       <div key={it.id} className="flex items-start gap-2 rounded-md border border-surface-border bg-surface p-2.5">
                         <span className="text-[11px] font-mono text-text-muted shrink-0 w-5">{idx + 1}.</span>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium text-text-primary truncate">{it.title}</p>
                           <p className="text-[11px] text-text-muted line-clamp-1">{it.draft_text || "—"}</p>
                         </div>
@@ -321,17 +371,20 @@ export function ExportModal({
                 size="sm"
                 onClick={handleDownloadDocx}
                 disabled={targetItems.length === 0 || downloadingDocx}
-                className="bg-ink-900 hover:bg-ink-800 text-white min-w-[170px]"
+                className="bg-ink-900 hover:bg-ink-800 text-white min-w-[200px]"
               >
                 {downloadingDocx ? (
-                  <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat Word...</>
+                  <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat File...</>
+                ) : templateType === "pptx" ? (
+                  <><Presentation size={14} className="mr-1.5 text-accent" />Unduh Slide PPTX (.pptx)</>
                 ) : (
-                  <><FileDown size={14} className="mr-1.5 text-accent" />Download Word (.docx)</>
+                  <><FileDown size={14} className="mr-1.5 text-accent" />Unduh Dokumen Word (.docx)</>
                 )}
               </Button>
             </div>
           </>
         )}
+
 
         {/* ── Tab: Template-Based Export ───────────────────────────────────── */}
         {activeTab === "template" && (

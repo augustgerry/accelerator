@@ -4,13 +4,17 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Task Terakhir Selesai:** ✅ PRIORITY 1: Documents Page Enhancement & Chunk Preview (`GET /documents/{id}/chunks`, Drawer UI, Division filtering, Sorting, Copy chunk)
-- **Task Saat Ini:** PRIORITY 2: Template Library & Multi-Format Proposal (SoW, Solution Brief, MoM, PPT Deck)
+- **Task Saat Ini:** PRIORITY 2: Folder Sync → Template Library (Google Drive Integration)
 - **Sub-task Aktif:**
-  1. Menambahkan support jenis output di `backend/app/routers/draft.py` (Technical Proposal, SoW, Solution Brief, MoM)
-  2. Menambahkan selector jenis dokumen di `ExportModal` (`frontend/components/draft/export-modal.tsx`)
-- **File Yang Sedang Disentuh:** `backend/app/routers/draft.py` -> `frontend/components/draft/export-modal.tsx`
-- **Langkah Berikutnya Jika Terputus:** Lanjutkan endpoint generator PPT deck / multi-type template di backend.
+  1. Saat sync Google Drive (`backend/app/routers/documents.py`), deteksi dokumen `.docx` dan set `doc_type = "template"`.
+  2. Di `ExportModal` tab Template, tambah dropdown "Pilih Template dari Library Drive" (tanpa upload manual).
+- **File Yang Sedang Disentuh:** `backend/app/routers/documents.py` -> `frontend/components/draft/export-modal.tsx`
+- **Langkah Berikutnya Jika Terputus:** Cek skema `Document` model utk field `doc_type`, cek endpoint list dokumen ber-filter template.
+
+## ✅ PRIORITY 3 SELESAI (Multi-Format Proposal Types)
+- Backend: `POST /draft/export-docx` mendukung `matrix`, `narrative`, `sow`, `solution_brief`, `mom`. `POST /draft/export-pptx` generate Pitch Deck (`python-pptx`).
+- Frontend: `ExportModal` dropdown "Jenis Output" (6 opsi termasuk PPTX), `lib/api.ts` punya `exportProposalPptx`.
+- Verifikasi: `npx tsc --noEmit` clean; kelima format docx + pptx berhasil di-generate via direct function call test (tidak lewat DB).
 
 ---
 

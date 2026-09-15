@@ -258,6 +258,89 @@ def export_proposal_docx(payload: ExportDocxRequest):
                     for r in p.runs:
                         r.font.size = Pt(9)
 
+    elif payload.template_type == "sow":
+        # Format Dokumen Statement of Work (SoW)
+        doc.add_heading("1. Latar Belakang & Tujuan Pekerjaan", level=1)
+        doc.add_paragraph(
+            f"Dokumen Statement of Work (SoW) ini merinci ruang lingkup implementasi, deliverables, "
+            f"serta tanggung jawab operasional {payload.company_name} dalam pelaksanaan proyek {payload.document_title}."
+        )
+
+        doc.add_heading("2. Ruang Lingkup Pekerjaan (Scope of Work)", level=1)
+        doc.add_paragraph(
+            "Ruang lingkup pekerjaan mencakup implementasi dan pemenuhan seluruh klausul teknis berikut:"
+        )
+        for idx, item in enumerate(payload.items, start=1):
+            doc.add_heading(f"2.{idx} Scope: {item.title} [{item.category}]", level=2)
+            req_p = doc.add_paragraph()
+            req_p.add_run(f"Klausul Acuan: {item.requirement_text}\n").italic = True
+            req_p.add_run("Rincian Lingkup Eksekusi:\n").bold = True
+            req_p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Rincian belum ditentukan]")
+            req_p.paragraph_format.space_after = Pt(10)
+
+        doc.add_heading("3. Deliverables & Serah Terima", level=1)
+        doc.add_paragraph(
+            "Deliverables proyek mencakup dokumen arsitektur solusi, konfigurasi sistem, laporan pengujian "
+            "(UAT), materi pelatihan (transfer of knowledge), dan Berita Acara Serah Terima (BAST)."
+        )
+
+        doc.add_heading("4. Tanggung Jawab & Asumsi", level=1)
+        doc.add_paragraph(
+            "1. Pihak Klien menyediakan akses lingkungan teknis, data uji, dan narahubung teknis yang berwenang.\n"
+            f"2. {payload.company_name} menyediakan tenaga ahli bersertifikasi dan metodologi implementasi standar.\n"
+            "3. Perubahan ruang lingkup di luar butir di atas akan disepakati melalui prosedur Change Request (CR)."
+        )
+
+    elif payload.template_type == "solution_brief":
+        # Format Solution Brief Ringkas & Tajam
+        doc.add_heading("1. Ringkasan Eksekutif & Value Proposition", level=1)
+        doc.add_paragraph(
+            f"Solution Brief ini menyajikan gambaran arsitektur dan keunggulan teknis penawaran {payload.company_name} "
+            f"dalam menjawab kebutuhan {payload.document_title} secara efektif, skalabel, dan efisien."
+        )
+
+        doc.add_heading("2. Tantangan Klien & Pendekatan Solusi", level=1)
+        for idx, item in enumerate(payload.items, start=1):
+            doc.add_heading(f"{idx}. {item.title}", level=2)
+            p = doc.add_paragraph()
+            p.add_run("Tantangan Kebutuhan: ").bold = True
+            p.add_run(f"{item.requirement_text}\n")
+            p.add_run("Solusi & Keunggulan SMG: ").bold = True
+            p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Solusi belum diisi]")
+            p.paragraph_format.space_after = Pt(10)
+
+        doc.add_heading("3. Keunggulan Kompetitif & Mengapa SMG", level=1)
+        doc.add_paragraph(
+            f"1. Tim Solution Architect berpengalaman dan bersertifikasi prinsipal terkemuka.\n"
+            f"2. Rekam jejak keberhasilan implementasi serupa dengan SLA tinggi.\n"
+            f"3. Dukungan purnajual lokal 24/7 dan asistensi kepatuhan regulasi."
+        )
+
+    elif payload.template_type == "mom":
+        # Format Minutes of Meeting (MoM) / Berita Acara
+        doc.add_heading("1. Informasi Pertemuan & Agenda", level=1)
+        doc.add_paragraph(
+            f"Agenda Pertemuan: Klarifikasi Teknis & Pembahasan Klausul {payload.document_title}\n"
+            f"Waktu Pelaksanaan: {datetime.now().strftime('%d %B %Y')}\n"
+            f"Penyelenggara: Tim Solution Architect {payload.company_name}"
+        )
+
+        doc.add_heading("2. Poin Pembahasan & Klarifikasi Klausul", level=1)
+        for idx, item in enumerate(payload.items, start=1):
+            doc.add_heading(f"Topik {idx}: {item.title}", level=2)
+            p = doc.add_paragraph()
+            p.add_run("Poin Diskusi / Pertanyaan Klien:\n").bold = True
+            p.add_run(f"\"{item.requirement_text}\"\n")
+            p.add_run("Tanggapan & Klarifikasi SMG:\n").bold = True
+            p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Belum ada catatan]")
+            p.paragraph_format.space_after = Pt(10)
+
+        doc.add_heading("3. Tindak Lanjut (Action Items)", level=1)
+        doc.add_paragraph(
+            "1. SMG melengkapi dokumen teknis dan penawaran harga sesuai hasil klarifikasi.\n"
+            "2. Klien melakukan review internal atas alternatif solusi yang telah disepakati."
+        )
+
     else:
         # Format Proposal Naratif Bertingkat (Bab & Sub-bab)
         doc.add_heading("1. Ringkasan Eksekutif & Metodologi", level=1)
@@ -295,13 +378,196 @@ def export_proposal_docx(payload: ExportDocxRequest):
 
     clean_name = "".join(c for c in payload.document_title if c.isalnum() or c in ("-", "_")).strip()
     if not clean_name:
-        clean_name = "Proposal"
+        clean_name = "Dokumen"
+
+    type_labels = {
+        "matrix": "Matriks-Tender",
+        "narrative": "Proposal-Teknis",
+        "sow": "Statement-of-Work",
+        "solution_brief": "Solution-Brief",
+        "mom": "Minutes-of-Meeting",
+    }
+    file_prefix = type_labels.get(payload.template_type, "Proposal")
 
     return StreamingResponse(
         bio,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="Proposal-{clean_name}.docx"'},
+        headers={"Content-Disposition": f'attachment; filename="{file_prefix}-{clean_name}.docx"'},
     )
+
+
+class ExportPptxRequest(BaseModel):
+    document_title: str
+    company_name: str = "PT Solusi Mitra Gemilang (SMG)"
+    items: list[ExportDocxItem]
+
+
+@router.post("/export-pptx")
+def export_proposal_pptx(payload: ExportPptxRequest):
+    """Generate a high-impact presentation slide deck (.pptx) from drafted items."""
+    import io
+    from datetime import datetime
+    from pptx import Presentation
+    from pptx.util import Inches, Pt
+    from pptx.dml.color import RGBColor
+    from pptx.enum.text import PP_ALIGN
+    from fastapi.responses import StreamingResponse
+
+    prs = Presentation()
+    # 16:9 widescreen
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+
+    blank_slide_layout = prs.slide_layouts[6]
+
+    # Slide 1: Cover
+    cover_slide = prs.slides.add_slide(blank_slide_layout)
+    # Background card
+    cover_box = cover_slide.shapes.add_textbox(Inches(1.0), Inches(1.5), Inches(11.333), Inches(4.5))
+    tf = cover_box.text_frame
+    tf.word_wrap = True
+
+    p_badge = tf.paragraphs[0]
+    p_badge.text = "SOLUTION PRESENTATION & TECHNICAL PITCH"
+    p_badge.font.size = Pt(14)
+    p_badge.font.bold = True
+    p_badge.font.color.rgb = RGBColor(0xD9, 0x77, 0x06)  # Amber accent
+
+    p_title = tf.add_paragraph()
+    p_title.text = payload.document_title
+    p_title.font.size = Pt(36)
+    p_title.font.bold = True
+    p_title.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
+    p_title.space_before = Pt(14)
+
+    p_sub = tf.add_paragraph()
+    p_sub.text = f"Dipersiapkan oleh: {payload.company_name} · {datetime.now().strftime('%d %B %Y')}"
+    p_sub.font.size = Pt(16)
+    p_sub.font.color.rgb = RGBColor(0x4B, 0x55, 0x63)
+    p_sub.space_before = Pt(12)
+
+    # Slide 2: Agenda / Executive Summary
+    agenda_slide = prs.slides.add_slide(blank_slide_layout)
+    ag_box = agenda_slide.shapes.add_textbox(Inches(1.0), Inches(0.8), Inches(11.333), Inches(1.2))
+    tf_ag = ag_box.text_frame
+    p_h = tf_ag.paragraphs[0]
+    p_h.text = "Ringkasan Eksekutif & Agenda Pemaparan"
+    p_h.font.size = Pt(24)
+    p_h.font.bold = True
+    p_h.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
+
+    ag_body = agenda_slide.shapes.add_textbox(Inches(1.0), Inches(2.2), Inches(11.333), Inches(4.5))
+    tf_body = ag_body.text_frame
+    tf_body.word_wrap = True
+
+    p_intro = tf_body.paragraphs[0]
+    p_intro.text = (
+        f"Presentasi ini menyajikan usulan solusi menyeluruh untuk {payload.document_title}. "
+        f"Kami telah menganalisis {len(payload.items)} butir kebutuhan spesifikasi teknis dan "
+        "merumuskan pendekatan arsitektur terbaik."
+    )
+    p_intro.font.size = Pt(14)
+    p_intro.font.color.rgb = RGBColor(0x37, 0x41, 0x51)
+
+    points = [
+        f"Analisis Kebutuhan Teknis ({len(payload.items)} Klausul Utama)",
+        "Pendekatan Arsitektur Solusi Teruji & Praktik Terbaik SMG",
+        "Komitmen Deliverables, Tata Kelola Proyek, dan SLA Implementasi",
+        "Keunggulan Kompetitif & Nilai Tambah Kemitraan SMG",
+    ]
+    for pt in points:
+        p_pt = tf_body.add_paragraph()
+        p_pt.text = f"• {pt}"
+        p_pt.font.size = Pt(14)
+        p_pt.font.bold = True
+        p_pt.font.color.rgb = RGBColor(0x1F, 0x29, 0x37)
+        p_pt.space_before = Pt(8)
+
+    # Slides 3..N: Content Slides (Max 10 per deck to keep concise)
+    for idx, item in enumerate(payload.items[:12], start=1):
+        slide = prs.slides.add_slide(blank_slide_layout)
+
+        # Header Title
+        hdr_box = slide.shapes.add_textbox(Inches(1.0), Inches(0.6), Inches(11.333), Inches(1.0))
+        tf_hdr = hdr_box.text_frame
+        p_cat = tf_hdr.paragraphs[0]
+        p_cat.text = f"KLAUSUL #{idx} · {item.category.upper()}"
+        p_cat.font.size = Pt(11)
+        p_cat.font.bold = True
+        p_cat.font.color.rgb = RGBColor(0xD9, 0x77, 0x06)
+
+        p_t = tf_hdr.add_paragraph()
+        p_t.text = item.title
+        p_t.font.size = Pt(22)
+        p_t.font.bold = True
+        p_t.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
+
+        # Left Box: Kebutuhan Klien
+        left_box = slide.shapes.add_textbox(Inches(1.0), Inches(1.8), Inches(5.3), Inches(4.8))
+        tf_l = left_box.text_frame
+        tf_l.word_wrap = True
+        p_lh = tf_l.paragraphs[0]
+        p_lh.text = "📋 Kebutuhan Dokumen Tender"
+        p_lh.font.size = Pt(14)
+        p_lh.font.bold = True
+        p_lh.font.color.rgb = RGBColor(0x25, 0x63, 0xEB)
+
+        p_lb = tf_l.add_paragraph()
+        p_lb.text = item.requirement_text
+        p_lb.font.size = Pt(12)
+        p_lb.font.color.rgb = RGBColor(0x4B, 0x55, 0x63)
+        p_lb.space_before = Pt(8)
+
+        # Right Box: Solusi SMG
+        right_box = slide.shapes.add_textbox(Inches(6.8), Inches(1.8), Inches(5.5), Inches(4.8))
+        tf_r = right_box.text_frame
+        tf_r.word_wrap = True
+        p_rh = tf_r.paragraphs[0]
+        p_rh.text = f"⚡ Tanggapan & Komitmen {payload.company_name}"
+        p_rh.font.size = Pt(14)
+        p_rh.font.bold = True
+        p_rh.font.color.rgb = RGBColor(0x05, 0x96, 0x69)
+
+        p_rb = tf_r.add_paragraph()
+        p_rb.text = item.draft_text.strip() if item.draft_text.strip() else "[Tanggapan belum disusun]"
+        p_rb.font.size = Pt(12)
+        p_rb.font.color.rgb = RGBColor(0x1F, 0x29, 0x37)
+        p_rb.space_before = Pt(8)
+
+    # Closing Slide: Q&A / Terima Kasih
+    close_slide = prs.slides.add_slide(blank_slide_layout)
+    close_box = close_slide.shapes.add_textbox(Inches(1.0), Inches(2.2), Inches(11.333), Inches(3.5))
+    tf_c = close_box.text_frame
+    tf_c.word_wrap = True
+
+    p_c1 = tf_c.paragraphs[0]
+    p_c1.text = "Terima Kasih"
+    p_c1.font.size = Pt(40)
+    p_c1.font.bold = True
+    p_c1.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
+    p_c1.alignment = PP_ALIGN.CENTER
+
+    p_c2 = tf_c.add_paragraph()
+    p_c2.text = f"Diskusi Solusi Teknis & Tanya Jawab · {payload.company_name}"
+    p_c2.font.size = Pt(16)
+    p_c2.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+    p_c2.space_before = Pt(12)
+    p_c2.alignment = PP_ALIGN.CENTER
+
+    bio_ppt = io.BytesIO()
+    prs.save(bio_ppt)
+    bio_ppt.seek(0)
+
+    clean_name = "".join(c for c in payload.document_title if c.isalnum() or c in ("-", "_")).strip()
+    if not clean_name:
+        clean_name = "PitchDeck"
+
+    return StreamingResponse(
+        bio_ppt,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={"Content-Disposition": f'attachment; filename="PitchDeck-{clean_name}.pptx"'},
+    )
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
