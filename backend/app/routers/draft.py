@@ -946,10 +946,10 @@ def _insert_item_block(doc, item: "ExportFromTemplateItem", font_name: str, font
 @router.post("/clone-template")
 async def clone_template(
     template: UploadFile,
-    items_json: str = "",
-    document_title: str = "",
-    company_name: str = "PT Solusi Mitra Gemilang (SMG)",
-    document_type: str = "proposal",
+    items_json: str = Form(""),
+    document_title: str = Form(""),
+    company_name: str = Form("PT Solusi Mitra Gemilang (SMG)"),
+    document_type: str = Form("proposal"),
 ):
     """
     In-place template cloning endpoint.
@@ -973,7 +973,6 @@ async def clone_template(
     import json
     import re
     from datetime import datetime
-    from fastapi import Form
     from fastapi.responses import StreamingResponse
     from docx import Document as DocxDocument
     from docx.shared import Pt, RGBColor, Inches
