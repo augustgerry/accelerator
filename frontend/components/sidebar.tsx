@@ -37,7 +37,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-surface-border bg-white text-text-primary select-none">
+    <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-surface-border bg-white text-text-primary select-none md:flex">
       {/* Brand / Logo */}
       <Link
         href="/"
@@ -149,5 +149,37 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+  );
+}
+
+export function MobileNav() {
+  const pathname = usePathname();
+  const items = [
+    { href: "/", label: "Home", icon: Sparkles },
+    { href: "/search", label: "Search", icon: Search },
+    { href: "/draft", label: "Draft", icon: FileEdit },
+    { href: "/documents", label: "Library", icon: FolderOpen },
+  ];
+
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-surface-border bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      {items.map((item) => {
+        const active = pathname === item.href;
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              "flex min-h-14 flex-col items-center justify-center gap-1 text-[10px] font-medium",
+              active ? "text-accent-ink" : "text-text-muted"
+            )}
+          >
+            <Icon size={17} />
+            <span>{item.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

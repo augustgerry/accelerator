@@ -212,6 +212,12 @@ knowledge-accelerator/
 - Reset data lokal ikut menghapus profil branding.
 - Verifikasi: `npx tsc --noEmit` exit 0, backend compile/import bersih, dan sample PDF dengan branding custom menghasilkan response `application/pdf`.
 
+### ✅ Enhancement: Compact Responsive UX & Faster Drafting
+- `frontend/components/draft/progress-header.tsx`: aksi utama diringkas menjadi `Generate All` dan `Export`; quality check, simpan project, dan ganti dokumen dipindahkan ke menu `More`.
+- `frontend/components/sidebar.tsx`, `frontend/components/topbar.tsx`, dan `frontend/app/layout.tsx`: desktop tetap sidebar, mobile memakai bottom navigation, topbar lebih ringkas dan tidak overflow.
+- `frontend/app/draft/page.tsx`: `Generate All` memproses batch maksimal 3 item paralel agar respons lebih cepat tanpa membanjiri provider.
+- Verifikasi: `npx tsc --noEmit` exit 0, diagnostics semua file UI bersih, dan `git diff --check` bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

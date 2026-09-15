@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Sidebar } from "@/components/sidebar";
+import { MobileNav, Sidebar } from "@/components/sidebar";
 
 export const metadata: Metadata = {
   title: "Internal Knowledge & Proposal Synapse",
@@ -16,7 +16,8 @@ export default function RootLayout({
     <html lang="id">
       <body className="flex">
         <Sidebar />
-        <main className="flex-1">{children}</main>
+        <main className="min-w-0 flex-1 pb-14 md:pb-0">{children}</main>
+        <MobileNav />
       </body>
     </html>
   );

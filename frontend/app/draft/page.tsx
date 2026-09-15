@@ -346,8 +346,9 @@ export default function DraftPage() {
     if (uncompleted.length === 0 || isDraftingAll) return;
 
     setIsDraftingAll(true);
-    for (const it of uncompleted) {
-      await handleGenerateItemDraft(it.id);
+    for (let index = 0; index < uncompleted.length; index += 3) {
+      const batch = uncompleted.slice(index, index + 3);
+      await Promise.all(batch.map((item) => handleGenerateItemDraft(item.id)));
     }
     setIsDraftingAll(false);
   };

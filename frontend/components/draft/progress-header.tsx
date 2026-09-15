@@ -1,6 +1,7 @@
 "use client";
 
-import { FileText, Sparkles, Download, RotateCcw, CheckCircle2, Clock, AlertCircle, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { FileText, Sparkles, Download, RotateCcw, CheckCircle2, Clock, AlertCircle, ShieldCheck, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RequirementItem } from "@/lib/types";
 
@@ -35,6 +36,7 @@ export function ProgressHeader({
   isSavingSession,
   sessionSaved,
 }: ProgressHeaderProps) {
+  const [moreOpen, setMoreOpen] = useState(false);
   const total = items.length;
   const finalCount = items.filter((it) => it.status === "final").length;
   const draftCount = items.filter((it) => it.status === "draft").length;
@@ -54,7 +56,7 @@ export function ProgressHeader({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-text-primary truncate max-w-md">
+                <h2 className="text-sm font-semibold text-text-primary truncate max-w-[min(18rem,45vw)]">
                   {fileName}
                 </h2>
                 <span className="rounded-full bg-surface border border-surface-border px-2 py-0.5 text-[11px] font-medium text-text-secondary">
@@ -67,8 +69,8 @@ export function ProgressHeader({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-text-muted">
-                Mode Checklist Loopio · Grounding presales internal
+              <p className="hidden text-xs text-text-muted sm:block">
+                Checklist proposal · knowledge base internal
               </p>
             </div>
           </div>
@@ -113,58 +115,66 @@ export function ProgressHeader({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Button
             variant="secondary"
             size="sm"
             onClick={onDraftAll}
             disabled={isDraftingAll || todoCount === 0}
-            className="flex items-center gap-1.5 border-surface-border hover:border-accent"
+            className="flex items-center gap-1.5 border-surface-border px-2.5 hover:border-accent sm:px-3"
           >
             <Sparkles size={14} className={isDraftingAll ? "animate-spin text-accent-ink" : "text-accent-ink"} />
-            <span>{isDraftingAll ? "Menyusun Draf..." : "Draf Semua Otomatis"}</span>
-          </Button>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onQualityCheck}
-            disabled={isCheckingQuality || total === 0}
-            className="flex items-center gap-1.5 border-surface-border hover:border-accent"
-            title="Periksa kelengkapan dan konsistensi draft"
-          >
-            <ShieldCheck size={14} className={isCheckingQuality ? "animate-pulse text-accent-ink" : "text-accent-ink"} />
-            <span>{isCheckingQuality ? "Memeriksa..." : qualityScore !== undefined ? `Quality ${qualityScore}` : "Cek Kualitas"}</span>
-          </Button>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onSaveSession}
-            disabled={isSavingSession}
-            className="flex items-center gap-1.5 border-surface-border hover:border-accent"
-          >
-            <FileText size={14} className={isSavingSession ? "animate-pulse text-accent-ink" : "text-accent-ink"} />
-            <span>{isSavingSession ? "Menyimpan..." : sessionSaved ?? "Simpan Project"}</span>
+            <span className="hidden sm:inline">{isDraftingAll ? "Menyusun..." : "Generate All"}</span>
           </Button>
 
           <Button
             variant="primary"
             size="sm"
             onClick={onOpenExport}
-            className="flex items-center gap-1.5 bg-ink-900 hover:bg-ink-800 text-white"
+            className="flex items-center gap-1.5 bg-ink-900 px-2.5 text-white hover:bg-ink-800 sm:px-3"
           >
             <Download size={14} />
-            <span>Kompilasi / Salin Semua</span>
+            <span className="hidden sm:inline">Export</span>
           </Button>
 
-          <button
-            onClick={onResetFile}
-            title="Ganti Dokumen TOR"
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-surface-border text-text-muted hover:border-red-300 hover:text-red-600 transition-colors"
-          >
-            <RotateCcw size={14} />
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setMoreOpen((open) => !open)}
+              aria-label="More actions"
+              aria-expanded={moreOpen}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-surface-border text-text-muted transition-colors hover:bg-surface hover:text-text-primary"
+            >
+              <MoreVertical size={15} />
+            </button>
+            {moreOpen && (
+              <div className="absolute right-0 top-10 z-20 w-48 rounded-lg border border-surface-border bg-surface-raised p-1.5 shadow-panel">
+                <button
+                  onClick={() => { onQualityCheck(); setMoreOpen(false); }}
+                  disabled={isCheckingQuality || total === 0}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-text-secondary hover:bg-surface hover:text-text-primary disabled:opacity-50"
+                >
+                  <ShieldCheck size={14} />
+                  <span>{isCheckingQuality ? "Memeriksa..." : qualityScore !== undefined ? `Quality check (${qualityScore})` : "Quality check"}</span>
+                </button>
+                <button
+                  onClick={() => { onSaveSession(); setMoreOpen(false); }}
+                  disabled={isSavingSession}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-text-secondary hover:bg-surface hover:text-text-primary disabled:opacity-50"
+                >
+                  <FileText size={14} />
+                  <span>{isSavingSession ? "Menyimpan..." : sessionSaved ?? "Simpan project"}</span>
+                </button>
+                <div className="my-1 border-t border-surface-border" />
+                <button
+                  onClick={() => { onResetFile(); setMoreOpen(false); }}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-red-600 hover:bg-red-50"
+                >
+                  <RotateCcw size={14} />
+                  <span>Ganti dokumen</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
