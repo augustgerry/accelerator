@@ -17,6 +17,7 @@ import {
   Table2,
   BookOpen,
   Presentation,
+  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,6 +56,7 @@ export function ExportModal({
   const [fontName, setFontName] = useState<string>("Calibri");
   const [copied, setCopied] = useState(false);
   const [downloadingDocx, setDownloadingDocx] = useState(false);
+  const [previewingPdf, setPreviewingPdf] = useState(false);
 
   // ── Tab state
   const [activeTab, setActiveTab] = useState<ExportTab>("standard");
@@ -207,6 +209,38 @@ export function ExportModal({
       alert(err instanceof Error ? err.message : "Gagal mengunduh dokumen");
     } finally {
       setDownloadingDocx(false);
+    }
+  };
+
+  const handlePreviewPdf = async () => {
+    if (targetItems.length === 0 || previewingPdf) return;
+    setPreviewingPdf(true);
+    try {
+      const blob = await exportProposalPdf({
+        document_title: documentTitle,
+        template_type: "narrative",
+        company_name: "PT Solusi Mitra Gemilang (SMG)",
+        items: targetItems.map((it) => ({
+          id: it.id,
+          title: it.title,
+          requirement_text: it.requirement_text,
+          category: it.category,
+          draft_text: it.draft_text,
+          status: it.status,
+        })),
+      });
+      const url = URL.createObjectURL(blob);
+      const previewWindow = window.open(url, "_blank", "noopener,noreferrer");
+      if (!previewWindow) {
+        URL.revokeObjectURL(url);
+        alert("Preview diblokir browser. Izinkan pop-up untuk membuka PDF.");
+      } else {
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Gagal membuka preview PDF");
+    } finally {
+      setPreviewingPdf(false);
     }
   };
 
@@ -495,6 +529,21 @@ export function ExportModal({
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-3 border-t border-surface-border px-6 py-4 bg-surface-raised">
+              {templateType === "pdf" && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handlePreviewPdf}
+                  disabled={targetItems.length === 0 || previewingPdf}
+                  className="min-w-[150px]"
+                >
+                  {previewingPdf ? (
+                    <><Loader2 size={14} className="mr-1.5 animate-spin" />Menyiapkan...</>
+                  ) : (
+                    <><Eye size={14} className="mr-1.5" />Preview PDF</>
+                  )}
+                </Button>
+              )}
               <Button
                 variant="primary"
                 size="sm"
@@ -506,6 +555,8 @@ export function ExportModal({
                   <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat File...</>
                 ) : templateType === "pptx" ? (
                   <><Presentation size={14} className="mr-1.5 text-accent" />Unduh Slide PPTX (.pptx)</>
+                ) : templateType === "pdf" ? (
+                  <><FileDown size={14} className="mr-1.5 text-accent" />Unduh PDF (.pdf)</>
                 ) : (
                   <><FileDown size={14} className="mr-1.5 text-accent" />Unduh Dokumen Word (.docx)</>
                 )}

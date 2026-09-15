@@ -197,8 +197,13 @@ knowledge-accelerator/
 ### ✅ Enhancement Poin 2: Professional PDF Export
 - `backend/app/routers/draft.py`: endpoint `POST /draft/export-pdf` dengan layout matriks dan naratif, header/footer, metadata, zebra table, serta nomor halaman.
 - `backend/requirements.txt`: tambah `reportlab` sebagai generator PDF native tanpa ketergantungan Word atau LibreOffice.
-- `frontend/lib/api.ts` dan `frontend/components/draft/export-modal.tsx`: opsi Proposal PDF tersedia di modal export.
+- `frontend/lib/api.ts` dan `frontend/components/draft/export-modal.tsx`: opsi Proposal PDF tersedia di modal export, termasuk tombol Preview PDF yang membuka hasil render di tab browser sebelum download.
 - Verifikasi: dependency terpasang di `backend/venv`, backend compile bersih, response endpoint terdeteksi `application/pdf` streaming, dan `npx tsc --noEmit` exit 0.
+
+### ✅ Enhancement Step 2A: PDF Preview
+- Preview memakai endpoint export yang sama sehingga file yang dilihat identik dengan file yang diunduh.
+- Popup blocker ditangani dengan pesan yang jelas; object URL dibersihkan setelah satu menit.
+- Verifikasi: `npx tsc --noEmit` exit 0 dan diagnostics `export-modal.tsx` bersih.
 
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
