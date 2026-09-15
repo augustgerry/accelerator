@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   SendHorizontal,
   ChevronRight,
+  CheckSquare,
 } from "lucide-react";
 import {
   uploadTor,
@@ -142,7 +143,7 @@ export default function DraftPage() {
   const [segmenting, setSegmenting] = useState(false);
   const [items, setItems] = useState<RequirementItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<"all" | RequirementStatus>("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "review" | RequirementStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
   const [isDraftingAll, setIsDraftingAll] = useState(false);
@@ -154,6 +155,7 @@ export default function DraftPage() {
   const [hydrated, setHydrated] = useState(false);
   const [qualityReport, setQualityReport] = useState<QualityCheckResult | null>(null);
   const [checkingQuality, setCheckingQuality] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [savingSession, setSavingSession] = useState(false);
   const [sessionSaved, setSessionSaved] = useState<string | null>(null);
@@ -210,7 +212,12 @@ export default function DraftPage() {
   // Filtered requirements list
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      const matchStatus = filterStatus === "all" || item.status === filterStatus;
+      const hasQualityIssue = qualityReport?.results.some(
+        (result) => result.item_id === item.id && result.issues.length > 0
+      ) ?? false;
+      const matchStatus = filterStatus === "all"
+        || (filterStatus === "review" && hasQualityIssue)
+        || item.status === filterStatus;
       const matchQuery =
         !searchQuery.trim() ||
         item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -218,7 +225,7 @@ export default function DraftPage() {
         item.category.toLowerCase().includes(searchQuery.toLowerCase());
       return matchStatus && matchQuery;
     });
-  }, [items, filterStatus, searchQuery]);
+  }, [items, filterStatus, searchQuery, qualityReport]);
 
   // Handle file upload & auto-segmentation
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -358,11 +365,38 @@ export default function DraftPage() {
         status: item.status,
       })));
       setQualityReport(report);
+      setSelectedIds(new Set(report.results.filter((result) => result.issues.length > 0).map((result) => result.item_id)));
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Gagal menjalankan quality check");
     } finally {
       setCheckingQuality(false);
     }
+  };
+
+  const toggleItemSelection = (itemId: string) => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const selectVisibleItems = () => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      const allSelected = filteredItems.length > 0 && filteredItems.every((item) => next.has(item.id));
+      filteredItems.forEach((item) => (allSelected ? next.delete(item.id) : next.add(item.id)));
+      return next;
+    });
+  };
+
+  const bulkSetStatus = (status: RequirementStatus) => {
+    if (selectedIds.size === 0) return;
+    setItems((previous) => previous.map((item) => (
+      selectedIds.has(item.id) ? { ...item, status } : item
+    )));
+    setSelectedIds(new Set());
   };
 
   const handleSaveSession = async () => {
@@ -629,6 +663,35 @@ export default function DraftPage() {
                   >
                     Final ({items.filter((i) => i.status === "final").length})
                   </button>
+                  <button
+                    onClick={() => setFilterStatus("review")}
+                    className={`flex-1 rounded py-1 font-medium transition-all ${
+                      filterStatus === "review"
+                        ? "bg-surface-raised text-red-700 shadow-subtle"
+                        : "text-text-muted hover:text-text-primary"
+                    }`}
+                  >
+                    Review ({qualityReport?.items_with_issues ?? 0})
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <button
+                    onClick={selectVisibleItems}
+                    className="inline-flex items-center gap-1 text-text-secondary hover:text-text-primary"
+                  >
+                    <CheckSquare size={13} />
+                    {filteredItems.length > 0 && filteredItems.every((item) => selectedIds.has(item.id))
+                      ? "Batalkan pilihan"
+                      : "Pilih yang tampil"}
+                  </button>
+                  {selectedIds.size > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-text-primary">{selectedIds.size} dipilih</span>
+                      <button onClick={() => bulkSetStatus("draft")} className="rounded border border-surface-border px-2 py-1 text-amber-700 hover:bg-accent-soft">Jadikan Draf</button>
+                      <button onClick={() => bulkSetStatus("final")} className="rounded border border-emerald-200 px-2 py-1 text-emerald-700 hover:bg-emerald-50">Finalkan</button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -678,6 +741,14 @@ export default function DraftPage() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-1.5">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(item.id)}
+                              onChange={() => toggleItemSelection(item.id)}
+                              onClick={(event) => event.stopPropagation()}
+                              aria-label={`Pilih ${item.title}`}
+                              className="rounded border-surface-border text-accent focus:ring-accent"
+                            />
                             <span className="text-[11px] font-mono font-medium text-text-muted">
                               #{idx + 1}
                             </span>

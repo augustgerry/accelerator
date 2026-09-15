@@ -212,6 +212,13 @@ knowledge-accelerator/
 - `frontend/components/draft/progress-header.tsx`: indikator simpan session.
 - Verifikasi: backend/app dan migration compile bersih, migration head `d3b4c5d6e7f8`, route methods terdaftar di router session, `npx tsc --noEmit` exit 0, dan diagnostics editor bersih.
 
+### ✅ Enhancement Poin 5: Batch Review Workflow
+- `frontend/app/draft/page.tsx`: filter klausul `Review` dari quality check, pilih per item, pilih semua yang tampil, serta bulk action `Jadikan Draf` dan `Finalkan`.
+- Batch action hanya mengubah status item yang dipilih; tidak mengubah isi jawaban secara diam-diam.
+- Verifikasi: `npx tsc --noEmit` exit 0, diagnostics editor bersih, dan `git diff --check` bersih.
+
+**STATUS ENHANCEMENT 1-5: SELESAI.** Semua milestone sudah di-commit dan dipush berurutan ke `main`.
+
 ### 🟡 PRIORITY 2: Folder Sync → Template Library (Google Drive Integration)
 **File:** `backend/app/routers/documents.py` & `frontend/components/draft/export-modal.tsx`
 - Saat sync Google Drive, deteksi dokumen template (.docx) dan beri tag `doc_type = "template"`.
