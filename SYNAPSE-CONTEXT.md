@@ -11,7 +11,13 @@
   2. `export-from-template` (docx, mode struktur) — baca heading & font dari template, tapi pemetaan item ke section masih **keyword-matching category** (heuristic sederhana, lihat KNOWN ISSUES), belum "AI pintar" beneran, dan belum tau target `template_type` (sow/mom/dll).
   3. `export-pptx` — **BELUM ada konsep template sama sekali.** Selalu generate slide dari layout fixed hardcoded (warna, style tetap). User minta bisa upload/pilih template `.pptx` dan AI ikutin master slide/layout aslinya — ini gap paling besar.
   4. Template Library (Priority 2) — baru nyimpen & fetch `.docx`. Perlu extend juga tag/simpan `.pptx` sebagai template kalau mau dipakai utk Pitch Deck.
-- **Langkah Berikutnya Jika Terputus:** Tanya user mau mulai dari gap mana dulu (biasanya: perbaiki AI section-mapping utk docx dulu karena fondasi udah ada, baru garap PPTX template-following yang dari nol). Belum ada file yang disentuh untuk task ini.
+- **Langkah Berikutnya Jika Terputus:** Sub-task 1 (LLM section-mapping utk docx) SUDAH SELESAI, lihat bawah. Lanjut sub-task 2-4 (template_type awareness di export-from-template/clone-template, lalu PPTX template-following).
+
+### ✅ Sub-task 1 SELESAI: LLM semantic section-mapping (ganti keyword-matching)
+- `backend/app/services/llm_provider.py`: tambah `LLMProvider.map_items_to_sections(headings, items) -> dict[item_id, heading_index]` di ABC (default fallback `_fallback_map_items_to_sections`, keyword heuristic yang tadinya inline di `draft.py`, dipindah kesini + fix bug token pendek kayak `&` ikut ke-match). `ClaudeProvider` & `GeminiProvider` override dengan LLM call (prompt semantik, item yang gak relevan boleh di-skip biar jatuh ke fallback section).
+- `backend/app/routers/draft.py` `export_from_template()`: hapus blok `items_by_category` keyword-matching, ganti panggil `get_llm_provider().map_items_to_sections(...)` sekali di awal, hasil mapping dipakai saat replay heading (`items_by_heading_index.get(idx, [])`).
+- Verifikasi: `py_compile` OK, import OK, unit test fallback heuristic OK, integration test `export_from_template` dengan fake provider (monkeypatch) — item ke-mapping tampil persis di bawah heading yang benar, item ter-skip jatuh ke placeholder/fallback section, docx ke-generate valid.
+- Belum jalan test pakai LLM asli (Claude/Gemini) — cuma ke-tes lewat fake provider supaya gak ada cost API call. Kalau mau validasi kualitas mapping asli, jalanin end-to-end lewat UI dengan API key aktif.
 
 ## ✅ PRIORITY 2 SELESAI (Folder Sync → Template Library)
 - Backend: `POST /documents/sync` (`documents.py`) sekarang set `doc_type = "template"` otomatis untuk file `.docx` (via `DOCX_MIME` check), `doc_type = "document"` untuk selainnya. Update juga jalan di re-sync dokumen existing.
