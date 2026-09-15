@@ -31,6 +31,7 @@ class Document(Base):
     doc_type: Mapped[str] = mapped_column(String)  # checklist | TOR | SoW | TCO | deck
     division: Mapped[str] = mapped_column(String, default="presales")
     source_drive_id: Mapped[str] = mapped_column(String, nullable=True)
+    source_modified_at: Mapped[str | None] = mapped_column(String, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     chunks: Mapped[list["DocumentChunk"]] = relationship(back_populates="document")

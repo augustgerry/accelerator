@@ -136,14 +136,27 @@ def sync_from_drive(
     total = len(files)
     synced: list[str] = []
     skipped: list[str] = []
+    unchanged: list[str] = []
 
     for i, f in enumerate(files, start=1):
         try:
-            text = fetch_and_extract_text(f["id"])
             division = f["folderPath"].split("/")[0] if f["folderPath"] else "presales"
             doc_type = "template" if f["mimeType"] in (DOCX_MIME, PPTX_MIME) else "document"
+            source_modified_at = f.get("modifiedTime") or ""
 
             doc = session.get(Document, f["id"])
+            if (
+                doc is not None
+                and doc.source_modified_at
+                and doc.source_modified_at == source_modified_at
+                and doc.title == f["name"]
+                and doc.division == division
+                and doc.doc_type == doc_type
+            ):
+                unchanged.append(f["name"])
+                continue
+
+            text = fetch_and_extract_text(f["id"])
             if doc is None:
                 doc = Document(
                     id=f["id"],
@@ -152,12 +165,14 @@ def sync_from_drive(
                     doc_type=doc_type,
                     division=division,
                     source_drive_id=f["id"],
+                    source_modified_at=source_modified_at,
                 )
                 session.add(doc)
             else:
                 doc.title = f["name"]
                 doc.division = division
                 doc.doc_type = doc_type
+                doc.source_modified_at = source_modified_at
             doc.updated_at = datetime.utcnow()
 
             session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == doc.id))
@@ -180,4 +195,4 @@ def sync_from_drive(
             skipped.append(f["name"])
             print(f"[{i}/{total}] skipped: {f['name']} ({e!r})", flush=True)
 
-    return {"synced": synced, "skipped": skipped}
+    return {"synced": synced, "skipped": skipped, "unchanged": unchanged}

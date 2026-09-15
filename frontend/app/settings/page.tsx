@@ -137,7 +137,7 @@ export default function SettingsPage() {
     setSyncResult(null);
     try {
       const result = await syncDocuments();
-      setSyncResult(`✅ Sync selesai: ${result.synced.length} dokumen baru, ${result.skipped.length} dilewati.`);
+      setSyncResult(`✅ Sync selesai: ${result.synced.length} diproses, ${result.unchanged.length} tetap, ${result.skipped.length} gagal.`);
     } catch (e) {
       setSyncResult(`❌ Sync gagal: ${e instanceof Error ? e.message : "Error tidak diketahui"}`);
     } finally {

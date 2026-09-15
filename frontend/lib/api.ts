@@ -48,7 +48,7 @@ export async function downloadTemplateDocument(docId: string): Promise<Blob> {
   return res.blob();
 }
 
-export async function syncDocuments(): Promise<{ synced: string[]; skipped: string[] }> {
+export async function syncDocuments(): Promise<{ synced: string[]; skipped: string[]; unchanged: string[] }> {
   const res = await fetch(`${API_BASE}/documents/sync`, { method: "POST" });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");

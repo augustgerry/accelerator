@@ -256,6 +256,14 @@ knowledge-accelerator/
 - Kandidat dibatasi agar tetap cepat dan tidak menyapu seluruh database.
 - Verifikasi: backend compile bersih, token teknis `HCI-3`, `24x7`, `SKU` terdeteksi benar, diagnostics bersih, dan `git diff --check` bersih.
 
+### ✅ Next Batch Poin 5: Incremental Google Drive Sync
+- `backend/app/models.py` dan migration `e4f5a6b7c8d9`: tambah `documents.source_modified_at` untuk menyimpan `modifiedTime` dari Drive.
+- `backend/app/routers/documents.py`: file yang timestamp, nama, divisi, dan tipe-nya tidak berubah dilewati tanpa download, extract, chunk, atau embedding ulang.
+- Response sync sekarang membedakan `synced`, `unchanged`, dan `skipped`; Settings menampilkan ketiganya.
+- Verifikasi: migration head `e4f5a6b7c8d9`, backend compile bersih, `npx tsc --noEmit` exit 0, dan diagnostics semua file bersih.
+
+**STATUS BATCH POIN 1-5: SELESAI.** Autosave session, logo branding, dashboard cleanup, hybrid search, dan incremental Drive sync sudah diimplementasikan serta dipush berurutan.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.
