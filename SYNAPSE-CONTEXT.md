@@ -42,6 +42,15 @@
 
 **PRIORITY 4 KELAR SEPENUHNYA.** Semua 4 sub-task selesai: LLM semantic mapping, wording per jenis dokumen, PPTX template-following, dan template library yang nyimpen kedua format.
 
+---
+
+## 🐛 BUG FIX PENTING: `clone-template` & `clone-template-pptx` gagal via HTTP asli
+- **Root cause:** `clone_template()` dan `clone_template_pptx()` di `backend/app/routers/draft.py` declare `items_json`, `document_title`, `company_name`, `document_type` sebagai `str = "..."` biasa (bukan `Form(...)`). FastAPI (versi terpasang: 0.141.1) TIDAK otomatis treat plain `str` sebagai form field pas endpoint juga punya `UploadFile` — field-field itu selalu dapet default kosong walau browser ngirim via `multipart/form-data` dengan benar. Semua test sebelumnya di sesi ini LOLOS karena dites dengan manggil fungsi Python langsung (bypass FastAPI request parsing) — baru ketauan pas user coba upload PPTX asli lewat browser dan dapet 400 "Tidak ada item...".
+- **Fix:** kedua endpoint sekarang declare eksplisit `items_json: str = Form("")`, dst. (`from fastapi import Form` ditambah ke import module-level). Ini juga artinya **`clone_template` (docx) kemungkinan gak pernah kepake dengan benar dari UI sejak awal dibuat** (commit `e01f41b`) — baru sekarang beneran jalan.
+- **Verifikasi:** dites end-to-end pakai `.pptx` asli via curl multipart request langsung (bukan cuma manggil fungsi Python) → 200 OK, isi slide benar. Juga dikonfirmasi via browser asli (Claude in Chrome): upload `.pptx` beneran → klik Generate → network request 200 OK, file ke-download.
+- **Insiden sampingan:** restart backend buat pickup fix ini nabrak sync Google Drive (231 file) yang user gak sengaja pencet di tab lain. User minta dimatiin — udah di-stop (proses lama di-kill, sync gak lanjut). Kalau user butuh index dokumen lengkap lagi, tinggal klik Sync Google Drive lagi manual.
+- **Pelajaran buat ke depan:** SELALU test endpoint multipart form (`UploadFile` + field lain) lewat HTTP request asli (curl/browser), bukan cuma manggil fungsi Python langsung — manggil fungsi langsung bypass seluruh request-parsing layer FastAPI dan bisa nyamarin bug kayak gini.
+
 ## ✅ PRIORITY 2 SELESAI (Folder Sync → Template Library)
 - Backend: `POST /documents/sync` (`documents.py`) sekarang set `doc_type = "template"` otomatis untuk file `.docx` (via `DOCX_MIME` check), `doc_type = "document"` untuk selainnya. Update juga jalan di re-sync dokumen existing.
 - Backend: `GET /documents/{id}/download` — re-download bytes .docx asli dari Drive by `source_drive_id` (fungsi baru `drive_sync.download_file_bytes()`), khusus dokumen `doc_type == "template"`.
