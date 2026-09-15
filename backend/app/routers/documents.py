@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import Document, DocumentChunk
 from app.db import get_session
-from app.services.drive_sync import DOCX_MIME, download_file_bytes, fetch_and_extract_text, list_drive_files
+from app.services.drive_sync import DOCX_MIME, PPTX_MIME, download_file_bytes, fetch_and_extract_text, list_drive_files
 from app.services.embeddings import chunk_text, embed_text
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -82,18 +82,19 @@ def download_document(
     workspace_id: str = settings.default_workspace_id,
     session: Session = Depends(get_session),
 ):
-    """Re-download the original .docx for a template document from Drive,
+    """Re-download the original .docx/.pptx for a template document from Drive,
     so the frontend can pick a template from the library without a manual upload."""
     doc = session.get(Document, doc_id)
     if not doc or doc.workspace_id != workspace_id:
         raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan")
     if doc.doc_type != "template" or not doc.source_drive_id:
-        raise HTTPException(status_code=400, detail="Dokumen ini bukan template Word")
+        raise HTTPException(status_code=400, detail="Dokumen ini bukan template")
 
+    media_type = PPTX_MIME if doc.title.lower().endswith(".pptx") else DOCX_MIME
     data = download_file_bytes(doc.source_drive_id)
     return StreamingResponse(
         iter([data]),
-        media_type=DOCX_MIME,
+        media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{doc.title}"'},
     )
 
@@ -140,7 +141,7 @@ def sync_from_drive(
         try:
             text = fetch_and_extract_text(f["id"])
             division = f["folderPath"].split("/")[0] if f["folderPath"] else "presales"
-            doc_type = "template" if f["mimeType"] == DOCX_MIME else "document"
+            doc_type = "template" if f["mimeType"] in (DOCX_MIME, PPTX_MIME) else "document"
 
             doc = session.get(Document, f["id"])
             if doc is None:
