@@ -760,6 +760,7 @@ def export_from_template(payload: ExportFromTemplateRequest):
     import copy
 
     doc = DocxDocument()
+    labels = _get_doc_type_labels(payload.template_type, payload.company_name)
 
     # ── Apply document-level default font ──────────────────────────────────────
     try:
@@ -785,7 +786,7 @@ def export_from_template(payload: ExportFromTemplateRequest):
     cover_run.font.name = payload.template_default_font
 
     sub_para = doc.add_paragraph()
-    sub_para.add_run(f"Tanggapan Teknis atas: {payload.document_title}").bold = True
+    sub_para.add_run(f"{labels['cover_subtitle']}: {payload.document_title}").bold = True
     sub_para.runs[0].font.size = Pt(12)
     sub_para.runs[0].font.name = payload.template_default_font
 
