@@ -25,6 +25,8 @@ class ChunkResult(BaseModel):
     division: Optional[str] = None
     source: str = "internal"
     chunk_text: str = ""
+    confidence: int = 0
+    matched_terms: list[str] = []
 
 
 class QueryResponse(BaseModel):
@@ -64,6 +66,8 @@ def query_knowledge_base(
             division=r.get("division"),
             source=r.get("source", "internal"),
             chunk_text=r.get("chunk_text", ""),
+            confidence=r.get("confidence", 0),
+            matched_terms=r.get("matched_terms", []),
         )
         for r in chunk_records
     ]

@@ -270,6 +270,12 @@ knowledge-accelerator/
 - `frontend/lib/api.ts`: `searchKnowledgeBase()` menerima filter opsional.
 - Verifikasi: query model, backend compile, `npx tsc --noEmit`, dan diagnostics semua file bersih.
 
+### ✅ Next Batch Poin 7: Evidence & Confidence
+- `backend/app/services/retrieval.py`: ranked candidate menyimpan score dan token yang match.
+- `backend/app/routers/query.py` dan `frontend/lib/api.ts`: citation contract menambahkan `confidence` dan `matched_terms`.
+- `frontend/app/search/page.tsx`: setiap citation card menampilkan relevansi dan evidence terms sebelum user membuka snippet lengkap.
+- Verifikasi: response model, backend compile, `npx tsc --noEmit`, dan diagnostics semua file bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

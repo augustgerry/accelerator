@@ -105,6 +105,8 @@ export type SearchResultChunk = {
   division?: string | null;
   source: string;
   chunk_text: string;
+  confidence: number;
+  matched_terms: string[];
 };
 
 export type SearchResult = {

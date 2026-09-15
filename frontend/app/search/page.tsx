@@ -264,6 +264,16 @@ function SearchContent() {
                       {src.division}
                     </span>
                   )}
+                  <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Relevansi {src.confidence}%
+                    </span>
+                    {src.matched_terms.slice(0, 3).map((term) => (
+                      <span key={term} className="rounded bg-surface px-1.5 py-0.5 text-[10px] text-text-muted">
+                        match: {term}
+                      </span>
+                    ))}
+                  </div>
                   <p className="text-[11px] leading-relaxed text-text-muted line-clamp-3">
                     <HighlightedText text={src.chunk_text} query={query} />
                   </p>

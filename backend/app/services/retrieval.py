@@ -16,7 +16,7 @@ def _query_tokens(query: str) -> list[str]:
     return list(dict.fromkeys(re.findall(r"[a-zA-Z0-9][a-zA-Z0-9._/-]{2,}", query.lower())))
 
 
-def _hybrid_chunks(
+def _hybrid_ranked_chunks(
     session: Session,
     workspace_id: str,
     query: str,
@@ -72,18 +72,34 @@ def _hybrid_chunks(
     query_numbers = set(re.findall(r"\d+(?:[.,]\d+)?(?:\s?[xX]\s?\d+)?%?", normalized_query))
     for candidate in candidates.values():
         content = (candidate["chunk"].content or "").lower()
-        matches = sum(1 for token in tokens if token in content)
+        matched_tokens = [token for token in tokens if token in content]
+        matches = len(matched_tokens)
         lexical_score = matches / max(1, len(tokens))
         if query_numbers and any(number in content for number in query_numbers):
             lexical_score = min(1.0, lexical_score + 0.25)
         candidate["score"] = candidate["vector_score"] * 0.65 + lexical_score * 0.35
+        candidate["matched_tokens"] = matched_tokens
 
     ranked = sorted(
         candidates.values(),
         key=lambda candidate: (candidate["score"], -candidate["vector_rank"]),
         reverse=True,
     )
-    return [candidate["chunk"] for candidate in ranked[:top_k]]
+    return ranked[:top_k]
+
+
+def _hybrid_chunks(
+    session: Session,
+    workspace_id: str,
+    query: str,
+    top_k: int,
+    doc_type: str | None = None,
+    division: str | None = None,
+) -> list[DocumentChunk]:
+    return [
+        candidate["chunk"]
+        for candidate in _hybrid_ranked_chunks(session, workspace_id, query, top_k, doc_type, division)
+    ]
 
 
 def retrieve_relevant_chunks(
@@ -132,10 +148,11 @@ def retrieve_chunks_with_full_metadata(
     """Return top-k chunks each with their own chunk text and parent document metadata.
     Unlike retrieve_relevant_chunks_with_sources, this does NOT deduplicate by document —
     every chunk gets its own entry so the Glean UI can show individual citation cards."""
-    chunks = _hybrid_chunks(session, workspace_id, query, top_k, doc_type, division)
+    ranked_chunks = _hybrid_ranked_chunks(session, workspace_id, query, top_k, doc_type, division)
 
     results = []
-    for c in chunks:
+    for candidate in ranked_chunks:
+        c = candidate["chunk"]
         doc = c.document
         results.append({
             "id": doc.id if doc else c.id,
@@ -144,6 +161,8 @@ def retrieve_chunks_with_full_metadata(
             "division": doc.division if doc else None,
             "source": "internal",
             "chunk_text": c.content or "",
+            "confidence": round(max(0.05, min(0.99, candidate["score"])) * 100),
+            "matched_terms": candidate.get("matched_tokens", []),
         })
     return results
 
