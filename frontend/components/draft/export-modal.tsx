@@ -66,6 +66,9 @@ export function ExportModal({
   const [exportingFromTemplate, setExportingFromTemplate] = useState(false);
   const [templateOnlyFinal, setTemplateOnlyFinal] = useState(false);
   const [templateMode, setTemplateMode] = useState<"structure" | "clone">("clone");
+  const [templateDocType, setTemplateDocType] = useState<
+    "proposal" | "sow" | "solution_brief" | "mom"
+  >("proposal");
 
   // ── Template library (Google Drive templates, tagged doc_type = "template")
   const [templateLibrary, setTemplateLibrary] = useState<IndexedDocument[] | null>(null);
@@ -239,6 +242,7 @@ export function ExportModal({
           templateFile,
           document_title: documentTitle,
           company_name: "PT Solusi Mitra Gemilang (SMG)",
+          document_type: templateDocType,
           items: templateTargetItems.map((it) => ({
             id: it.id, title: it.title, requirement_text: it.requirement_text,
             category: it.category, draft_text: it.draft_text, status: it.status,
@@ -248,6 +252,7 @@ export function ExportModal({
         blob = await exportFromTemplate({
           document_title: documentTitle,
           company_name: "PT Solusi Mitra Gemilang (SMG)",
+          template_type: templateDocType,
           items: templateTargetItems.map((it) => ({
             id: it.id, title: it.title, requirement_text: it.requirement_text,
             category: it.category, draft_text: it.draft_text, status: it.status,
