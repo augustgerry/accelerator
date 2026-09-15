@@ -4,8 +4,14 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Task Saat Ini:** Tidak ada task aktif — PRIORITY 2 baru saja selesai. Lanjut ke sisa roadmap (lihat bawah) atau tunggu instruksi user.
-- **Langkah Berikutnya Jika Terputus:** Baca ROADMAP di bawah, semua Priority 1-3 sudah selesai per commit ini.
+- **Task Saat Ini:** Scoping PRIORITY 4 (belum mulai coding) — "Full-Fidelity Template-Following Generator" untuk semua jenis dokumen.
+- **Request User (verbatim intent):** User mau generator proposal (Proposal Teknis / SoW / Solution Brief / MoM / PPT Pitch Deck) bisa dikasih **landasan template** — baik upload manual atau ambil dari Template Library hasil sync Drive (Priority 2) — lalu AI ikutin template itu **sampai ke sub-bab, jenis font, ukuran font, semua detail teknis Word/PPT**, dan ngisi konten pakai AI sepintar mungkin sehingga hasil akhirnya (dikasih TOR + template) langsung jadi dengan kesalahan minim.
+- **Gap Analisis (kondisi existing vs yang diminta):**
+  1. `clone-template` (docx) — SUDAH preserve 100% formatting, tapi cuma isi placeholder token (`{{...}}`), bukan pemetaan per-sub-bab otomatis, dan cuma untuk 1 mode compiled response, belum ngerti bedanya SoW/MoM/Solution Brief.
+  2. `export-from-template` (docx, mode struktur) — baca heading & font dari template, tapi pemetaan item ke section masih **keyword-matching category** (heuristic sederhana, lihat KNOWN ISSUES), belum "AI pintar" beneran, dan belum tau target `template_type` (sow/mom/dll).
+  3. `export-pptx` — **BELUM ada konsep template sama sekali.** Selalu generate slide dari layout fixed hardcoded (warna, style tetap). User minta bisa upload/pilih template `.pptx` dan AI ikutin master slide/layout aslinya — ini gap paling besar.
+  4. Template Library (Priority 2) — baru nyimpen & fetch `.docx`. Perlu extend juga tag/simpan `.pptx` sebagai template kalau mau dipakai utk Pitch Deck.
+- **Langkah Berikutnya Jika Terputus:** Tanya user mau mulai dari gap mana dulu (biasanya: perbaiki AI section-mapping utk docx dulu karena fondasi udah ada, baru garap PPTX template-following yang dari nol). Belum ada file yang disentuh untuk task ini.
 
 ## ✅ PRIORITY 2 SELESAI (Folder Sync → Template Library)
 - Backend: `POST /documents/sync` (`documents.py`) sekarang set `doc_type = "template"` otomatis untuk file `.docx` (via `DOCX_MIME` check), `doc_type = "document"` untuk selainnya. Update juga jalan di re-sync dokumen existing.
