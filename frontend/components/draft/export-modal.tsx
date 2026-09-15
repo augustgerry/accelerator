@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import {
   exportProposalDocx,
   exportProposalPptx,
+  exportProposalPdf,
   uploadTemplate,
   exportFromTemplate,
   cloneTemplate,
@@ -49,7 +50,7 @@ export function ExportModal({
   // ── Standard tab state
   const [onlyFinal, setOnlyFinal] = useState(false);
   const [templateType, setTemplateType] = useState<
-    "matrix" | "narrative" | "sow" | "solution_brief" | "mom" | "pptx"
+    "matrix" | "narrative" | "sow" | "solution_brief" | "mom" | "pptx" | "pdf"
   >("matrix");
   const [fontName, setFontName] = useState<string>("Calibri");
   const [copied, setCopied] = useState(false);
@@ -122,6 +123,7 @@ export function ExportModal({
     solution_brief: "Solution Brief",
     mom: "Minutes of Meeting (MoM)",
     pptx: "Slide Presentation (.pptx)",
+    pdf: "Dokumen PDF",
   };
 
   const fullExportContent = `# Tanggapan Teknis & Dokumen: ${documentTitle}\nTanggal Ekspor: ${new Date().toLocaleDateString("id-ID")}\nFormat Dokumen: ${formatLabels[templateType] || templateType}\nTotal Klausul Terjawab: ${targetItems.length} dari ${items.length}\n\n---\n\n${compiledText}`;
@@ -160,6 +162,20 @@ export function ExportModal({
         const link = document.createElement("a");
         link.href = url;
         link.setAttribute("download", `PitchDeck-${cleanTitle}.pptx`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else if (templateType === "pdf") {
+        const blob = await exportProposalPdf({
+          document_title: documentTitle,
+          template_type: "narrative",
+          company_name: "PT Solusi Mitra Gemilang (SMG)",
+          items: mappedItems,
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `Proposal-${cleanTitle}.pdf`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -408,10 +424,11 @@ export function ExportModal({
                     <option value="solution_brief">💡 Solution Brief (.docx)</option>
                     <option value="mom">📝 Minutes of Meeting / MoM (.docx)</option>
                     <option value="pptx">📊 Presentation Pitch Deck (.pptx)</option>
+                    <option value="pdf">📕 Proposal PDF (.pdf)</option>
                   </select>
                 </div>
 
-                {templateType !== "pptx" && (
+                {templateType !== "pptx" && templateType !== "pdf" && (
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-text-primary">Font:</span>
                     <select

@@ -403,6 +403,158 @@ def export_proposal_docx(payload: ExportDocxRequest):
     )
 
 
+class ExportPdfRequest(BaseModel):
+    document_title: str
+    template_type: str = "narrative"
+    company_name: str = "PT Solusi Mitra Gemilang (SMG)"
+    items: list[ExportDocxItem]
+
+
+@router.post("/export-pdf")
+def export_proposal_pdf(payload: ExportPdfRequest):
+    """Generate a professional PDF without requiring Word or LibreOffice."""
+    from datetime import datetime
+    from fastapi.responses import StreamingResponse
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from xml.sax.saxutils import escape
+
+    type_labels = {
+        "matrix": "Matriks Kepatuhan Tender",
+        "narrative": "Proposal Teknis",
+        "sow": "Statement of Work",
+        "solution_brief": "Solution Brief",
+        "mom": "Minutes of Meeting",
+    }
+    document_type = type_labels.get(payload.template_type, "Proposal Teknis")
+    bio = io.BytesIO()
+    doc = SimpleDocTemplate(
+        bio,
+        pagesize=A4,
+        rightMargin=18 * mm,
+        leftMargin=18 * mm,
+        topMargin=20 * mm,
+        bottomMargin=18 * mm,
+        title=payload.document_title,
+        author=payload.company_name,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "SynapseTitle", parent=styles["Title"], fontName="Helvetica-Bold",
+        fontSize=18, leading=23, textColor=colors.HexColor("#111827"),
+        alignment=TA_CENTER, spaceAfter=8,
+    )
+    subtitle_style = ParagraphStyle(
+        "SynapseSubtitle", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=10, leading=14, textColor=colors.HexColor("#2F5FE0"),
+        alignment=TA_CENTER, spaceAfter=4,
+    )
+    meta_style = ParagraphStyle(
+        "SynapseMeta", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=8.5, leading=11, textColor=colors.HexColor("#6B7280"),
+        alignment=TA_CENTER, spaceAfter=18,
+    )
+    heading_style = ParagraphStyle(
+        "SynapseHeading", parent=styles["Heading2"], fontName="Helvetica-Bold",
+        fontSize=12, leading=15, textColor=colors.HexColor("#111827"),
+        spaceBefore=10, spaceAfter=6,
+    )
+    body_style = ParagraphStyle(
+        "SynapseBody", parent=styles["BodyText"], fontName="Helvetica",
+        fontSize=9.5, leading=14, textColor=colors.HexColor("#1F2937"),
+        spaceAfter=6,
+    )
+    small_style = ParagraphStyle(
+        "SynapseSmall", parent=body_style, fontSize=8.2, leading=10.5,
+    )
+
+    def paragraph(text: str, style=body_style) -> Paragraph:
+        return Paragraph(escape(text or "").replace("\n", "<br/>"), style)
+
+    story = [
+        paragraph(payload.company_name.upper(), subtitle_style),
+        paragraph(document_type.upper(), title_style),
+        paragraph(payload.document_title, subtitle_style),
+        paragraph(
+            f"Tanggal: {datetime.now().strftime('%d %B %Y')}  |  Total klausul: {len(payload.items)}",
+            meta_style,
+        ),
+    ]
+
+    if payload.template_type == "matrix":
+        rows = [[
+            paragraph("No", small_style), paragraph("Kebutuhan / Klausul", small_style),
+            paragraph("Kategori", small_style), paragraph("Tanggapan Solusi", small_style),
+            paragraph("Status", small_style),
+        ]]
+        for index, item in enumerate(payload.items, start=1):
+            rows.append([
+                paragraph(str(index), small_style),
+                paragraph(f"{item.title}\n{item.requirement_text}", small_style),
+                paragraph(item.category, small_style),
+                paragraph(item.draft_text or "[Belum ada tanggapan]", small_style),
+                paragraph(item.status.upper(), small_style),
+            ])
+        table = Table(
+            rows,
+            colWidths=[10 * mm, 49 * mm, 24 * mm, 73 * mm, 16 * mm],
+            repeatRows=1,
+        )
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#D1D5DB")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F9FAFB")]),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(table)
+    else:
+        story.append(paragraph("Ringkasan Dokumen", heading_style))
+        story.append(paragraph(
+            f"Dokumen {document_type.lower()} ini disusun oleh {payload.company_name} "
+            f"untuk menjawab kebutuhan pada {payload.document_title}."
+        ))
+        story.append(paragraph("Rincian Klausul dan Tanggapan", heading_style))
+        for index, item in enumerate(payload.items, start=1):
+            story.append(paragraph(f"{index}. {item.title} [{item.category}]", heading_style))
+            story.append(paragraph(f"Klausul Acuan:\n{item.requirement_text}"))
+            story.append(paragraph(
+                f"Tanggapan {payload.company_name}:\n{item.draft_text or '[Tanggapan belum disusun]'}"
+            ))
+        story.append(paragraph("Penutup", heading_style))
+        story.append(paragraph(
+            "Dokumen ini disusun berdasarkan klausul yang tersedia dan dapat disempurnakan "
+            "setelah proses review internal."
+        ))
+
+    def add_page_number(canvas, document):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.HexColor("#6B7280"))
+        canvas.drawString(18 * mm, 10 * mm, payload.company_name)
+        canvas.drawRightString(192 * mm, 10 * mm, f"Halaman {document.page}")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+    bio.seek(0)
+    clean_name = "".join(
+        c for c in payload.document_title if c.isalnum() or c in ("-", "_")
+    ).strip() or "Dokumen"
+    return StreamingResponse(
+        bio,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="Proposal-{clean_name}.pdf"'},
+    )
+
+
 class ExportPptxRequest(BaseModel):
     document_title: str
     company_name: str = "PT Solusi Mitra Gemilang (SMG)"

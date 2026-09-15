@@ -194,6 +194,12 @@ knowledge-accelerator/
 - `backend/app/routers/research.py`: kegagalan provider dikembalikan sebagai HTTP 503 dengan pesan aman.
 - Verifikasi: `backend/venv` compile check, provider error formatter, invalid provider check, dan diagnostics editor bersih.
 
+### ✅ Enhancement Poin 2: Professional PDF Export
+- `backend/app/routers/draft.py`: endpoint `POST /draft/export-pdf` dengan layout matriks dan naratif, header/footer, metadata, zebra table, serta nomor halaman.
+- `backend/requirements.txt`: tambah `reportlab` sebagai generator PDF native tanpa ketergantungan Word atau LibreOffice.
+- `frontend/lib/api.ts` dan `frontend/components/draft/export-modal.tsx`: opsi Proposal PDF tersedia di modal export.
+- Verifikasi: dependency terpasang di `backend/venv`, backend compile bersih, response endpoint terdeteksi `application/pdf` streaming, dan `npx tsc --noEmit` exit 0.
+
 ### 🟡 PRIORITY 2: Folder Sync → Template Library (Google Drive Integration)
 **File:** `backend/app/routers/documents.py` & `frontend/components/draft/export-modal.tsx`
 - Saat sync Google Drive, deteksi dokumen template (.docx) dan beri tag `doc_type = "template"`.

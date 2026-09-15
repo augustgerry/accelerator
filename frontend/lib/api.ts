@@ -228,6 +228,31 @@ export async function exportProposalPptx(payload: {
   return res.blob();
 }
 
+export async function exportProposalPdf(payload: {
+  document_title: string;
+  template_type: "matrix" | "narrative" | "sow" | "solution_brief" | "mom";
+  company_name?: string;
+  items: Array<{
+    id: string;
+    title: string;
+    requirement_text: string;
+    category: string;
+    draft_text: string;
+    status: string;
+  }>;
+}): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/draft/export-pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal membuat dokumen PDF (${res.status}): ${detail}`);
+  }
+  return res.blob();
+}
+
 
 export async function uploadTemplate(file: File): Promise<TemplateInfo> {
   const form = new FormData();
