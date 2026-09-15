@@ -905,7 +905,7 @@ def export_from_template(payload: ExportFromTemplateRequest):
     )
 
 
-def _insert_item_block(doc, item: "ExportFromTemplateItem", font_name: str, font_size: float):
+def _insert_item_block(doc, item: "ExportFromTemplateItem", font_name: str, font_size: float, labels: dict):
     """Insert a single requirement + response block into the document."""
     from docx.shared import Pt, RGBColor, Inches
 
@@ -916,7 +916,7 @@ def _insert_item_block(doc, item: "ExportFromTemplateItem", font_name: str, font
 
     # Requirement blockquote
     req_para = doc.add_paragraph()
-    req_run = req_para.add_run(f"Klausul / Kebutuhan Tender:\n\"{item.requirement_text}\"")
+    req_run = req_para.add_run(f"{labels['requirement_label']}:\n\"{item.requirement_text}\"")
     req_run.italic = True
     req_run.font.size = Pt(font_size - 0.5)
     req_run.font.name = font_name
@@ -926,7 +926,7 @@ def _insert_item_block(doc, item: "ExportFromTemplateItem", font_name: str, font
 
     # Draft response
     resp_para = doc.add_paragraph()
-    resp_para.add_run("Tanggapan SMG:\n").bold = True
+    resp_para.add_run(f"{labels['response_label']}:\n").bold = True
     resp_para.runs[0].font.name = font_name
     resp_para.runs[0].font.size = Pt(font_size)
     resp_text = item.draft_text.strip() if item.draft_text.strip() else "[Tanggapan belum disusun]"
@@ -948,6 +948,7 @@ async def clone_template(
     items_json: str = "",
     document_title: str = "",
     company_name: str = "PT Solusi Mitra Gemilang (SMG)",
+    document_type: str = "proposal",
 ):
     """
     In-place template cloning endpoint.
@@ -995,12 +996,13 @@ async def clone_template(
     final_items = [it for it in raw_items if it.get("status") in ("final", "draft") and it.get("draft_text", "").strip()]
 
     # Build the compiled responses block
+    labels = _get_doc_type_labels(document_type, company_name)
     compiled_lines = []
     for idx, it in enumerate(final_items, start=1):
         compiled_lines.append(
             f"{idx}. {it.get('title', '')} [{it.get('category', '')}]\n"
-            f"Klausul Tender: {it.get('requirement_text', '')}\n"
-            f"Tanggapan {company_name}:\n{it.get('draft_text', '')}\n"
+            f"{labels['requirement_label']}: {it.get('requirement_text', '')}\n"
+            f"{labels['response_label']}:\n{it.get('draft_text', '')}\n"
             f"{'─' * 60}"
         )
     compiled_text = "\n\n".join(compiled_lines) if compiled_lines else "[Belum ada tanggapan yang berstatus Draf atau Final]"
