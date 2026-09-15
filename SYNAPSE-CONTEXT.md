@@ -138,6 +138,22 @@ Enhancement lanjutan atas ide sendiri (disetujui user "gas aja semua"). Kali ini
 - **Debounce local search `/documents`:** input pencarian di-debounce 250ms (`debouncedQuery` state) sebelum masuk filter `useMemo`, biar gak re-filter tiap keystroke kalau daftar dokumen sudah besar.
 - Verifikasi: `npx tsc --noEmit` (frontend) exit 0, `python -m py_compile` (backend, file yang diubah: `documents.py`, `query.py`, `retrieval.py`, `llm_provider.py`) OK. Belum ditest manual end-to-end lewat browser dengan LLM asli (citation marker `[n]` tergantung LLM benar-benar patuh instruksi — kalau kualitasnya kurang, snippet drawer + grid referensi tetap jadi fallback cara buka sitasi tanpa marker).
 
+### Lanjutan (batch 3) — simplify + animasi, masih di branch `feat/search-citation-drawer`
+Murni frontend, gak ada sentuhan backend sama sekali:
+- **Konsolidasi `DOC_TYPE_COLORS`:** dulu duplikat persis di `search/page.tsx` dan `citation-drawer.tsx`. Diekstrak ke `components/search/doc-type-colors.ts`, dua-duanya import dari situ.
+- **BUG FIX: `animate-in`/`fade-in`/`zoom-in`/`slide-in-from-*`/`fill-mode-both` ternyata dead class selama ini** — `tailwindcss-animate` plugin gak pernah ke-install (`tailwind.config.ts` `plugins: []`), jadi animasi drawer chunk di `/documents` yang udah lama ada (dan animasi baru yang saya tambahin) diam-diam gak pernah render. Fix: `frontend/app/globals.css` sekarang punya implementasi minimal manual (bukan install dependency baru) pakai `--tw-enter-*` CSS vars + satu `@keyframes enter`, cuma nyakup varian yang beneran dipakai di codebase (fade-in, zoom-in, slide-in-from-bottom-1/2, slide-in-from-right, fill-mode-both). Kalau butuh varian baru nanti, tambahin pola yang sama di situ.
+- **Anti race-condition di search:** `doSearch()` di `search/page.tsx` sekarang pakai `requestIdRef` counter — kalau user ganti filter cepat-cepat, response request lama yang telat datang gak akan nimpa response yang lebih baru.
+- **Retry button** di error banner search (dulu cuma teks merah tanpa aksi).
+- **Skeleton loading** ganti spinner polos di list kutipan kiri.
+- **Micro-animation:** stagger fade-in kartu kutipan & kartu jawaban AI pas muncul, scale-pop di ikon Copy/Bookmark/Check pas state berubah, pulse highlight di snippet drawer pas dibuka/pindah sitasi.
+- Verifikasi: `npx tsc --noEmit` exit 0. CSS custom di `globals.css` belum divisualkan langsung di browser (butuh `npm run dev`) — logikanya straightforward (dua custom property + satu keyframe) tapi worth di-eyeball sekali di browser kalau sempat.
+
+### ⚠️ CATATAN PENTING UNTUK AGENT BERIKUTNYA: shared working directory antara Claude Code & Antigravity
+Ketauan pas kerja batch 3: **auto-commit script Antigravity commit (dan push) ke branch APAPUN yang sedang di-checkout di working directory ini**, bukan selalu ke `main`. Selama saya kerja di branch `feat/search-citation-drawer`, Antigravity's auto-commit sempat nyelipin 1 commit (`844b882` — fitur Sub-Bab Adaptif/Auditor/Progress Bar, murni kerjaan mereka di `draft.py`/`app/draft/`) di ATAS commit-commit saya di branch yang sama, dan itu udah ke-push ke `origin/feat/search-citation-drawer`. `main` lokal & `origin/main` sendiri masih bersih di `e5f63af` (gak kena).
+- **Implikasi:** branch `feat/search-citation-drawer` sekarang BUKAN cuma berisi kerjaan search/citation — ada 1 commit campuran punya Antigravity nyelip di tengah riwayatnya. Kalau branch ini mau di-merge/PR ke `main`, commit `844b882` bakal ikut kebawa kecuali di-cherry-pick/rebase keluar duluan.
+- **Yang saya LAKUKAN:** commit kerjaan sendiri tetap scoped rapi (cuma file yang saya sentuh, via `git add` daftar eksplisit), TIDAK menyentuh/commit file `draft.py`/`app/draft/`/file baru punya Antigravity (`diagram_generator.py`, `image_search.py`, `template_extractor.py` masih untracked, saya biarkan). TIDAK melakukan rebase/reset (destruktif, riwayat udah kepush ke origin, bisa bikin bingung/rusak kerjaan Antigravity kalau saya utak-atik sepihak).
+- **Yang PERLU diputuskan user/Antigravity:** apakah mau checkout ulang ke `main` sebelum lanjut kerja (biar auto-commit balik nyasar ke `main`), dan apakah `844b882` perlu di-cherry-pick manual ke `main` lalu di-drop dari branch search (pakai `git rebase -i` atau bikin branch baru bersih) sebelum PR search/citation dibuka.
+
 ---
 
 ## 🗂️ PROJECT OVERVIEW
