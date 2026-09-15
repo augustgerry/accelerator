@@ -276,6 +276,11 @@ knowledge-accelerator/
 - `frontend/app/search/page.tsx`: setiap citation card menampilkan relevansi dan evidence terms sebelum user membuka snippet lengkap.
 - Verifikasi: response model, backend compile, `npx tsc --noEmit`, dan diagnostics semua file bersih.
 
+### ✅ Next Batch Poin 8: Export Visual Preflight
+- `backend/app/routers/draft.py`: endpoint `POST /draft/export-preflight` menghitung estimasi halaman dan mendeteksi draft kosong, placeholder, judul panjang, jawaban berisiko overflow, serta dokumen terlalu besar.
+- `frontend/lib/api.ts` dan `frontend/components/draft/export-modal.tsx`: preflight otomatis tampil di Export Wizard sebagai blocking issue atau warning ringkas.
+- Verifikasi: sample draft kosong terdeteksi sebagai blocking issue, backend compile bersih, `npx tsc --noEmit` exit 0, dan diagnostics bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

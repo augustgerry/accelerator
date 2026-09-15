@@ -24,12 +24,14 @@ import {
   exportProposalDocx,
   exportProposalPptx,
   exportProposalPdf,
+  exportPreflight,
   uploadTemplate,
   exportFromTemplate,
   cloneTemplate,
   cloneTemplatePptx,
   listDocuments,
   downloadTemplateDocument,
+  type ExportPreflightResult,
 } from "@/lib/api";
 import type { RequirementItem, TemplateInfo, IndexedDocument } from "@/lib/types";
 
@@ -77,6 +79,8 @@ export function ExportModal({
   const [downloadingDocx, setDownloadingDocx] = useState(false);
   const [previewingPdf, setPreviewingPdf] = useState(false);
   const [branding, setBranding] = useState<CorporateBranding>(DEFAULT_BRANDING);
+  const [preflight, setPreflight] = useState<ExportPreflightResult | null>(null);
+  const [preflightLoading, setPreflightLoading] = useState(false);
 
   useEffect(() => {
     try {
@@ -147,6 +151,30 @@ export function ExportModal({
     if (onlyFinal) return it.status === "final";
     return it.status === "final" || it.status === "draft";
   });
+
+  useEffect(() => {
+    if (!isOpen || targetItems.length === 0) {
+      setPreflight(null);
+      return;
+    }
+    let cancelled = false;
+    setPreflightLoading(true);
+    exportPreflight(
+      targetItems.map((it) => ({
+        id: it.id,
+        title: it.title,
+        requirement_text: it.requirement_text,
+        category: it.category,
+        draft_text: it.draft_text,
+        status: it.status,
+      })),
+      templateType,
+    )
+      .then((report) => { if (!cancelled) setPreflight(report); })
+      .catch(() => { if (!cancelled) setPreflight(null); })
+      .finally(() => { if (!cancelled) setPreflightLoading(false); });
+    return () => { cancelled = true; };
+  }, [isOpen, targetItems.length, templateType]);
 
   const templateTargetItems = items.filter((it) => {
     if (templateOnlyFinal) return it.status === "final";
@@ -542,6 +570,19 @@ export function ExportModal({
                 <span>Hanya Final ({items.filter((i) => i.status === "final").length})</span>
               </label>
             </div>
+
+            {preflightLoading && (
+              <div className="border-b border-surface-border bg-surface px-6 py-2 text-[11px] text-text-muted">
+                Memeriksa kesiapan export...
+              </div>
+            )}
+            {!preflightLoading && preflight && (preflight.blocking_issues.length > 0 || preflight.warnings.length > 0) && (
+              <div className={`border-b px-6 py-2.5 text-[11px] ${preflight.blocking_issues.length > 0 ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                <span className="font-semibold">Preflight: estimasi {preflight.estimated_pages} halaman.</span>
+                {preflight.blocking_issues.length > 0 && <span className="ml-2">{preflight.blocking_issues.slice(0, 2).join(" · ")}</span>}
+                {preflight.warnings.length > 0 && <span className="ml-2">{preflight.warnings.slice(0, 2).join(" · ")}</span>}
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto p-6 bg-surface/30">
               {targetItems.length === 0 ? (

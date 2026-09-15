@@ -261,6 +261,58 @@ class ExportDocxItem(BaseModel):
     status: str
 
 
+class ExportPreflightRequest(BaseModel):
+    output_type: str = "pdf"
+    items: list[ExportDocxItem]
+
+
+class ExportPreflightResponse(BaseModel):
+    estimated_pages: int
+    warnings: list[str]
+    blocking_issues: list[str]
+    ready: bool
+
+
+@router.post("/export-preflight", response_model=ExportPreflightResponse)
+def export_preflight(payload: ExportPreflightRequest):
+    """Run fast layout/content checks before generating an export file."""
+    warnings: list[str] = []
+    blocking_issues: list[str] = []
+    placeholder_pattern = re.compile(
+        r"\[\s*(?:belum|isi|fill|content|tanggapan|solusi)|\{\{.*?\}\}",
+        re.IGNORECASE,
+    )
+    total_characters = 0
+
+    if not payload.items:
+        blocking_issues.append("Tidak ada klausul yang dipilih untuk diekspor")
+    if len(payload.items) > 60:
+        warnings.append("Jumlah klausul besar; hasil export dapat menjadi dokumen panjang")
+
+    for item in payload.items:
+        draft = (item.draft_text or "").strip()
+        total_characters += len(item.requirement_text or "") + len(draft) + len(item.title or "")
+        if not draft:
+            blocking_issues.append(f"Jawaban kosong: {item.title}")
+        if placeholder_pattern.search(draft):
+            warnings.append(f"Placeholder masih tersisa: {item.title}")
+        if len(item.title) > 100:
+            warnings.append(f"Judul panjang berisiko memenuhi satu baris: {item.title[:80]}...")
+        if len(draft) > 2500:
+            warnings.append(f"Jawaban panjang; periksa potensi overflow: {item.title}")
+
+    estimated_pages = max(1, (total_characters + 3499) // 3500)
+    if estimated_pages > 20:
+        warnings.append(f"Estimasi {estimated_pages} halaman; pertimbangkan membagi dokumen")
+
+    return ExportPreflightResponse(
+        estimated_pages=estimated_pages,
+        warnings=list(dict.fromkeys(warnings)),
+        blocking_issues=list(dict.fromkeys(blocking_issues)),
+        ready=not blocking_issues,
+    )
+
+
 class ExportDocxRequest(BaseModel):
     document_title: str
     template_type: str = "matrix"  # "matrix" | "narrative"

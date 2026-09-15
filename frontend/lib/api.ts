@@ -212,6 +212,30 @@ export async function qualityCheckDraft(items: Array<{
   return postJson<QualityCheckResult>("/draft/quality-check", { items });
 }
 
+export type ExportPreflightResult = {
+  estimated_pages: number;
+  warnings: string[];
+  blocking_issues: string[];
+  ready: boolean;
+};
+
+export async function exportPreflight(
+  items: Array<{
+    id: string;
+    title: string;
+    requirement_text: string;
+    category: string;
+    draft_text: string;
+    status: string;
+  }>,
+  outputType: string,
+): Promise<ExportPreflightResult> {
+  return postJson<ExportPreflightResult>("/draft/export-preflight", {
+    output_type: outputType,
+    items,
+  });
+}
+
 export type ProposalSession = {
   id: string;
   title: string;
