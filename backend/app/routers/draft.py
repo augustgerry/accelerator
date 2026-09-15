@@ -339,11 +339,29 @@ def export_preflight(payload: ExportPreflightRequest):
     )
 
 
+def _decode_logo_bytes(data_url: str) -> bytes | None:
+    if not (data_url.startswith("data:image/") and ";base64," in data_url):
+        return None
+    import base64
+
+    try:
+        decoded = base64.b64decode(data_url.split(";base64,", 1)[1], validate=True)
+        from PIL import Image
+
+        with Image.open(io.BytesIO(decoded)) as image:
+            image.verify()
+        return decoded
+    except (ValueError, base64.binascii.Error, OSError):
+        return None
+
+
 class ExportDocxRequest(BaseModel):
     document_title: str
     template_type: str = "matrix"  # "matrix" | "narrative"
     font_name: str = "Calibri"
     company_name: str = "PT Solusi Mitra Gemilang (SMG)"
+    logo_data_url: str = ""
+    customer_logo_data_url: str = ""
     items: list[ExportDocxItem]
 
 
@@ -355,6 +373,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
     from docx import Document as DocxDocument
     from docx.shared import Inches, Pt, RGBColor
     from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml import parse_xml
     from docx.oxml.ns import nsdecls
 
@@ -373,6 +392,39 @@ def export_proposal_docx(payload: ExportDocxRequest):
     font.name = payload.font_name
     font.size = Pt(10)
     font.color.rgb = RGBColor(0x1F, 0x24, 0x30)
+
+    # Header logos (company logo on left, customer logo on right)
+    company_logo_bytes = _decode_logo_bytes(payload.logo_data_url)
+    customer_logo_bytes = _decode_logo_bytes(payload.customer_logo_data_url)
+
+    if company_logo_bytes or customer_logo_bytes:
+        logo_table = doc.add_table(rows=1, cols=2)
+        logo_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        tbl_borders = parse_xml(
+            f'<w:tblBorders {nsdecls("w")}>'
+            f'<w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/>'
+            f'<w:insideH w:val="none"/><w:insideV w:val="none"/>'
+            f'</w:tblBorders>'
+        )
+        logo_table._tbl.tblPr.append(tbl_borders)
+
+        cell_left = logo_table.cell(0, 0)
+        cell_right = logo_table.cell(0, 1)
+        cell_left.width = Inches(3.25)
+        cell_right.width = Inches(3.25)
+
+        p_left = cell_left.paragraphs[0]
+        p_left.paragraph_format.space_after = Pt(10)
+        if company_logo_bytes:
+            run_left = p_left.add_run()
+            run_left.add_picture(io.BytesIO(company_logo_bytes), height=Inches(0.65))
+
+        p_right = cell_right.paragraphs[0]
+        p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        p_right.paragraph_format.space_after = Pt(10)
+        if customer_logo_bytes:
+            run_right = p_right.add_run()
+            run_right.add_picture(io.BytesIO(customer_logo_bytes), height=Inches(0.65))
 
     # Header title block
     title_p = doc.add_paragraph()
@@ -579,22 +631,6 @@ class ExportPdfRequest(BaseModel):
     logo_data_url: str = ""
     customer_logo_data_url: str = ""
     items: list[ExportDocxItem]
-
-
-def _decode_logo_bytes(data_url: str) -> bytes | None:
-    if not (data_url.startswith("data:image/") and ";base64," in data_url):
-        return None
-    import base64
-
-    try:
-        decoded = base64.b64decode(data_url.split(";base64,", 1)[1], validate=True)
-        from PIL import Image
-
-        with Image.open(io.BytesIO(decoded)) as image:
-            image.verify()
-        return decoded
-    except (ValueError, base64.binascii.Error, OSError):
-        return None
 
 
 @router.post("/export-pdf")

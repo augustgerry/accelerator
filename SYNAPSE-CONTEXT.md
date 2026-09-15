@@ -52,11 +52,12 @@ User minta lanjutin kerjaan Copilot yang kepotong, lalu iteratif redesign besar 
 - Field **Logo Customer** ditambah di step Format (khusus format PDF) — digambar di kanan-atas cover PDF, sejajar/mirror sama company logo (kiri-atas). Backend `ExportPdfRequest.customer_logo_data_url` baru, helper `_decode_logo_bytes()` dipakai bareng buat 2 logo.
 - Alur generate direstruktur: **Preview Dokumen → centang "saya setuju" → baru tombol Generate Document aktif**. Preview docx/pptx dikonversi ke PDF dulu (`convertOfficeToPdf`, udah ada sebelumnya) biar preview-nya nunjukkin font/bold/italic asli, bukan teks mentah. Ganti opsi apa pun (jenis dokumen/format/font/logo) otomatis reset gate ini, paksa preview ulang.
 - Step wizard di-rename: "Template" → "Ikuti Gaya File Lain", "Preview" → "Salin Teks" (karena isinya emang cuma salin markdown mentah, bukan preview beneran).
-- **Belum sempat:** Sumber Referensi (poin 3 di atas) belum otomatis nyambung jadi opsi di step "Ikuti Gaya File Lain" — masih dua langkah terpisah. Kalau file referensi yang dipilih itu `.docx`, idealnya bisa langsung dipakai jadi template Clone-mode tanpa pilih ulang.
-- Customer logo cuma kepasang di PDF export, belum di DOCX (ngikut pola lama — company logo juga cuma di PDF, belum pernah ada di DOCX).
+- **Integrasi Sumber Referensi → Template (SELESAI):** Dokumen `.docx` / `.pptx` yang dipilih user sebagai Sumber Referensi di layar upload otomatis muncul sebagai kartu quick-access di Step 2 Export Modal ("Ikuti Gaya File Lain") dengan tombol 1-klik "Gunakan Sebagai Template".
+- **Logo Perusahaan & Logo Customer di DOCX (SELESAI):** `export_proposal_docx` kini menyisipkan header table 2 kolom di paling atas dokumen (kiri: logo perusahaan, kanan: logo customer). Di UI Export Modal, input Logo Customer dibuka untuk format PDF maupun DOCX.
+- **Fleksibilitas Sub-Bab di UI (SELESAI):** User dapat menambah sub-bab/bagian baru via tombol `+ Tambah Bagian`, mengedit judul/kategori/tujuan bagian via tombol `Edit Info`, dan menghapus bagian via tombol `Hapus`.
 - Klarifikasi Teknis & Minutes of Meetings share wording backend yang sama (`mom` key, karena wording-nya emang mirip). Pitch Deck docx/pdf reuse wording `narrative` (belum ada style khusus pitch-deck buat docx/pdf, cuma pptx). Kalau nanti mau dibedain, tambah entry baru di `DOC_TYPE_LABELS` (`backend/app/routers/draft.py`, cari `DOC_TYPE_LABELS = {`).
 
-Semua perubahan di atas: `npx tsc --noEmit` clean, backend `py_compile` clean, dan dites end-to-end lewat browser asli (Claude in Chrome) — bukan cuma curl. Detail verifikasi ada di histori chat sesi ini kalau perlu ditelusuri lebih dalam.
+Semua perubahan di atas: `npx tsc --noEmit` clean, backend `py_compile` clean, unit test DOCX header table valid.
 
 ---
 

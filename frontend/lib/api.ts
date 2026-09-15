@@ -295,6 +295,8 @@ export async function exportProposalDocx(payload: {
   template_type: "matrix" | "narrative" | "sow" | "solution_brief" | "mom";
   font_name?: string;
   company_name?: string;
+  logo_data_url?: string;
+  customer_logo_data_url?: string;
   items: Array<{
     id: string;
     title: string;

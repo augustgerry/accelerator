@@ -44,6 +44,7 @@ interface ExportModalProps {
   items: RequirementItem[];
   initialDocTypeId?: DraftDocTypeId;
   initialFormat?: DraftFormat;
+  selectedReferenceDocs?: IndexedDocument[];
 }
 
 type ExportTab = "standard" | "template" | "text";
@@ -83,7 +84,11 @@ export function ExportModal({
   items,
   initialDocTypeId = "narrative",
   initialFormat = "docx",
+  selectedReferenceDocs = [],
 }: ExportModalProps) {
+  const referenceDocxList = (selectedReferenceDocs ?? []).filter((d) => d.title.toLowerCase().endsWith(".docx"));
+  const referencePptxList = (selectedReferenceDocs ?? []).filter((d) => d.title.toLowerCase().endsWith(".pptx"));
+
   // ── Standard tab state
   const [onlyFinal, setOnlyFinal] = useState(false);
   const [docTypeId, setDocTypeId] = useState<DraftDocTypeId>("narrative");
@@ -275,7 +280,9 @@ export function ExportModal({
       document_title: documentTitle,
       template_type: docType.backendType,
       font_name: fontName,
-      company_name: "PT Solusi Mitra Gemilang (SMG)",
+      company_name: branding.companyName || "PT Solusi Mitra Gemilang (SMG)",
+      logo_data_url: branding.logoDataUrl,
+      customer_logo_data_url: customerLogoDataUrl,
       items: mappedItems,
     });
     return { blob, ext: "docx", filenamePrefix: docType.fileLabel };
@@ -647,7 +654,7 @@ export function ExportModal({
                   </div>
                 )}
 
-                {format === "pdf" && (
+                {(format === "pdf" || format === "docx") && (
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-text-primary">Logo Customer:</span>
                     {customerLogoDataUrl ? (
@@ -871,6 +878,37 @@ export function ExportModal({
 
                 {!templateInfo ? (
                   <>
+                    {referenceDocxList.length > 0 && (
+                      <div className="mb-4 rounded-lg border border-accent/40 bg-accent-soft/30 p-3.5">
+                        <span className="text-xs font-semibold text-accent-ink flex items-center gap-1.5 mb-2">
+                          📌 Dari Sumber Referensi Terpilih:
+                        </span>
+                        <div className="flex flex-col gap-2">
+                          {referenceDocxList.map((doc) => (
+                            <div key={doc.id} className="flex items-center justify-between gap-2 bg-surface rounded-md border border-surface-border px-3 py-2 text-xs">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-semibold text-text-primary">{doc.title}</p>
+                                <p className="text-[10px] text-text-muted">{doc.division ? `Divisi: ${doc.division}` : "Dokumen Drive"}</p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={pickingLibraryId === doc.id}
+                                onClick={() => handlePickLibraryTemplate(doc)}
+                                className="shrink-0 h-7 text-xs bg-accent-soft hover:bg-accent text-accent-ink font-semibold border-accent/40"
+                              >
+                                {pickingLibraryId === doc.id ? (
+                                  <><Loader2 size={12} className="animate-spin mr-1" />Memproses...</>
+                                ) : (
+                                  "Gunakan Sebagai Template"
+                                )}
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="mb-3">
                       <span className="text-xs font-semibold text-text-primary block mb-1.5">
                         Pilih Contoh/Template dari Library Drive
@@ -1045,6 +1083,37 @@ export function ExportModal({
 
                 {!pptxTemplateFile ? (
                   <>
+                    {referencePptxList.length > 0 && (
+                      <div className="mb-4 rounded-lg border border-accent/40 bg-accent-soft/30 p-3.5">
+                        <span className="text-xs font-semibold text-accent-ink flex items-center gap-1.5 mb-2">
+                          📌 Dari Sumber Referensi Terpilih:
+                        </span>
+                        <div className="flex flex-col gap-2">
+                          {referencePptxList.map((doc) => (
+                            <div key={doc.id} className="flex items-center justify-between gap-2 bg-surface rounded-md border border-surface-border px-3 py-2 text-xs">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-semibold text-text-primary">{doc.title}</p>
+                                <p className="text-[10px] text-text-muted">{doc.division ? `Divisi: ${doc.division}` : "Slide PowerPoint Drive"}</p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={pickingPptxLibraryId === doc.id}
+                                onClick={() => handlePickLibraryPptx(doc)}
+                                className="shrink-0 h-7 text-xs bg-accent-soft hover:bg-accent text-accent-ink font-semibold border-accent/40"
+                              >
+                                {pickingPptxLibraryId === doc.id ? (
+                                  <><Loader2 size={12} className="animate-spin mr-1" />Memproses...</>
+                                ) : (
+                                  "Gunakan Sebagai Slide Acuan"
+                                )}
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="mb-3">
                       <span className="text-xs font-semibold text-text-primary block mb-1.5">
                         Pilih Contoh/Template dari Library Drive

@@ -24,6 +24,10 @@ import {
   SendHorizontal,
   ChevronRight,
   CheckSquare,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
 } from "lucide-react";
 import {
   uploadTor,
@@ -119,6 +123,13 @@ export default function DraftPage() {
   const [selectedReferenceIds, setSelectedReferenceIds] = useState<Set<string>>(new Set());
   const [referenceSearch, setReferenceSearch] = useState("");
   const autoSavedSignature = useRef<string | null>(null);
+
+  // Section management (Add / Edit / Delete)
+  const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
+  const [sectionModalMode, setSectionModalMode] = useState<"add" | "edit">("add");
+  const [sectionFormTitle, setSectionFormTitle] = useState("");
+  const [sectionFormCategory, setSectionFormCategory] = useState("Teknis");
+  const [sectionFormDescription, setSectionFormDescription] = useState("");
 
   // ── Restore from localStorage on mount ──────────────────────────────────
   useEffect(() => {
@@ -532,6 +543,72 @@ export default function DraftPage() {
     }
   };
 
+  const handleOpenAddSection = () => {
+    setSectionFormTitle("");
+    setSectionFormCategory("Teknis");
+    setSectionFormDescription("");
+    setSectionModalMode("add");
+    setIsSectionModalOpen(true);
+  };
+
+  const handleOpenEditSection = () => {
+    if (!selectedItem) return;
+    setSectionFormTitle(selectedItem.title);
+    setSectionFormCategory(selectedItem.category);
+    setSectionFormDescription(selectedItem.requirement_text);
+    setSectionModalMode("edit");
+    setIsSectionModalOpen(true);
+  };
+
+  const handleSaveSectionModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sectionFormTitle.trim()) return;
+
+    if (sectionModalMode === "add") {
+      const newId = `sec-custom-${Date.now()}`;
+      const newItem: RequirementItem = {
+        id: newId,
+        title: sectionFormTitle.trim(),
+        category: sectionFormCategory || "Teknis",
+        requirement_text: sectionFormDescription.trim() || "Cakupan bagian kustom.",
+        draft_text: "",
+        status: "todo",
+      };
+      setItems((prev) => [...prev, newItem]);
+      setSelectedItemId(newId);
+    } else if (sectionModalMode === "edit" && selectedItemId) {
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === selectedItemId
+            ? {
+                ...it,
+                title: sectionFormTitle.trim(),
+                category: sectionFormCategory || "Teknis",
+                requirement_text: sectionFormDescription.trim() || it.requirement_text,
+              }
+            : it
+        )
+      );
+    }
+    setIsSectionModalOpen(false);
+  };
+
+  const handleDeleteSection = (itemId: string) => {
+    const itemToDelete = items.find((it) => it.id === itemId);
+    const confirmMsg = itemToDelete
+      ? `Apakah Anda yakin ingin menghapus bagian "${itemToDelete.title}"?`
+      : "Apakah Anda yakin ingin menghapus bagian ini?";
+    if (!window.confirm(confirmMsg)) return;
+
+    setItems((prev) => {
+      const updated = prev.filter((it) => it.id !== itemId);
+      if (selectedItemId === itemId) {
+        setSelectedItemId(updated.length > 0 ? updated[0].id : null);
+      }
+      return updated;
+    });
+  };
+
   return (
     <div className="flex h-screen flex-col bg-surface font-sans text-text-primary">
       <Topbar
@@ -798,12 +875,21 @@ export default function DraftPage() {
                       ? "Batalkan pilihan"
                       : "Pilih yang tampil"}
                   </button>
-                  {selectedIds.size > 0 && (
+                  {selectedIds.size > 0 ? (
                     <div className="flex items-center gap-1.5">
                       <span className="font-semibold text-text-primary">{selectedIds.size} dipilih</span>
                       <button onClick={() => bulkSetStatus("draft")} className="rounded border border-surface-border px-2 py-1 text-amber-700 hover:bg-accent-soft">Jadikan Draf</button>
                       <button onClick={() => bulkSetStatus("final")} className="rounded border border-emerald-200 px-2 py-1 text-emerald-700 hover:bg-emerald-50">Finalkan</button>
                     </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleOpenAddSection}
+                      className="inline-flex items-center gap-1 text-accent-ink bg-accent-soft hover:bg-accent border border-accent/40 rounded px-2.5 py-1 font-semibold transition-colors"
+                    >
+                      <Plus size={12} />
+                      Tambah Bagian
+                    </button>
                   )}
                 </div>
               </div>
@@ -908,6 +994,18 @@ export default function DraftPage() {
                   })
                 )}
               </div>
+
+              {/* Bottom Add Section affordance */}
+              <div className="p-2.5 border-t border-surface-border bg-surface/50">
+                <button
+                  type="button"
+                  onClick={handleOpenAddSection}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed border-surface-border bg-surface py-1.5 text-xs font-semibold text-text-secondary hover:border-accent hover:text-text-primary hover:bg-accent-soft/30 transition-all"
+                >
+                  <Plus size={13} className="text-accent-ink" />
+                  Tambah Bagian Baru
+                </button>
+              </div>
             </div>
 
             {/* RIGHT COLUMN: ACTIVE REQUIREMENT STUDIO & DRAFT WORKSPACE */}
@@ -924,6 +1022,22 @@ export default function DraftPage() {
                         <span className="rounded bg-surface border border-surface-border px-2 py-0.5 text-xs font-medium text-text-secondary">
                           {selectedItem.category}
                         </span>
+                        <button
+                          type="button"
+                          onClick={handleOpenEditSection}
+                          title="Edit Judul & Cakupan Bagian"
+                          className="inline-flex items-center gap-1 rounded border border-surface-border bg-surface px-2 py-0.5 text-[11px] text-text-secondary hover:border-accent hover:text-text-primary transition-colors ml-1"
+                        >
+                          <Pencil size={11} /> Edit Info
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSection(selectedItem.id)}
+                          title="Hapus Bagian ini"
+                          className="inline-flex items-center gap-1 rounded border border-red-200 bg-surface px-2 py-0.5 text-[11px] text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 size={11} /> Hapus
+                        </button>
                       </div>
                       <h3 className="mt-2 text-base font-bold text-text-primary">
                         {selectedItem.title}
@@ -1144,7 +1258,93 @@ export default function DraftPage() {
             items={items}
             initialDocTypeId={docTypeId}
             initialFormat={format}
+            selectedReferenceDocs={referenceDocs.filter((d) => selectedReferenceIds.has(d.id))}
           />
+        </div>
+      )}
+
+      {/* Add / Edit Section Modal */}
+      {isSectionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="flex w-full max-w-md flex-col rounded-xl border border-surface-border bg-surface-raised shadow-panel">
+            <div className="flex items-center justify-between border-b border-surface-border px-5 py-3.5">
+              <h3 className="text-sm font-bold text-text-primary">
+                {sectionModalMode === "add" ? "Tambah Bagian Baru" : "Edit Info Bagian"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsSectionModalOpen(false)}
+                className="rounded-md p-1 text-text-muted hover:bg-surface hover:text-text-primary transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSectionModal} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Judul Bagian / Sub-Bab *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={sectionFormTitle}
+                  onChange={(e) => setSectionFormTitle(e.target.value)}
+                  placeholder="Contoh: Arsitektur Keamanan & Disaster Recovery"
+                  className="w-full rounded-md border border-surface-border bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-accent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Kategori Bagian
+                </label>
+                <select
+                  value={sectionFormCategory}
+                  onChange={(e) => setSectionFormCategory(e.target.value)}
+                  className="w-full rounded-md border border-surface-border bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-accent"
+                >
+                  <option value="Teknis">Teknis</option>
+                  <option value="Umum">Umum</option>
+                  <option value="SLA & Support">SLA & Support</option>
+                  <option value="Manajemen Proyek">Manajemen Proyek</option>
+                  <option value="Administrasi & Legal">Administrasi & Legal</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-text-primary mb-1">
+                  Cakupan / Tujuan Bagian (Acuan Jawaban AI)
+                </label>
+                <textarea
+                  rows={3}
+                  value={sectionFormDescription}
+                  onChange={(e) => setSectionFormDescription(e.target.value)}
+                  placeholder="Deskripsikan poin-poin yang perlu dijawab pada bagian ini berdasarkan TOR..."
+                  className="w-full rounded-md border border-surface-border bg-surface p-3 text-xs text-text-primary outline-none focus:border-accent resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-surface-border">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setIsSectionModalOpen(false)}
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  className="bg-ink-900 text-white hover:bg-ink-800"
+                >
+                  {sectionModalMode === "add" ? "Tambah Bagian" : "Simpan Perubahan"}
+                </Button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
