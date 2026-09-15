@@ -4,10 +4,76 @@ a flat top-k similarity search, no reranking or agentic multi-hop retrieval.
 Add those later only if query quality genuinely needs it.
 """
 
-from sqlalchemy import select
+import re
+
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 from app.models import DocumentChunk
 from app.services.embeddings import embed_text
+
+
+def _query_tokens(query: str) -> list[str]:
+    return list(dict.fromkeys(re.findall(r"[a-zA-Z0-9][a-zA-Z0-9._/-]{2,}", query.lower())))
+
+
+def _hybrid_chunks(
+    session: Session, workspace_id: str, query: str, top_k: int
+) -> list[DocumentChunk]:
+    """Blend vector candidates with exact-term candidates before returning top-k."""
+    query_embedding = embed_text(query)
+    candidate_limit = max(top_k * 4, 20)
+    distance = DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
+    vector_rows = session.execute(
+        select(DocumentChunk, distance)
+        .options(joinedload(DocumentChunk.document))
+        .where(DocumentChunk.workspace_id == workspace_id)
+        .order_by(distance)
+        .limit(candidate_limit)
+    ).all()
+
+    tokens = _query_tokens(query)
+    keyword_rows = []
+    if tokens:
+        keyword_rows = session.execute(
+            select(DocumentChunk)
+            .options(joinedload(DocumentChunk.document))
+            .where(
+                DocumentChunk.workspace_id == workspace_id,
+                or_(*(DocumentChunk.content.ilike(f"%{token}%") for token in tokens)),
+            )
+            .limit(candidate_limit)
+        ).scalars().all()
+
+    candidates: dict[str, dict] = {}
+    for rank, (chunk, raw_distance) in enumerate(vector_rows):
+        candidates[chunk.id] = {
+            "chunk": chunk,
+            "vector_score": max(0.0, 1.0 - float(raw_distance)),
+            "vector_rank": rank,
+        }
+    for chunk in keyword_rows:
+        candidates.setdefault(chunk.id, {
+            "chunk": chunk,
+            "vector_score": 0.0,
+            "vector_rank": candidate_limit,
+        })
+
+    normalized_query = query.lower()
+    query_numbers = set(re.findall(r"\d+(?:[.,]\d+)?(?:\s?[xX]\s?\d+)?%?", normalized_query))
+    for candidate in candidates.values():
+        content = (candidate["chunk"].content or "").lower()
+        matches = sum(1 for token in tokens if token in content)
+        lexical_score = matches / max(1, len(tokens))
+        if query_numbers and any(number in content for number in query_numbers):
+            lexical_score = min(1.0, lexical_score + 0.25)
+        candidate["score"] = candidate["vector_score"] * 0.65 + lexical_score * 0.35
+
+    ranked = sorted(
+        candidates.values(),
+        key=lambda candidate: (candidate["score"], -candidate["vector_rank"]),
+        reverse=True,
+    )
+    return [candidate["chunk"] for candidate in ranked[:top_k]]
 
 
 def retrieve_relevant_chunks(
@@ -20,16 +86,7 @@ def retrieve_relevant_chunks(
 def retrieve_relevant_chunks_with_sources(
     session: Session, workspace_id: str, query: str, top_k: int = 5
 ) -> tuple[list[str], list[dict]]:
-    query_embedding = embed_text(query)
-
-    stmt = (
-        select(DocumentChunk)
-        .options(joinedload(DocumentChunk.document))
-        .where(DocumentChunk.workspace_id == workspace_id)
-        .order_by(DocumentChunk.embedding.cosine_distance(query_embedding))
-        .limit(top_k)
-    )
-    chunks = session.execute(stmt).scalars().all()
+    chunks = _hybrid_chunks(session, workspace_id, query, top_k)
     chunk_texts = [c.content for c in chunks]
 
     seen = set()
@@ -55,16 +112,7 @@ def retrieve_chunks_with_full_metadata(
     """Return top-k chunks each with their own chunk text and parent document metadata.
     Unlike retrieve_relevant_chunks_with_sources, this does NOT deduplicate by document —
     every chunk gets its own entry so the Glean UI can show individual citation cards."""
-    query_embedding = embed_text(query)
-
-    stmt = (
-        select(DocumentChunk)
-        .options(joinedload(DocumentChunk.document))
-        .where(DocumentChunk.workspace_id == workspace_id)
-        .order_by(DocumentChunk.embedding.cosine_distance(query_embedding))
-        .limit(top_k)
-    )
-    chunks = session.execute(stmt).scalars().all()
+    chunks = _hybrid_chunks(session, workspace_id, query, top_k)
 
     results = []
     for c in chunks:

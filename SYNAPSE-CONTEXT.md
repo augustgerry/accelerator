@@ -250,6 +250,12 @@ knowledge-accelerator/
 - Recent project memakai session backend dan membuka Draft melalui mekanisme restore yang sudah ada.
 - Verifikasi: `npx tsc --noEmit` exit 0, diagnostics dashboard bersih, dan `git diff --check` bersih.
 
+### ✅ Next Batch Poin 4: Hybrid Search Retrieval
+- `backend/app/services/retrieval.py`: vector candidate diperlebar lalu digabung dengan exact keyword candidates.
+- Ranking memberi bobot vector similarity dan lexical overlap; angka/target klausul mendapat bonus jika muncul di chunk.
+- Kandidat dibatasi agar tetap cepat dan tidak menyapu seluruh database.
+- Verifikasi: backend compile bersih, token teknis `HCI-3`, `24x7`, `SKU` terdeteksi benar, diagnostics bersih, dan `git diff --check` bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.
