@@ -35,6 +35,14 @@ class LLMProvider(ABC):
             f"{self.__class__.__name__} does not implement research_external()"
         )
 
+    def map_items_to_sections(self, headings: list[dict], items: list[dict]) -> dict[str, int]:
+        """Assign each TOR item (by id) to the best-fitting template heading
+        (by its `index` in `headings`), based on meaning rather than keywords.
+        Returns {item_id: heading_index}; an item absent from the result means
+        no heading fit well enough and it should fall back to a generic section.
+        Default implementation uses the category-keyword heuristic."""
+        return _fallback_map_items_to_sections(headings, items)
+
 
 class ClaudeProvider(LLMProvider):
     def __init__(self):
@@ -235,6 +243,44 @@ def get_llm_provider() -> LLMProvider:
     if provider_cls is None:
         raise ValueError(f"Unknown LLM_PROVIDER: {settings.llm_provider}")
     return provider_cls()
+
+
+_MAPPING_SYSTEM_PROMPT = (
+    "Anda mencocokkan butir kebutuhan tender (TOR) ke heading dokumen template yang paling relevan "
+    "secara makna, bukan sekadar kata kunci yang sama persis. "
+    "Untuk setiap item, pilih SATU heading yang paling cocok isinya, atau lewati item itu (jangan "
+    "dimasukkan ke hasil) jika tidak ada heading yang benar-benar relevan — item yang dilewati akan "
+    "otomatis masuk ke bagian umum di akhir dokumen. "
+    "Balas HANYA JSON object valid, tanpa penjelasan: {\"<item_id>\": <heading_index>, ...}"
+)
+
+
+def _parse_json_object(raw: str) -> dict:
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    return json.loads(cleaned)
+
+
+def _build_mapping_prompt(headings: list[dict], items: list[dict]) -> str:
+    headings_text = "\n".join(f"{h['index']}: {h['text']}" for h in headings)
+    items_text = "\n".join(
+        f"- id={it['id']} | kategori={it.get('category', '')} | judul={it.get('title', '')} | "
+        f"isi={(it.get('requirement_text') or '')[:300]}"
+        for it in items
+    )
+    return f"Daftar heading template (index: teks):\n{headings_text}\n\nDaftar item TOR:\n{items_text}"
+
+
+def _clean_mapping_result(data: dict, headings: list[dict], items: list[dict]) -> dict[str, int]:
+    valid_indices = {h["index"] for h in headings}
+    valid_ids = {it["id"] for it in items}
+    result: dict[str, int] = {}
+    for item_id, heading_index in data.items():
+        if item_id in valid_ids and isinstance(heading_index, int) and heading_index in valid_indices:
+            result[item_id] = heading_index
+    return result
 
 
 def _categorize_text(t: str) -> str:
