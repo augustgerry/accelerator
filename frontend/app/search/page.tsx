@@ -14,8 +14,35 @@ import {
   X,
   ChevronRight,
   SlidersHorizontal,
+  History,
+  Bookmark,
+  BookmarkCheck,
+  Copy,
+  Check,
 } from "lucide-react";
 import { searchKnowledgeBase, type SearchResult } from "@/lib/api";
+import { CitationDrawer } from "@/components/search/citation-drawer";
+
+const LS_HISTORY_KEY = "synapse-search-history";
+const LS_BOOKMARKS_KEY = "synapse-search-bookmarks";
+
+type BookmarkEntry = { question: string; answer: string; savedAt: string };
+
+function loadHistory(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(LS_HISTORY_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+function loadBookmarks(): BookmarkEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem(LS_BOOKMARKS_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
 
 const SUGGESTED_QUERIES = [
   "SLA response time teknisi on-site SMBC",
@@ -75,7 +102,35 @@ function SearchContent() {
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
   const [docTypeFilter, setDocTypeFilter] = useState("");
   const [divisionFilter, setDivisionFilter] = useState("");
+  const [history, setHistory] = useState<string[]>([]);
+  const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
+  const [answerCopied, setAnswerCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setHistory(loadHistory());
+    setBookmarks(loadBookmarks());
+  }, []);
+
+  const isBookmarked = !!result && bookmarks.some((b) => b.question === query);
+
+  const toggleBookmark = () => {
+    if (!result) return;
+    const existing = loadBookmarks();
+    const already = existing.some((b) => b.question === query);
+    const updated = already
+      ? existing.filter((b) => b.question !== query)
+      : [{ question: query, answer: result.answer, savedAt: new Date().toISOString() }, ...existing].slice(0, 20);
+    localStorage.setItem(LS_BOOKMARKS_KEY, JSON.stringify(updated));
+    setBookmarks(updated);
+  };
+
+  const copyAnswer = () => {
+    if (!result) return;
+    navigator.clipboard.writeText(result.answer);
+    setAnswerCopied(true);
+    setTimeout(() => setAnswerCopied(false), 2000);
+  };
 
   const doSearch = async (q: string, nextDocType = docTypeFilter, nextDivision = divisionFilter) => {
     if (!q.trim()) return;
@@ -91,10 +146,10 @@ function SearchContent() {
 
     // Persist to search history (max 10, no duplicates)
     try {
-      const LS_HISTORY_KEY = "synapse-search-history";
-      const existing: string[] = JSON.parse(localStorage.getItem(LS_HISTORY_KEY) ?? "[]");
+      const existing = loadHistory();
       const updated = [q, ...existing.filter((h) => h !== q)].slice(0, 10);
       localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(updated));
+      setHistory(updated);
     } catch { /* private mode */ }
 
     try {
@@ -212,6 +267,38 @@ function SearchContent() {
             )}
           </div>
 
+        {/* Search history */}
+        {!query && history.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <History size={12} className="text-text-muted" />
+            {history.slice(0, 6).map((h, i) => (
+              <button
+                key={i}
+                onClick={() => doSearch(h)}
+                className="rounded-full border border-surface-border bg-surface px-3 py-1 text-xs text-text-secondary hover:border-accent hover:text-accent-ink transition-colors"
+              >
+                {h}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Bookmarks */}
+        {!query && bookmarks.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <Bookmark size={12} className="text-text-muted" />
+            {bookmarks.slice(0, 6).map((b, i) => (
+              <button
+                key={i}
+                onClick={() => doSearch(b.question)}
+                className="rounded-full border border-secondary/40 bg-secondary-soft px-3 py-1 text-xs text-secondary hover:border-secondary transition-colors"
+              >
+                {b.question}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Quick chips */}
         {!query && (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -257,7 +344,7 @@ function SearchContent() {
               {result.sources.map((src, idx) => (
                 <div
                   key={`${src.id}-${idx}`}
-                  onClick={() => setSelectedChunkIdx(selectedChunkIdx === idx ? null : idx)}
+                  onClick={() => setSelectedChunkIdx(idx)}
                   className={`cursor-pointer border-b border-surface-border p-4 transition-all ${
                     selectedChunkIdx === idx
                       ? "bg-accent-soft/50 border-l-4 border-l-accent"
@@ -267,6 +354,7 @@ function SearchContent() {
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <FileText size={13} className="text-secondary shrink-0" />
+                      <span className="shrink-0 rounded bg-surface px-1 text-[10px] font-bold text-accent-ink">[{idx + 1}]</span>
                       <span className="text-xs font-semibold text-text-primary truncate">{src.title}</span>
                     </div>
                     <span className={`shrink-0 text-[10px] font-semibold border rounded px-1.5 py-0.5 ${
@@ -294,8 +382,8 @@ function SearchContent() {
                     <HighlightedText text={src.chunk_text} query={query} />
                   </p>
                   <div className="mt-2 flex items-center gap-1 text-[10px] text-accent-ink font-medium">
-                    <span>{selectedChunkIdx === idx ? "Tutup" : "Lihat lengkap"}</span>
-                    <ChevronRight size={10} className={`transition-transform ${selectedChunkIdx === idx ? "rotate-90" : ""}`} />
+                    <span>Lihat detail</span>
+                    <ChevronRight size={10} />
                   </div>
                 </div>
               ))}
@@ -356,43 +444,34 @@ function SearchContent() {
                     {result.answer}
                   </p>
                 </div>
-                <button
-                  onClick={createDocumentFromAnswer}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-primary transition-colors hover:border-accent hover:bg-accent-soft"
-                >
-                  <FileEdit size={14} className="text-accent-ink" />
-                  Buat dokumen dari jawaban
-                </button>
-              </div>
-
-              {/* Selected chunk detail */}
-              {selectedChunk && (
-                <div className="rounded-xl border border-accent/40 bg-accent-soft/20 p-5 shadow-subtle">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <FileText size={16} className="text-accent-ink" />
-                      <span className="text-sm font-bold text-text-primary">{selectedChunk.title}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {selectedChunk.division && (
-                        <span className="text-[10px] font-semibold text-secondary bg-secondary-soft rounded px-1.5 py-0.5">
-                          {selectedChunk.division}
-                        </span>
-                      )}
-                      <span className={`text-[10px] font-semibold border rounded px-1.5 py-0.5 ${
-                        DOC_TYPE_COLORS[selectedChunk.docType] ?? DOC_TYPE_COLORS.other
-                      }`}>
-                        {selectedChunk.docType}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="rounded-lg bg-surface border border-surface-border p-4">
-                    <p className="text-xs leading-relaxed text-text-primary whitespace-pre-wrap">
-                      <HighlightedText text={selectedChunk.chunk_text} query={query} />
-                    </p>
-                  </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={createDocumentFromAnswer}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-primary transition-colors hover:border-accent hover:bg-accent-soft"
+                  >
+                    <FileEdit size={14} className="text-accent-ink" />
+                    Buat dokumen dari jawaban
+                  </button>
+                  <button
+                    onClick={copyAnswer}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-primary transition-colors hover:border-accent hover:bg-accent-soft"
+                  >
+                    {answerCopied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                    {answerCopied ? "Tersalin!" : "Salin Jawaban"}
+                  </button>
+                  <button
+                    onClick={toggleBookmark}
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
+                      isBookmarked
+                        ? "border-secondary bg-secondary-soft text-secondary"
+                        : "border-surface-border bg-surface text-text-primary hover:border-accent hover:bg-accent-soft"
+                    }`}
+                  >
+                    {isBookmarked ? <BookmarkCheck size={14} /> : <Bookmark size={14} />}
+                    {isBookmarked ? "Tersimpan" : "Bookmark"}
+                  </button>
                 </div>
-              )}
+              </div>
 
               {/* Source list summary */}
               {result.sources.length > 0 && (
@@ -404,7 +483,7 @@ function SearchContent() {
                     {result.sources.map((src, idx) => (
                       <button
                         key={`${src.id}-${idx}`}
-                        onClick={() => setSelectedChunkIdx(selectedChunkIdx === idx ? null : idx)}
+                        onClick={() => setSelectedChunkIdx(idx)}
                         className={`flex items-center justify-between rounded-lg border p-2.5 text-left transition-all ${
                           selectedChunkIdx === idx
                             ? "border-accent bg-accent-soft/30"
@@ -412,6 +491,7 @@ function SearchContent() {
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
+                          <span className="shrink-0 text-[10px] font-bold text-accent-ink">[{idx + 1}]</span>
                           <FileText size={13} className="text-secondary shrink-0" />
                           <span className="text-xs text-text-primary truncate">{src.title}</span>
                         </div>
@@ -451,6 +531,12 @@ function SearchContent() {
           )}
         </div>
       </div>
+
+      <CitationDrawer
+        chunk={selectedChunk}
+        index={selectedChunkIdx ?? 0}
+        onClose={() => setSelectedChunkIdx(null)}
+      />
     </div>
   );
 }

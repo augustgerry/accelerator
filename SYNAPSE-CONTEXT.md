@@ -112,6 +112,22 @@ Semua perubahan di atas: `npx tsc --noEmit` clean, backend `py_compile` clean, u
 
 ---
 
+## 🔍 SESI CLAUDE CODE — SEARCH MODE & CITATION UX (branch `feat/search-citation-drawer`)
+
+Kerja terisolasi di `frontend/app/search/`, `frontend/components/search/`, `frontend/app/documents/` — TIDAK menyentuh `frontend/app/draft/` atau `backend/app/routers/draft.py` (area Antigravity), jadi backend tetap 0 perubahan.
+
+1. **Interactive Citation Drawer:** `frontend/components/search/citation-drawer.tsx` (baru) — slide-over panel dari kanan (Tailwind transition, tanpa dependency baru). Diklik dari chip sitasi `[1]` di kartu kutipan (list kiri) maupun grid "Dokumen Referensi" (kanan). Menampilkan judul dokumen lengkap, badge ekstensi file (`.pdf/.docx/.pptx` — diparse dari `title` via `getFileExtension()` baru di `lib/utils.ts`, TANPA perlu field/migrasi backend baru), badge tipe dokumen, divisi, cuplikan chunk teks lengkap + tombol salin, serta tombol **Download Dokumen** (reuse `downloadDriveDocument()` yang sudah ada) dan **Buka di Drive** (`https://drive.google.com/file/d/{doc.id}/view` — valid karena `Document.id` di backend memang di-set sama dengan Drive file id saat sync, lihat `documents.py` `sync_from_drive()`).
+   - `frontend/app/search/page.tsx`: inline "Selected chunk detail" box lama dihapus (redundant, digantikan drawer). Klik kartu kutipan sekarang selalu membuka drawer (bukan toggle expand/collapse).
+2. **Search History & Bookmarking** (`frontend/app/search/page.tsx`):
+   - Riwayat pencarian (`localStorage` key `synapse-search-history`, sudah ada sebelumnya tapi belum pernah ditampilkan) sekarang dirender sebagai chip yang bisa diklik ulang di bawah search bar.
+   - Bookmark baru (`localStorage` key `synapse-search-bookmarks`, maks 20 entri) — tombol **Bookmark** di kartu jawaban AI, tersimpan tampil sebagai chip terpisah (bisa diklik ulang juga).
+   - Tombol **Salin Jawaban** (clipboard) ditambah di kartu jawaban AI.
+3. **Filter Lanjutan `/documents`** (`frontend/app/documents/page.tsx`): dropdown filter Ekstensi File (`.docx/.pdf/.pptx`, dll — di-derive dari `title` via `getFileExtension()`, bukan field DB baru) ditambahkan di samping filter Divisi yang sudah ada. Pencarian cepat lokal di tabel dokumen sudah ada sebelumnya (tidak diubah).
+- Verifikasi: `npx tsc --noEmit` di `frontend/` exit 0. Belum ditest manual lewat browser (`npm run dev`) — kalau mau validasi UI, jalankan dev server lalu coba klik chip sitasi di `/search` dan filter ekstensi di `/documents`.
+- Tidak ada perubahan backend/database sama sekali di sesi ini — seluruh fitur reuse endpoint & field yang sudah ada (`/documents/{id}/download`, `Document.id == source_drive_id`, `title` yang sudah menyimpan ekstensi asli).
+
+---
+
 ## 🗂️ PROJECT OVERVIEW
 
 **Nama:** Synapse Knowledge Accelerator

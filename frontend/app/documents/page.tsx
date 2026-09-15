@@ -29,6 +29,7 @@ import {
   type DocumentsSummary,
 } from "@/lib/api";
 import type { IndexedDocument, DocumentChunksResponse, DocumentChunkItem } from "@/lib/types";
+import { getFileExtension } from "@/lib/utils";
 
 export default function DocumentsPage() {
   const [summary, setSummary] = useState<DocumentsSummary | null>(null);
@@ -40,6 +41,7 @@ export default function DocumentsPage() {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDivision, setSelectedDivision] = useState<string>("all");
+  const [selectedExt, setSelectedExt] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"updated" | "title" | "chunks">("updated");
 
   // Chunk Inspection Drawer State
@@ -114,6 +116,16 @@ export default function DocumentsPage() {
     return ["all", ...Array.from(set)];
   }, [documents]);
 
+  // Extensions list (derived from filenames)
+  const extensions = useMemo(() => {
+    const set = new Set<string>();
+    documents.forEach((d) => {
+      const ext = getFileExtension(d.title);
+      if (ext) set.add(ext);
+    });
+    return ["all", ...Array.from(set).sort()];
+  }, [documents]);
+
   // Filtered & Sorted documents
   const filteredDocs = useMemo(() => {
     return documents
@@ -124,7 +136,9 @@ export default function DocumentsPage() {
           d.docType?.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesDivision =
           selectedDivision === "all" || d.division === selectedDivision;
-        return matchesSearch && matchesDivision;
+        const matchesExt =
+          selectedExt === "all" || getFileExtension(d.title) === selectedExt;
+        return matchesSearch && matchesDivision && matchesExt;
       })
       .sort((a, b) => {
         if (sortBy === "title") return a.title.localeCompare(b.title);
@@ -273,6 +287,20 @@ export default function DocumentsPage() {
 
               <div className="h-4 w-px bg-surface-border hidden sm:block" />
 
+              <select
+                value={selectedExt}
+                onChange={(e) => setSelectedExt(e.target.value)}
+                className="bg-transparent text-xs text-text-secondary border border-surface-border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
+              >
+                {extensions.map((ext) => (
+                  <option key={ext} value={ext}>
+                    {ext === "all" ? "Semua Ekstensi" : `.${ext}`}
+                  </option>
+                ))}
+              </select>
+
+              <div className="h-4 w-px bg-surface-border hidden sm:block" />
+
               <div className="flex items-center gap-1 text-xs text-text-muted">
                 <SlidersHorizontal size={13} />
                 <select
@@ -299,13 +327,13 @@ export default function DocumentsPage() {
               <div className="p-12 text-center text-text-muted">
                 <FileText size={32} className="mx-auto mb-3 opacity-40" />
                 <p className="text-sm font-medium text-text-primary">
-                  {searchQuery || selectedDivision !== "all"
+                  {searchQuery || selectedDivision !== "all" || selectedExt !== "all"
                     ? "Tidak ada dokumen yang cocok dengan filter"
                     : "Belum ada dokumen yang terindeks"}
                 </p>
                 <p className="text-xs mt-1 max-w-sm mx-auto">
-                  {searchQuery || selectedDivision !== "all"
-                    ? "Coba ubah kata kunci pencarian atau pilih kategori divisi lain."
+                  {searchQuery || selectedDivision !== "all" || selectedExt !== "all"
+                    ? "Coba ubah kata kunci pencarian atau pilih kategori divisi/ekstensi lain."
                     : "Jalankan 'Sync Drive' untuk menarik dan memproses dokumen dari Google Drive."}
                 </p>
               </div>
