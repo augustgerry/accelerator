@@ -11,7 +11,7 @@
   2. `export-from-template` (docx, mode struktur) — baca heading & font dari template, tapi pemetaan item ke section masih **keyword-matching category** (heuristic sederhana, lihat KNOWN ISSUES), belum "AI pintar" beneran, dan belum tau target `template_type` (sow/mom/dll).
   3. `export-pptx` — **BELUM ada konsep template sama sekali.** Selalu generate slide dari layout fixed hardcoded (warna, style tetap). User minta bisa upload/pilih template `.pptx` dan AI ikutin master slide/layout aslinya — ini gap paling besar.
   4. Template Library (Priority 2) — baru nyimpen & fetch `.docx`. Perlu extend juga tag/simpan `.pptx` sebagai template kalau mau dipakai utk Pitch Deck.
-- **Langkah Berikutnya Jika Terputus:** Sub-task 1, 2, 3 SELESAI (lihat bawah). Tinggal sub-task 4 (tag `.pptx` di Template Library sync, opsional — user bisa upload manual dulu tanpa ini).
+- **Status:** SEMUA sub-task (1-4) SELESAI. PRIORITY 4 kelar. Lihat detail tiap sub-task di bawah. Belum ada task aktif baru — tunggu instruksi user.
 
 ### ✅ Sub-task 1 SELESAI: LLM semantic section-mapping (ganti keyword-matching)
 - `backend/app/services/llm_provider.py`: tambah `LLMProvider.map_items_to_sections(headings, items) -> dict[item_id, heading_index]` di ABC (default fallback `_fallback_map_items_to_sections`, keyword heuristic yang tadinya inline di `draft.py`, dipindah kesini + fix bug token pendek kayak `&` ikut ke-match). `ClaudeProvider` & `GeminiProvider` override dengan LLM call (prompt semantik, item yang gak relevan boleh di-skip biar jatuh ke fallback section).
