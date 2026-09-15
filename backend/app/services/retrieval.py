@@ -8,7 +8,7 @@ import re
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
-from app.models import DocumentChunk
+from app.models import Document, DocumentChunk
 from app.services.embeddings import embed_text
 
 
@@ -17,16 +17,26 @@ def _query_tokens(query: str) -> list[str]:
 
 
 def _hybrid_chunks(
-    session: Session, workspace_id: str, query: str, top_k: int
+    session: Session,
+    workspace_id: str,
+    query: str,
+    top_k: int,
+    doc_type: str | None = None,
+    division: str | None = None,
 ) -> list[DocumentChunk]:
     """Blend vector candidates with exact-term candidates before returning top-k."""
     query_embedding = embed_text(query)
     candidate_limit = max(top_k * 4, 20)
+    filters = [DocumentChunk.workspace_id == workspace_id]
+    if doc_type:
+        filters.append(DocumentChunk.document.has(Document.doc_type == doc_type))
+    if division:
+        filters.append(DocumentChunk.document.has(Document.division == division))
     distance = DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
     vector_rows = session.execute(
         select(DocumentChunk, distance)
         .options(joinedload(DocumentChunk.document))
-        .where(DocumentChunk.workspace_id == workspace_id)
+        .where(*filters)
         .order_by(distance)
         .limit(candidate_limit)
     ).all()
@@ -38,7 +48,7 @@ def _hybrid_chunks(
             select(DocumentChunk)
             .options(joinedload(DocumentChunk.document))
             .where(
-                DocumentChunk.workspace_id == workspace_id,
+                *filters,
                 or_(*(DocumentChunk.content.ilike(f"%{token}%") for token in tokens)),
             )
             .limit(candidate_limit)
@@ -84,9 +94,14 @@ def retrieve_relevant_chunks(
 
 
 def retrieve_relevant_chunks_with_sources(
-    session: Session, workspace_id: str, query: str, top_k: int = 5
+    session: Session,
+    workspace_id: str,
+    query: str,
+    top_k: int = 5,
+    doc_type: str | None = None,
+    division: str | None = None,
 ) -> tuple[list[str], list[dict]]:
-    chunks = _hybrid_chunks(session, workspace_id, query, top_k)
+    chunks = _hybrid_chunks(session, workspace_id, query, top_k, doc_type, division)
     chunk_texts = [c.content for c in chunks]
 
     seen = set()
@@ -107,12 +122,17 @@ def retrieve_relevant_chunks_with_sources(
 
 
 def retrieve_chunks_with_full_metadata(
-    session: Session, workspace_id: str, query: str, top_k: int = 6
+    session: Session,
+    workspace_id: str,
+    query: str,
+    top_k: int = 6,
+    doc_type: str | None = None,
+    division: str | None = None,
 ) -> list[dict]:
     """Return top-k chunks each with their own chunk text and parent document metadata.
     Unlike retrieve_relevant_chunks_with_sources, this does NOT deduplicate by document —
     every chunk gets its own entry so the Glean UI can show individual citation cards."""
-    chunks = _hybrid_chunks(session, workspace_id, query, top_k)
+    chunks = _hybrid_chunks(session, workspace_id, query, top_k, doc_type, division)
 
     results = []
     for c in chunks:

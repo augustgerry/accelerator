@@ -264,6 +264,12 @@ knowledge-accelerator/
 
 **STATUS BATCH POIN 1-5: SELESAI.** Autosave session, logo branding, dashboard cleanup, hybrid search, dan incremental Drive sync sudah diimplementasikan serta dipush berurutan.
 
+### ✅ Next Batch Poin 6: Search Filters
+- `backend/app/routers/query.py` dan `backend/app/services/retrieval.py`: query menerima filter `doc_type` dan `division` sebelum hybrid ranking.
+- `frontend/app/search/page.tsx`: filter ringkas Semua Jenis Dokumen/Template/Dokumen dan Divisi, refresh otomatis saat berubah.
+- `frontend/lib/api.ts`: `searchKnowledgeBase()` menerima filter opsional.
+- Verifikasi: query model, backend compile, `npx tsc --noEmit`, dan diagnostics semua file bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

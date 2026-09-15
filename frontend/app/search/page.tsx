@@ -12,6 +12,7 @@ import {
   BookOpen,
   X,
   ChevronRight,
+  SlidersHorizontal,
 } from "lucide-react";
 import { searchKnowledgeBase, type SearchResult } from "@/lib/api";
 
@@ -68,9 +69,11 @@ function SearchContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedChunkIdx, setSelectedChunkIdx] = useState<number | null>(null);
+  const [docTypeFilter, setDocTypeFilter] = useState("");
+  const [divisionFilter, setDivisionFilter] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const doSearch = async (q: string) => {
+  const doSearch = async (q: string, nextDocType = docTypeFilter, nextDivision = divisionFilter) => {
     if (!q.trim()) return;
     setQuery(q);
     setInputValue(q);
@@ -89,7 +92,7 @@ function SearchContent() {
     } catch { /* private mode */ }
 
     try {
-      const res = await searchKnowledgeBase(q);
+      const res = await searchKnowledgeBase(q, { docType: nextDocType, division: nextDivision });
       setResult(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Pencarian gagal. Pastikan server API aktif.");
@@ -108,6 +111,16 @@ function SearchContent() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     doSearch(inputValue);
+  };
+
+  const handleFilterChange = (kind: "docType" | "division", value: string) => {
+    if (kind === "docType") {
+      setDocTypeFilter(value);
+      if (query) doSearch(query, value, divisionFilter);
+    } else {
+      setDivisionFilter(value);
+      if (query) doSearch(query, docTypeFilter, value);
+    }
   };
 
   const selectedChunk = result && selectedChunkIdx !== null ? result.sources[selectedChunkIdx] : null;
@@ -150,6 +163,38 @@ function SearchContent() {
             Cari
           </button>
         </form>
+
+          <div className="mt-2 flex max-w-3xl flex-wrap items-center gap-2">
+            <SlidersHorizontal size={13} className="text-text-muted" />
+            <select
+              value={docTypeFilter}
+              onChange={(e) => handleFilterChange("docType", e.target.value)}
+              className="rounded-md border border-surface-border bg-surface px-2 py-1.5 text-[11px] text-text-secondary outline-none focus:border-accent"
+            >
+              <option value="">Semua jenis dokumen</option>
+              <option value="document">Dokumen</option>
+              <option value="template">Template</option>
+            </select>
+            <select
+              value={divisionFilter}
+              onChange={(e) => handleFilterChange("division", e.target.value)}
+              className="rounded-md border border-surface-border bg-surface px-2 py-1.5 text-[11px] text-text-secondary outline-none focus:border-accent"
+            >
+              <option value="">Semua divisi</option>
+              <option value="presales">Presales</option>
+              <option value="infrastructure">Infrastructure</option>
+              <option value="security">Security</option>
+              <option value="application">Application</option>
+            </select>
+            {(docTypeFilter || divisionFilter) && (
+              <button
+                onClick={() => { setDocTypeFilter(""); setDivisionFilter(""); if (query) doSearch(query, "", ""); }}
+                className="text-[11px] font-medium text-secondary hover:underline"
+              >
+                Reset filter
+              </button>
+            )}
+          </div>
 
         {/* Quick chips */}
         {!query && (

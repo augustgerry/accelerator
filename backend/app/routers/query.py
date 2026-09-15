@@ -14,6 +14,8 @@ router = APIRouter(prefix="/query", tags=["query"])
 class QueryRequest(BaseModel):
     question: str
     workspace_id: str = settings.default_workspace_id
+    doc_type: Optional[str] = None
+    division: Optional[str] = None
 
 
 class ChunkResult(BaseModel):
@@ -36,7 +38,12 @@ def query_knowledge_base(
     payload: QueryRequest, session: Session = Depends(get_session)
 ):
     chunk_records = retrieve_chunks_with_full_metadata(
-        session, payload.workspace_id, payload.question, top_k=6
+        session,
+        payload.workspace_id,
+        payload.question,
+        top_k=6,
+        doc_type=payload.doc_type,
+        division=payload.division,
     )
     chunks_text = [r["chunk_text"] for r in chunk_records]
 

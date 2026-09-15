@@ -113,8 +113,15 @@ export type SearchResult = {
   sources: SearchResultChunk[];
 };
 
-export async function searchKnowledgeBase(question: string): Promise<SearchResult> {
-  return postJson<SearchResult>("/query", { question });
+export async function searchKnowledgeBase(
+  question: string,
+  filters?: { docType?: string; division?: string },
+): Promise<SearchResult> {
+  return postJson<SearchResult>("/query", {
+    question,
+    doc_type: filters?.docType || undefined,
+    division: filters?.division || undefined,
+  });
 }
 
 export async function generateDraft(
