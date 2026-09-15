@@ -159,6 +159,7 @@ export default function DraftPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [savingSession, setSavingSession] = useState(false);
   const [sessionSaved, setSessionSaved] = useState<string | null>(null);
+  const autoSavedSignature = useRef<string | null>(null);
 
   // ── Restore from localStorage on mount ──────────────────────────────────
   useEffect(() => {
@@ -202,7 +203,41 @@ export default function DraftPage() {
     const time = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     setLastSaved(time);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, fileName, hydrated]);
+  }, [items, fileName, torText, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated || !fileName || items.length === 0) return;
+    const cleanItems = items.map(({ isGenerating: _isGenerating, error: _error, ...item }) => item);
+    const signature = JSON.stringify({ fileName, torText, items: cleanItems });
+    if (signature === autoSavedSignature.current) return;
+
+    const timer = window.setTimeout(async () => {
+      setSavingSession(true);
+      try {
+        const saved = await saveProposalSession(
+          {
+            title: fileName.replace(/\.[^/.]+$/, ""),
+            file_name: fileName,
+            tor_text: torText,
+            items: cleanItems,
+            status: items.every((item) => item.status === "final") ? "completed" : "draft",
+          },
+          sessionId ?? undefined,
+        );
+        autoSavedSignature.current = signature;
+        setSessionId(saved.id);
+        localStorage.setItem(LS_SESSION_ID_KEY, saved.id);
+        setSessionSaved("Auto-saved");
+        window.setTimeout(() => setSessionSaved(null), 1800);
+      } catch {
+        setSessionSaved("Belum tersimpan ke server");
+      } finally {
+        setSavingSession(false);
+      }
+    }, 1200);
+
+    return () => window.clearTimeout(timer);
+  }, [fileName, hydrated, items, sessionId, torText]);
 
   // Active selected item
   const selectedItem = useMemo(() => {
@@ -416,6 +451,11 @@ export default function DraftPage() {
       );
       setSessionId(saved.id);
       localStorage.setItem(LS_SESSION_ID_KEY, saved.id);
+      autoSavedSignature.current = JSON.stringify({
+        fileName,
+        torText,
+        items: items.map(({ isGenerating: _isGenerating, error: _error, ...item }) => item),
+      });
       setSessionSaved("Tersimpan");
       setTimeout(() => setSessionSaved(null), 2500);
     } catch (err) {

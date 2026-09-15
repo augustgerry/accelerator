@@ -232,6 +232,12 @@ knowledge-accelerator/
 - Project yang dipilih menyimpan session id lalu membuka Draft dengan restore session yang sudah ada.
 - Verifikasi: `npx tsc --noEmit` exit 0, diagnostics page/API/sidebar bersih, dan `git diff --check` bersih.
 
+### ✅ Next Batch Poin 1: Backend Autosave Proposal Session
+- `frontend/app/draft/page.tsx`: autosave session ke backend setelah 1,2 detik tanpa perubahan, memakai debounce dan payload yang sama dengan save manual.
+- Session id baru disimpan ke localStorage setelah create pertama; perubahan berikutnya memakai update session yang sama.
+- UI menampilkan `Auto-saved` atau `Belum tersimpan ke server` tanpa mengganggu editor.
+- Verifikasi: `npx tsc --noEmit` exit 0, diagnostics bersih, dan `git diff --check` bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.
