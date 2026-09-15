@@ -241,13 +241,16 @@ export function ExportModal({
         link.click();
         document.body.removeChild(link);
       } else if (templateType === "pdf") {
-        const docxBlob = await exportProposalDocx({
+        const blob = await exportProposalPdf({
           document_title: documentTitle,
           template_type: "narrative",
           company_name: branding.companyName,
+          primary_color: branding.primaryColor,
+          accent_color: branding.accentColor,
+          footer_text: branding.footerText,
+          logo_data_url: branding.logoDataUrl,
           items: mappedItems,
         });
-        const blob = await convertOfficeToPdf(docxBlob, `Proposal-${cleanTitle}.docx`);
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
