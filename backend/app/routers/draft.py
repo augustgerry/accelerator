@@ -1154,9 +1154,9 @@ def _delete_pptx_slide(prs, index: int) -> None:
 @router.post("/clone-template-pptx")
 async def clone_template_pptx(
     template: UploadFile,
-    items_json: str = "",
-    document_title: str = "",
-    company_name: str = "PT Solusi Mitra Gemilang (SMG)",
+    items_json: str = Form(""),
+    document_title: str = Form(""),
+    company_name: str = Form("PT Solusi Mitra Gemilang (SMG)"),
 ):
     """
     In-place PPTX template cloning. Form fields:
