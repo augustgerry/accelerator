@@ -25,6 +25,7 @@ import {
   uploadTemplate,
   exportFromTemplate,
   cloneTemplate,
+  cloneTemplatePptx,
   listDocuments,
   downloadTemplateDocument,
 } from "@/lib/api";
@@ -281,6 +282,43 @@ export function ExportModal({
       alert(err instanceof Error ? err.message : "Gagal mengekspor dari template");
     } finally {
       setExportingFromTemplate(false);
+    }
+  };
+
+  const handlePptxTemplateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPptxTemplateFile(file);
+    setPptxCloneError(null);
+    e.target.value = "";
+  };
+
+  const handleGeneratePptxClone = async () => {
+    if (!pptxTemplateFile || templateTargetItems.length === 0) return;
+    setGeneratingPptxClone(true);
+    setPptxCloneError(null);
+    try {
+      const blob = await cloneTemplatePptx({
+        templateFile: pptxTemplateFile,
+        document_title: documentTitle,
+        company_name: "PT Solusi Mitra Gemilang (SMG)",
+        items: templateTargetItems.map((it) => ({
+          id: it.id, title: it.title, requirement_text: it.requirement_text,
+          category: it.category, draft_text: it.draft_text, status: it.status,
+        })),
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const cleanTitle = documentTitle.replace(/\.[^/.]+$/, "").replace(/\s+/g, "-");
+      link.setAttribute("download", `PitchDeck-Cloned-${cleanTitle}.pptx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      setPptxCloneError(err instanceof Error ? err.message : "Gagal clone template PowerPoint");
+    } finally {
+      setGeneratingPptxClone(false);
     }
   };
 
