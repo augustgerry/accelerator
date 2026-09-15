@@ -93,100 +93,47 @@ knowledge-accelerator/
 - [x] `lib/api.ts` — semua API functions: uploadTor, segmentTor, generateItemDraft, exportProposalDocx, uploadTemplate, exportFromTemplate, searchKnowledgeBase
 - [x] `lib/types.ts` — TemplateSection, TemplateInfo types added
 - [x] Design system: light MOIP-style dengan yellow accent, Tailwind tokens
+- [x] **In-Place Template Cloning** (`POST /draft/clone-template`) — preserve 100% font, margins, tables, header/footer template Word asli dengan placeholder tokens (`{{PROPOSAL_TITLE}}`, `{{ITEM_TITLE}}`, `{{ITEM_RESPONSE}}`, `{{COMPILED_RESPONSES}}`)
+- [x] **Clone Mode UI** di `ExportModal` — user bisa pilih mode clone vs mode struktur, preview token placeholder docs
+- [x] **Settings Page** (`/settings`) — switch LLM Provider (Claude, Gemini, OpenAI), API Key configuration, Google Drive sync management, local storage cleaner
+- [x] **Search History Persistence** — simpan riwayat pencarian ke localStorage dan tampilkan chip pencarian terakhir
+- [x] **Git Auto-Commit Script** (`auto-commit.ps1`) — background process yang mendeteksi perubahan file dan push ke GitHub tiap 15 detik
 
 ---
 
-## 🔄 SEDANG DIKERJAKAN / IN PROGRESS
+## 🔄 STATUS GIT & HANDOFF TERAKHIR
 
-**Status saat ini:** Semua file sudah ditulis, BELUM di-commit ke GitHub.
+**Status Repositori:**
+- Branch: `main`
+- Commit Terakhir: `e01f41b` ("feat: in-place clone-template endpoint (preserves ALL docx formatting), clone mode UI in ExportModal with placeholder docs")
+- Status: **Up to date dengan origin/main (GitHub). Working tree CLEAN.**
+- Semua file kode di backend dan frontend sudah ter-push ke GitHub repo https://github.com/augustgerry/accelerator.
 
-### Yang perlu di-commit:
-```
-backend/app/config.py
-backend/app/routers/draft.py        ← BARU: upload-template + export-from-template endpoints
-backend/app/routers/query.py        ← UPDATE: return sources[] untuk Glean UI
-backend/app/services/llm_provider.py ← UPDATE: GeminiProvider + segment_document
-backend/app/services/retrieval.py   ← UPDATE: retrieve_chunks_with_full_metadata()
-backend/requirements.txt            ← UPDATE: google-generativeai added
-frontend/app/draft/page.tsx         ← BARU: Loopio checklist full implementation
-frontend/app/page.tsx               ← UPDATE: dashboard dengan Glean search hero
-frontend/app/search/page.tsx        ← BARU: Glean dual-panel search
-frontend/components/draft/          ← BARU: export-modal.tsx + progress-header.tsx
-frontend/components/onboarding-modal.tsx ← BARU
-frontend/lib/api.ts                 ← UPDATE: template + search functions
-frontend/lib/types.ts               ← UPDATE: TemplateSection, TemplateInfo types
-```
+> 💡 **PETUNJUK UNTUK CLAUDE CODE / NEXT AGENT:**
+> Jika kamu melanjutkan sesi ini menggunakan Claude Code:
+> 1. Kode sudah 100% tersinkronisasi di GitHub dan lokal.
+> 2. Backend berjalan di port 8000 (`uvicorn main:app --reload --port 8000`).
+> 3. Frontend berjalan di port 3000 (`npm run dev` di folder `frontend/`).
+> 4. Silakan langsung lanjutkan task prioritas di bawah ini.
 
 ---
 
-## 📋 ROADMAP — NEXT TASKS (Prioritas Tinggi → Rendah)
+## 📋 ROADMAP — NEXT TASKS (Prioritas Lanjutan)
 
-### 🔴 HIGH PRIORITY — Belum dikerjakan sama sekali
+### 🔴 PRIORITY 1: Documents Page Enhancement
+**File:** `frontend/app/documents/page.tsx` & `backend/app/routers/documents.py`
+- Tambahkan endpoint `GET /documents/{id}/chunks` untuk ambil preview chunk dokumen.
+- Di frontend UI: expand dokumen saat diklik untuk menampilkan cuplikan teks chunk-chunk yang tersimpan di pgvector.
 
-#### 1. Template-Based Generation Enhancement
-**Problem:** Saat ini `export-from-template` bisa ikuti struktur heading dari template Word, tapi belum bisa:
-- Copy EXACT formatting dari template (table styles, custom paragraph styles, page headers/footers)
-- Replace text di dalam template DOCX secara langsung (in-place replacement)
-- Handle template dengan tabel (misalnya matriks compliance yang sudah ada kolomnya)
+### 🟡 PRIORITY 2: Folder Sync → Template Library (Google Drive Integration)
+**File:** `backend/app/routers/documents.py` & `frontend/components/draft/export-modal.tsx`
+- Saat sync Google Drive, deteksi dokumen template (.docx) dan beri tag `doc_type = "template"`.
+- Di `ExportModal` tab template: sediakan opsi dropdown "Pilih Template dari Library Drive" tanpa user harus upload file manual setiap kali.
 
-**Plan:**
-- Gunakan `python-docx` `Document` object cloning: open template file, replace placeholder text, save as new file
-- Endpoint baru: `POST /draft/export-clone-template` yang menerima binary template file + items
-- Di frontend: simpan raw template File object (bukan hanya metadata) dan kirim keduanya ke backend
-
-#### 2. Auto-Save Draft ke localStorage
-**Problem:** Kalau user refresh browser, semua draft hilang karena state hanya di React.
-
-**Plan:**
-- Di `frontend/app/draft/page.tsx`: tambahkan `useEffect` yang persist `items` ke `localStorage` dengan key `synapse-draft-{fileName}`
-- Load dari localStorage saat mount (kalau ada)
-- Tambahkan indicator "Auto-saved" di ProgressHeader
-
-#### 3. Search Page — Query Chips & History
-**Problem:** Search page belum ada history pencarian sebelumnya.
-
-**Plan:**
-- Simpan array `searchHistory` di localStorage
-- Tampilkan di bawah search bar sebagai "Pencarian Terakhir" chips
-- Max 10 item
-
-#### 4. Documents Page Enhancement
-**Problem:** Halaman /documents terlalu basic, belum menampilkan file dengan preview chunk.
-
-**Plan:**
-- Tambahkan endpoint `GET /documents/{id}/chunks` yang return N chunks dari dokumen
-- Di frontend: klik dokumen → expand dan tampilkan preview chunk-chunk-nya
-
-### 🟡 MEDIUM PRIORITY
-
-#### 5. Settings Page — LLM Provider Toggle
-**File:** `frontend/app/settings/page.tsx`
-**Plan:**
-- UI untuk toggle antara Claude / Gemini / OpenAI
-- Input API key (disimpan di localStorage, dikirim ke backend via header)
-- Backend: baca API key dari request header (opsional, override .env)
-
-#### 6. Proposal Types Support
-User minta support berbagai jenis dokumen output:
-- Technical Proposal / SoW
-- Solution Brief
-- MoM (Minutes of Meeting)
-- PPT / Pitch Deck (via python-pptx)
-- Competitive Comparison Matrix
-
-**Plan:**
-- Di ExportModal: dropdown "Jenis Dokumen" 
-- Backend: `template_type` enum di `ExportDocxRequest`
-- Buat format berbeda per jenis
-
-#### 7. Folder Sync → Template Library
-User minta: AI bisa baca template dari folder Google Drive yang sudah di-sync.
-
-**Plan:**
-- Saat sync GDrive, detect file dengan nama "Template_*" atau di folder "Templates/"
-- Simpan di DB sebagai `doc_type = "template"`
-- Di ExportModal tab "Template": tambahkan opsi "Gunakan Template dari Drive" → list template dari KB
-- Backend fetch template dari storage dan parse dengan endpoint yang sudah ada
+### 🟡 PRIORITY 3: Multi-Format Proposal Types (SoW, Solution Brief, MoM, PPT Deck)
+**File:** `backend/app/routers/draft.py` & `frontend/components/draft/export-modal.tsx`
+- Buat generator SoW, Solution Brief, dan MoM (Minutes of Meeting).
+- Siapkan generator presentasi PPT / Pitch Deck (menggunakan library `python-pptx`).
 
 ---
 
