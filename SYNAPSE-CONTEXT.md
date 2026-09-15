@@ -4,18 +4,15 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Sesi terakhir (Claude Code, lanjutan setelah Antigravity):** User pindah balik ke Antigravity. Semua kerjaan di bawah ini SUDAH SELESAI + di-commit + push. Tidak ada task aktif menggantung — tunggu instruksi baru dari user.
-- **Ringkasan kerjaan sesi ini** (urut kronologis, detail lengkap di bagian "SESI CLAUDE CODE — REDESIGN ALUR DRAFT & EXPORT" di bawah):
-  1. Nerusin kerjaan Copilot yang belum kelar: template picker di Export Modal sekarang nampilin SEMUA dokumen Drive (bukan cuma yang ditag `doc_type=template`).
-  2. Setup Gemini sebagai LLM provider cadangan (Anthropic credit habis) — lihat bagian ⚠️ LLM PROVIDER di bawah, **PENTING dicek sebelum lanjut kerja**.
-  3. **Redesign total alur Draft**: dari "pecah TOR jadi klausul lalu tanggapi satu-satu" → jadi **skeleton per sub-bab dokumen OUTPUT** (`frontend/lib/skeletons.ts`), tiap sub-bab generate draf dari TOR + knowledge base + Sumber Referensi pilihan user. Wording "klausul" diganti "bagian" di ~20 tempat termasuk teks di dalam dokumen hasil export.
-  4. Redesign Export Modal: Jenis Dokumen (6 tipe) × Format (pdf/docx/pptx) jadi kontrol terpisah, font MS Word lengkap (25 opsi), logo customer, alur wajib Preview → centang setuju → baru tombol Generate aktif.
-- **Gap Analisis (histori lama, sudah selesai semua — dibiarkan sebagai referensi):**
-  1. `clone-template` (docx) — SUDAH preserve 100% formatting, tapi cuma isi placeholder token (`{{...}}`), bukan pemetaan per-sub-bab otomatis, dan cuma untuk 1 mode compiled response, belum ngerti bedanya SoW/MoM/Solution Brief.
-  2. `export-from-template` (docx, mode struktur) — baca heading & font dari template, tapi pemetaan item ke section masih **keyword-matching category** (heuristic sederhana, lihat KNOWN ISSUES), belum "AI pintar" beneran, dan belum tau target `template_type` (sow/mom/dll).
-  3. `export-pptx` — **BELUM ada konsep template sama sekali.** Selalu generate slide dari layout fixed hardcoded (warna, style tetap). User minta bisa upload/pilih template `.pptx` dan AI ikutin master slide/layout aslinya — ini gap paling besar.
-  4. Template Library (Priority 2) — baru nyimpen & fetch `.docx`. Perlu extend juga tag/simpan `.pptx` sebagai template kalau mau dipakai utk Pitch Deck.
-- **Status:** SEMUA sub-task (1-4) SELESAI. PRIORITY 4 kelar. Lihat detail tiap sub-task di bawah. Belum ada task aktif baru — tunggu instruksi user.
+- **Sesi terakhir (Antigravity):** Seluruh 5 poin enhancement proposal accelerator TELAH SELESAI, diverifikasi, di-commit, dan di-push ke remote `origin/main` (commit `2ec1551`). Tidak ada task aktif menggantung — status *ready* untuk instruksi berikutnya dari user.
+- **Ringkasan kerjaan 5 Poin Sesi Ini:**
+  1. **Integrasi Sumber Referensi → Template:** Dokumen `.docx` / `.pptx` yang dipilih user sebagai Sumber Referensi otomatis muncul sebagai kartu quick-access di Export Modal Step 2 dengan tombol 1-klik "Gunakan Sebagai Template".
+  2. **Logo Perusahaan & Logo Customer di DOCX:** `export_proposal_docx` menyisipkan header table 2-kolom tanpa border di cover Word (kiri: logo SMG, kanan: logo customer).
+  3. **Fleksibilitas Sub-Bab di UI:** User dapat menambah sub-bab baru (`+ Tambah Bagian`), mengedit judul/kategori/tujuan (`Edit Info`), serta menghapus bagian (`Hapus`) secara dinamis.
+  4. **Grounding Semantik Cuplikan TOR:** Menggantikan keyword matching biasa di frontend, backend menggunakan model embedding lokal `sentence-transformers` (`paraphrase-multilingual-mpnet-base-v2` di CPU) via `semantic_select_tor_excerpt()` untuk merangking paragraf paling relevan secara semantik sesuai urutan dokumen asli hingga 3.500 karakter. Frontend meneruskan teks acuan penuh hingga 35.000 karakter.
+  5. **Layout Khusus Pitch Deck untuk DOCX & PDF:** Format "Pitch Deck For Customer / Internal" kini memiliki layout tersendiri (bukan narrative proposal biasa). DOCX menghasilkan *Executive Pitch Deck Briefing Paper* (Executive Summary, Slide Breakdown Table, Talking Points per slide, Next Steps/CTA), dan PDF menghasilkan slide briefing kartu dan tabel berulang dengan tajuk warna primer.
+- **Status Git:** Clean, up to date with `origin/main`.
+- **Status Service:** Backend aktif di port 8000 (`http://127.0.0.1:8000/health` 200 OK, LLM: `gemini-3.6-flash`), Frontend aktif di port 3000.
 
 ---
 
