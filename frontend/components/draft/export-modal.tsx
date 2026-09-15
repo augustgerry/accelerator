@@ -92,6 +92,9 @@ export function ExportModal({
       .finally(() => setLibraryLoading(false));
   }, [activeTab, templateLibrary]);
 
+  const docxTemplateLibrary = (templateLibrary ?? []).filter((d) => d.title.toLowerCase().endsWith(".docx"));
+  const pptxTemplateLibrary = (templateLibrary ?? []).filter((d) => d.title.toLowerCase().endsWith(".pptx"));
+
   if (!isOpen) return null;
 
   const targetItems = items.filter((it) => {
