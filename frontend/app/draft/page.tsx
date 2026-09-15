@@ -24,7 +24,7 @@ import {
   SendHorizontal,
   ChevronRight,
 } from "lucide-react";
-import { uploadTor, segmentTor, generateItemDraft } from "@/lib/api";
+import { uploadTor, segmentTor, generateItemDraft, qualityCheckDraft, type QualityCheckResult } from "@/lib/api";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import type { RequirementItem, RequirementStatus, SourceCitation } from "@/lib/types";
 
@@ -143,6 +143,8 @@ export default function DraftPage() {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [qualityReport, setQualityReport] = useState<QualityCheckResult | null>(null);
+  const [checkingQuality, setCheckingQuality] = useState(false);
 
   // ── Restore from localStorage on mount ──────────────────────────────────
   useEffect(() => {
@@ -302,6 +304,26 @@ export default function DraftPage() {
       await handleGenerateItemDraft(it.id);
     }
     setIsDraftingAll(false);
+  };
+
+  const handleQualityCheck = async () => {
+    if (items.length === 0 || checkingQuality) return;
+    setCheckingQuality(true);
+    try {
+      const report = await qualityCheckDraft(items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        requirement_text: item.requirement_text,
+        category: item.category,
+        draft_text: item.draft_text,
+        status: item.status,
+      })));
+      setQualityReport(report);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Gagal menjalankan quality check");
+    } finally {
+      setCheckingQuality(false);
+    }
   };
 
   // Update draft text directly (user edits)
@@ -474,6 +496,9 @@ export default function DraftPage() {
             onResetFile={handleReset}
             isDraftingAll={isDraftingAll}
             lastSaved={lastSaved ?? undefined}
+            onQualityCheck={handleQualityCheck}
+            isCheckingQuality={checkingQuality}
+            qualityScore={qualityReport?.overall_score}
           />
 
           {/* Split Workspace */}
@@ -539,6 +564,31 @@ export default function DraftPage() {
                   </button>
                 </div>
               </div>
+
+              {qualityReport && (
+                <div className="border-b border-surface-border bg-surface px-3 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-text-primary">Quality check</p>
+                      <p className="text-[11px] text-text-muted">
+                        {qualityReport.items_with_issues} dari {qualityReport.total_items} klausul perlu review
+                      </p>
+                    </div>
+                    <span className={`rounded-full px-2 py-1 text-xs font-bold ${qualityReport.overall_score >= 80 ? "bg-emerald-50 text-emerald-700" : qualityReport.overall_score >= 50 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>
+                      {qualityReport.overall_score}/100
+                    </span>
+                  </div>
+                  {qualityReport.results.filter((result) => result.issues.length > 0).slice(0, 3).map((result) => (
+                    <button
+                      key={result.item_id}
+                      onClick={() => setSelectedItemId(result.item_id)}
+                      className="mt-2 block w-full text-left text-[11px] text-amber-800 hover:text-text-primary"
+                    >
+                      <span className="font-semibold">{result.title}:</span> {result.issues[0]}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Requirement Items List */}
               <div className="flex-1 overflow-y-auto divide-y divide-surface-border">

@@ -72,6 +72,94 @@ class DraftItemResponse(BaseModel):
     sources: list[SourceMeta] = []
 
 
+class QualityCheckInput(BaseModel):
+    id: str
+    title: str
+    requirement_text: str
+    category: str
+    draft_text: str
+    status: str
+
+
+class QualityCheckRequest(BaseModel):
+    items: list[QualityCheckInput]
+
+
+class QualityCheckItem(BaseModel):
+    item_id: str
+    title: str
+    status: str
+    score: int
+    issues: list[str] = []
+    missing_values: list[str] = []
+
+
+class QualityCheckResponse(BaseModel):
+    overall_score: int
+    total_items: int
+    items_with_issues: int
+    results: list[QualityCheckItem]
+
+
+@router.post("/quality-check", response_model=QualityCheckResponse)
+def quality_check_draft(payload: QualityCheckRequest):
+    """Run deterministic preflight checks before a proposal is exported."""
+    placeholder_pattern = re.compile(
+        r"\[\s*(?:belum|isi|fill|content|tanggapan|solusi)|\{\{.*?\}\}",
+        re.IGNORECASE,
+    )
+    number_pattern = re.compile(r"\b\d+(?:[.,]\d+)?(?:\s?[xX]\s?\d+)?%?\b")
+    results: list[QualityCheckItem] = []
+
+    for item in payload.items:
+        draft = (item.draft_text or "").strip()
+        requirement = item.requirement_text or ""
+        issues: list[str] = []
+        missing_values: list[str] = []
+
+        if not draft:
+            issues.append("Jawaban masih kosong")
+        elif len(draft) < 30:
+            issues.append("Jawaban terlalu singkat untuk review teknis")
+
+        if placeholder_pattern.search(draft):
+            issues.append("Masih mengandung placeholder atau teks sementara")
+
+        for value in number_pattern.findall(requirement):
+            normalized = value.replace(" ", "")
+            if normalized not in draft.replace(" ", "") and value not in missing_values:
+                missing_values.append(value)
+        if missing_values:
+            issues.append("Angka atau target dari klausul belum terlihat di jawaban")
+
+        if not issues:
+            score = 100
+            check_status = "pass"
+        elif not draft:
+            score = 0
+            check_status = "fail"
+        else:
+            score = max(20, 100 - len(issues) * 25)
+            check_status = "warning"
+
+        results.append(QualityCheckItem(
+            item_id=item.id,
+            title=item.title,
+            status=check_status,
+            score=score,
+            issues=issues,
+            missing_values=missing_values,
+        ))
+
+    overall_score = round(sum(result.score for result in results) / len(results)) if results else 0
+    return QualityCheckResponse(
+        overall_score=overall_score,
+        total_items=len(results),
+        items_with_issues=sum(1 for result in results if result.issues),
+        results=results,
+    )
+
+
 @router.post("", response_model=DraftResponse)
 def generate_draft(payload: DraftRequest, session: Session = Depends(get_session)):
     # Ground the draft in both the uploaded TOR and the knowledge base

@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Sparkles, Download, RotateCcw, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { FileText, Sparkles, Download, RotateCcw, CheckCircle2, Clock, AlertCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RequirementItem } from "@/lib/types";
 
@@ -12,6 +12,9 @@ interface ProgressHeaderProps {
   onResetFile: () => void;
   isDraftingAll: boolean;
   lastSaved?: string;
+  onQualityCheck: () => void;
+  isCheckingQuality: boolean;
+  qualityScore?: number;
 }
 
 export function ProgressHeader({
@@ -22,6 +25,9 @@ export function ProgressHeader({
   onResetFile,
   isDraftingAll,
   lastSaved,
+  onQualityCheck,
+  isCheckingQuality,
+  qualityScore,
 }: ProgressHeaderProps) {
   const total = items.length;
   const finalCount = items.filter((it) => it.status === "final").length;
@@ -111,6 +117,18 @@ export function ProgressHeader({
           >
             <Sparkles size={14} className={isDraftingAll ? "animate-spin text-accent-ink" : "text-accent-ink"} />
             <span>{isDraftingAll ? "Menyusun Draf..." : "Draf Semua Otomatis"}</span>
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onQualityCheck}
+            disabled={isCheckingQuality || total === 0}
+            className="flex items-center gap-1.5 border-surface-border hover:border-accent"
+            title="Periksa kelengkapan dan konsistensi draft"
+          >
+            <ShieldCheck size={14} className={isCheckingQuality ? "animate-pulse text-accent-ink" : "text-accent-ink"} />
+            <span>{isCheckingQuality ? "Memeriksa..." : qualityScore !== undefined ? `Quality ${qualityScore}` : "Cek Kualitas"}</span>
           </Button>
 
           <Button

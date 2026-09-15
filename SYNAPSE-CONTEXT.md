@@ -200,6 +200,11 @@ knowledge-accelerator/
 - `frontend/lib/api.ts` dan `frontend/components/draft/export-modal.tsx`: opsi Proposal PDF tersedia di modal export.
 - Verifikasi: dependency terpasang di `backend/venv`, backend compile bersih, response endpoint terdeteksi `application/pdf` streaming, dan `npx tsc --noEmit` exit 0.
 
+### ✅ Enhancement Poin 3: Draft Quality Check
+- `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
+- `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.
+- Verifikasi: scoring test menghasilkan status warning/fail sesuai input, backend compile bersih, `npx tsc --noEmit` exit 0, dan diagnostics editor bersih.
+
 ### 🟡 PRIORITY 2: Folder Sync → Template Library (Google Drive Integration)
 **File:** `backend/app/routers/documents.py` & `frontend/components/draft/export-modal.tsx`
 - Saat sync Google Drive, deteksi dokumen template (.docx) dan beri tag `doc_type = "template"`.

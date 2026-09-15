@@ -178,6 +178,31 @@ export async function generateItemDraft(
   return data;
 }
 
+export type QualityCheckResult = {
+  overall_score: number;
+  total_items: number;
+  items_with_issues: number;
+  results: Array<{
+    item_id: string;
+    title: string;
+    status: "pass" | "warning" | "fail";
+    score: number;
+    issues: string[];
+    missing_values: string[];
+  }>;
+};
+
+export async function qualityCheckDraft(items: Array<{
+  id: string;
+  title: string;
+  requirement_text: string;
+  category: string;
+  draft_text: string;
+  status: string;
+}>): Promise<QualityCheckResult> {
+  return postJson<QualityCheckResult>("/draft/quality-check", { items });
+}
+
 export async function exportProposalDocx(payload: {
   document_title: string;
   template_type: "matrix" | "narrative" | "sow" | "solution_brief" | "mom";
