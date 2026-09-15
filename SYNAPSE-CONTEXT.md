@@ -20,7 +20,7 @@
 ---
 
 ## ⚠️ LLM PROVIDER — CEK INI DULU SEBELUM KERJA
-`backend/.env` sekarang `LLM_PROVIDER=gemini` (bukan `claude`). **Anthropic API key kehabisan credit balance** (dicoba, error "Kuota atau kredit provider LLM sedang habis"). `GOOGLE_API_KEY` udah diisi API key gratis dari Google AI Studio, model `gemini-3.6-flash` (default lama `gemini-1.5-flash` di `config.py` udah retired, jangan dipakai lagi). **Free tier Gemini cuma 5 request/menit** — kalau "Generate All" atau testing beruntun, gampang kena `ResourceExhausted 429`. Kalau Anthropic udah di-top-up, tinggal balikin `LLM_PROVIDER=claude` di `.env`, gak perlu ubah kode apa pun (abstraksi provider di `llm_provider.py` udah pluggable).
+`backend/.env` sekarang `LLM_PROVIDER=gemini` (bukan `claude`). **Anthropic API key kehabisan credit balance**. `GOOGLE_API_KEY` telah diperbarui dengan API key baru dari user (`AQ.Ab8RN6KsVrv...`), model aktif `gemini-3.6-flash`. Catatan: model Pro (`gemini-3.1-pro`) memerlukan project billing aktif, sementara `gemini-3.6-flash` dan `gemini-3.8-flash` aktif dengan kuota testing. Kalau Anthropic sudah di-top-up, tinggal kembalikan `LLM_PROVIDER=claude` di `.env`.
 
 Catatan startup Windows: jalanin backend pake `./venv/Scripts/python.exe -m uvicorn main:app --port 8000` (JANGAN pakai `venv/Scripts/uvicorn.exe` langsung — exe shim-nya kadang exit silent tanpa error di setup ini). `--reload` juga pernah kejadian gak beneran restart worker process-nya (kode lama masih kepake walau file udah diedit) — kalau curiga kode gak ke-pickup, matiin proses manual (`Stop-Process`) terus start ulang fresh tanpa `--reload` buat mastiin.
 
