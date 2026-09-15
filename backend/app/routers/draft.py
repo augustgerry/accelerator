@@ -1080,7 +1080,7 @@ async def clone_template(
 # master layout) instead of generating the fixed hardcoded deck /export-pptx does.
 # ─────────────────────────────────────────────────────────────────────────────
 
-_ITEM_MARKER_RE = __import__("re").compile(r"\{\{ITEM_[A-Z]+\}\}", __import__("re").IGNORECASE)
+_ITEM_MARKER_RE = re.compile(r"\{\{ITEM_[A-Z]+\}\}", re.IGNORECASE)
 
 
 def _pptx_slide_text(slide) -> str:
@@ -1142,7 +1142,7 @@ def _move_pptx_slide(prs, old_index: int, new_index: int) -> None:
 
 
 def _delete_pptx_slide(prs, index: int) -> None:
-    from docx.oxml.ns import qn  # same qn() helper works for pptx's r:id attr
+    from pptx.oxml.ns import qn
 
     xml_slides = prs.slides._sldIdLst
     slides = list(xml_slides)
