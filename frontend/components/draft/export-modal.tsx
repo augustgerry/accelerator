@@ -701,6 +701,82 @@ export function ExportModal({
                   </label>
                 </div>
               )}
+
+              {/* Clone PowerPoint template card — separate flow, no structure parsing needed */}
+              <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
+                <div className="flex items-center gap-2 mb-2">
+                  <Presentation size={16} className="text-amber-500" />
+                  <h4 className="text-sm font-bold text-text-primary">Clone Template PowerPoint (.pptx)</h4>
+                </div>
+                <p className="text-xs text-text-muted mb-3 leading-relaxed">
+                  Upload deck <code className="font-mono bg-surface border border-surface-border rounded px-1">.pptx</code> Anda
+                  sendiri. Tandai <strong className="text-text-primary">satu slide</strong> sebagai slide-per-item pakai placeholder{" "}
+                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{ITEM_TITLE}}"}</code>,{" "}
+                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{ITEM_REQUIREMENT}}"}</code>,{" "}
+                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{ITEM_RESPONSE}}"}</code> — slide
+                  itu akan digandakan sekali per klausul. Slide lain (cover/closing) cukup pakai{" "}
+                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{DOCUMENT_TITLE}}"}</code>,{" "}
+                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{COMPANY_NAME}}"}</code>,{" "}
+                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{DATE}}"}</code>. Desain, warna,
+                  dan font asli deck Anda dipertahankan.
+                </p>
+
+                {!pptxTemplateFile ? (
+                  <div
+                    onClick={() => pptxTemplateInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-surface-border bg-surface p-6 cursor-pointer hover:border-accent hover:bg-accent-soft/30 transition-all group"
+                  >
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent-ink group-hover:scale-105 transition-transform">
+                      <UploadCloud size={18} />
+                    </div>
+                    <p className="text-sm font-semibold text-text-primary">Klik atau seret file template .pptx</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-3 mb-3">
+                    <div className="flex items-center gap-2">
+                      <Presentation size={16} className="text-emerald-600" />
+                      <span className="text-sm font-semibold text-emerald-800">{pptxTemplateFile.name}</span>
+                    </div>
+                    <button
+                      onClick={() => { setPptxTemplateFile(null); setPptxCloneError(null); }}
+                      className="text-xs text-emerald-600 hover:text-emerald-800 underline"
+                    >
+                      Ganti
+                    </button>
+                  </div>
+                )}
+
+                {pptxCloneError && (
+                  <div className="mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    <AlertCircle size={13} />
+                    <span>{pptxCloneError}</span>
+                  </div>
+                )}
+
+                <input
+                  ref={pptxTemplateInputRef}
+                  type="file"
+                  accept=".pptx"
+                  className="hidden"
+                  onChange={handlePptxTemplateSelect}
+                />
+
+                {pptxTemplateFile && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleGeneratePptxClone}
+                    disabled={templateTargetItems.length === 0 || generatingPptxClone}
+                    className="bg-ink-900 hover:bg-ink-800 text-white mt-3 w-full"
+                  >
+                    {generatingPptxClone ? (
+                      <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat Slide...</>
+                    ) : (
+                      <><Presentation size={14} className="mr-1.5 text-accent" />Generate Pitch Deck (.pptx)</>
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-between border-t border-surface-border px-6 py-4 bg-surface-raised">
