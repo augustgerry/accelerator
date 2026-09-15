@@ -257,6 +257,7 @@ export async function exportFromTemplate(payload: {
   template_default_font: string;
   template_default_font_size: number;
   template_sections: TemplateSection[];
+  template_type?: "proposal" | "sow" | "solution_brief" | "mom";
 }): Promise<Blob> {
   const res = await fetch(`${API_BASE}/draft/export-from-template`, {
     method: "POST",
@@ -274,6 +275,7 @@ export async function cloneTemplate(payload: {
   templateFile: File;
   document_title: string;
   company_name?: string;
+  document_type?: "proposal" | "sow" | "solution_brief" | "mom";
   items: Array<{
     id: string;
     title: string;
@@ -288,6 +290,7 @@ export async function cloneTemplate(payload: {
   form.append("items_json", JSON.stringify(payload.items));
   form.append("document_title", payload.document_title);
   form.append("company_name", payload.company_name ?? "PT Solusi Mitra Gemilang (SMG)");
+  form.append("document_type", payload.document_type ?? "proposal");
 
   const res = await fetch(`${API_BASE}/draft/clone-template`, {
     method: "POST",
