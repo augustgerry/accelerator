@@ -29,7 +29,7 @@ const primaryNav = [
 ];
 
 const secondaryNav = [
-  { href: "/documents", label: "Arsip Dokumen", icon: FolderOpen, count: "161" },
+  { href: "/library", label: "Library", icon: FolderOpen, count: "" },
   { href: "/settings", label: "Pengaturan", icon: Settings },
 ];
 
@@ -158,7 +158,7 @@ export function MobileNav() {
     { href: "/", label: "Home", icon: Sparkles },
     { href: "/search", label: "Search", icon: Search },
     { href: "/draft", label: "Draft", icon: FileEdit },
-    { href: "/documents", label: "Library", icon: FolderOpen },
+    { href: "/library", label: "Library", icon: FolderOpen },
   ];
 
   return (

@@ -224,6 +224,14 @@ knowledge-accelerator/
 - Panel lama tetap dipakai di balik wizard, sehingga export Word/PDF/PPTX, template, dan Markdown tidak berubah kontraknya.
 - Verifikasi: `npx tsc --noEmit` exit 0, diagnostics bersih, dan `git diff --check` bersih.
 
+### ✅ Enhancement: Unified Library
+- `frontend/app/library/page.tsx`: halaman Library ringkas dengan tab `Documents`, `Templates`, dan `Projects`.
+- Data dokumen, template, summary, dan proposal sessions dimuat paralel agar respons awal cepat.
+- `frontend/lib/api.ts`: tambah `listProposalSessions()`.
+- `frontend/components/sidebar.tsx`: navigasi desktop/mobile diarahkan ke Library, sementara halaman Documents lama tetap tersedia sebagai fallback.
+- Project yang dipilih menyimpan session id lalu membuka Draft dengan restore session yang sudah ada.
+- Verifikasi: `npx tsc --noEmit` exit 0, diagnostics page/API/sidebar bersih, dan `git diff --check` bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

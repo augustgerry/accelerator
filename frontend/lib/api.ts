@@ -230,6 +230,10 @@ export async function getProposalSession(sessionId: string): Promise<ProposalSes
   return getJson<ProposalSession>(`/sessions/${encodeURIComponent(sessionId)}`);
 }
 
+export async function listProposalSessions(): Promise<ProposalSession[]> {
+  return getJson<ProposalSession[]>("/sessions");
+}
+
 export async function saveProposalSession(
   payload: ProposalSessionPayload,
   sessionId?: string,
