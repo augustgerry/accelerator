@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   X,
   Copy,
@@ -19,8 +19,16 @@ import {
   Presentation,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { exportProposalDocx, exportProposalPptx, uploadTemplate, exportFromTemplate, cloneTemplate } from "@/lib/api";
-import type { RequirementItem, TemplateInfo } from "@/lib/types";
+import {
+  exportProposalDocx,
+  exportProposalPptx,
+  uploadTemplate,
+  exportFromTemplate,
+  cloneTemplate,
+  listDocuments,
+  downloadTemplateDocument,
+} from "@/lib/api";
+import type { RequirementItem, TemplateInfo, IndexedDocument } from "@/lib/types";
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -58,6 +66,21 @@ export function ExportModal({
   const [exportingFromTemplate, setExportingFromTemplate] = useState(false);
   const [templateOnlyFinal, setTemplateOnlyFinal] = useState(false);
   const [templateMode, setTemplateMode] = useState<"structure" | "clone">("clone");
+
+  // ── Template library (Google Drive templates, tagged doc_type = "template")
+  const [templateLibrary, setTemplateLibrary] = useState<IndexedDocument[] | null>(null);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryPickError, setLibraryPickError] = useState<string | null>(null);
+  const [pickingLibraryId, setPickingLibraryId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== "template" || templateLibrary !== null) return;
+    setLibraryLoading(true);
+    listDocuments()
+      .then((docs) => setTemplateLibrary(docs.filter((d) => d.docType === "template")))
+      .catch(() => setTemplateLibrary([]))
+      .finally(() => setLibraryLoading(false));
+  }, [activeTab, templateLibrary]);
 
   if (!isOpen) return null;
 
@@ -169,9 +192,7 @@ export function ExportModal({
     document.body.removeChild(link);
   };
 
-  const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const applyTemplateFile = async (file: File) => {
     setTemplateFile(file);
     setUploadingTemplate(true);
     setTemplateError(null);
@@ -182,7 +203,29 @@ export function ExportModal({
       setTemplateError(err instanceof Error ? err.message : "Gagal membaca template");
     } finally {
       setUploadingTemplate(false);
-      e.target.value = "";
+    }
+  };
+
+  const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await applyTemplateFile(file);
+    e.target.value = "";
+  };
+
+  const handlePickLibraryTemplate = async (doc: IndexedDocument) => {
+    setPickingLibraryId(doc.id);
+    setLibraryPickError(null);
+    try {
+      const blob = await downloadTemplateDocument(doc.id);
+      const file = new File([blob], doc.title, {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      });
+      await applyTemplateFile(file);
+    } catch (err) {
+      setLibraryPickError(err instanceof Error ? err.message : "Gagal mengambil template");
+    } finally {
+      setPickingLibraryId(null);
     }
   };
 
@@ -441,20 +484,65 @@ export function ExportModal({
                 </p>
 
                 {!templateInfo ? (
-                  <div
-                    onClick={() => templateInputRef.current?.click()}
-                    className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-surface-border bg-surface p-8 cursor-pointer hover:border-accent hover:bg-accent-soft/30 transition-all group"
-                  >
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-soft text-accent-ink group-hover:scale-105 transition-transform">
-                      {uploadingTemplate ? <Loader2 size={22} className="animate-spin" /> : <UploadCloud size={22} />}
+                  <>
+                    <div className="mb-3">
+                      <span className="text-xs font-semibold text-text-primary block mb-1.5">
+                        Pilih Template dari Library Drive
+                      </span>
+                      {libraryLoading ? (
+                        <div className="flex items-center gap-2 text-xs text-text-muted">
+                          <Loader2 size={13} className="animate-spin" /> Memuat daftar template...
+                        </div>
+                      ) : templateLibrary && templateLibrary.length > 0 ? (
+                        <select
+                          value=""
+                          disabled={pickingLibraryId !== null}
+                          onChange={(e) => {
+                            const doc = templateLibrary.find((d) => d.id === e.target.value);
+                            if (doc) handlePickLibraryTemplate(doc);
+                          }}
+                          className="w-full rounded border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent disabled:opacity-60"
+                        >
+                          <option value="" disabled>
+                            {pickingLibraryId ? "Mengambil template..." : "— Pilih dari Drive —"}
+                          </option>
+                          {templateLibrary.map((d) => (
+                            <option key={d.id} value={d.id}>
+                              {d.title}{d.division ? ` (${d.division})` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <p className="text-xs text-text-muted">
+                          Belum ada template di library. Sync Google Drive dulu di halaman Documents, atau upload manual di bawah.
+                        </p>
+                      )}
+                      {libraryPickError && (
+                        <p className="text-xs text-red-600 mt-1">{libraryPickError}</p>
+                      )}
                     </div>
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-text-primary">
-                        {uploadingTemplate ? "Membaca template..." : "Klik atau seret file template .docx"}
-                      </p>
-                      <p className="text-xs text-text-muted mt-0.5">Hanya file .docx yang didukung</p>
+
+                    <div className="flex items-center gap-3 text-[11px] text-text-muted mb-3">
+                      <div className="h-px flex-1 bg-surface-border" />
+                      atau
+                      <div className="h-px flex-1 bg-surface-border" />
                     </div>
-                  </div>
+
+                    <div
+                      onClick={() => templateInputRef.current?.click()}
+                      className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-surface-border bg-surface p-8 cursor-pointer hover:border-accent hover:bg-accent-soft/30 transition-all group"
+                    >
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-soft text-accent-ink group-hover:scale-105 transition-transform">
+                        {uploadingTemplate ? <Loader2 size={22} className="animate-spin" /> : <UploadCloud size={22} />}
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-text-primary">
+                          {uploadingTemplate ? "Membaca template..." : "Klik atau seret file template .docx"}
+                        </p>
+                        <p className="text-xs text-text-muted mt-0.5">Hanya file .docx yang didukung</p>
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
                     <div className="flex items-center justify-between mb-2">

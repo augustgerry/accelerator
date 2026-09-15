@@ -39,6 +39,15 @@ export async function getDocumentsSummary(): Promise<DocumentsSummary> {
   return getJson<DocumentsSummary>("/documents/summary");
 }
 
+export async function downloadTemplateDocument(docId: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/documents/${encodeURIComponent(docId)}/download`);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal mengambil template dari library (${res.status}): ${detail}`);
+  }
+  return res.blob();
+}
+
 export async function syncDocuments(): Promise<{ synced: string[]; skipped: string[] }> {
   const res = await fetch(`${API_BASE}/documents/sync`, { method: "POST" });
   if (!res.ok) {

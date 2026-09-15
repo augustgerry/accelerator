@@ -107,6 +107,12 @@ def _download_media(service, file_id: str) -> bytes:
     return buffer.getvalue()
 
 
+def download_file_bytes(file_id: str) -> bytes:
+    """Download the raw bytes of a Drive file (e.g. to re-serve a .docx template)."""
+    service = _get_service()
+    return _download_media(service, file_id)
+
+
 def fetch_and_extract_text(file_id: str) -> str:
     """Download file `file_id` and extract plain text based on its mimeType."""
     service = _get_service()

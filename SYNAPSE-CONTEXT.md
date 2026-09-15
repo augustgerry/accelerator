@@ -4,12 +4,14 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Task Saat Ini:** PRIORITY 2: Folder Sync → Template Library (Google Drive Integration)
-- **Sub-task Aktif:**
-  1. Saat sync Google Drive (`backend/app/routers/documents.py`), deteksi dokumen `.docx` dan set `doc_type = "template"`.
-  2. Di `ExportModal` tab Template, tambah dropdown "Pilih Template dari Library Drive" (tanpa upload manual).
-- **File Yang Sedang Disentuh:** `backend/app/routers/documents.py` -> `frontend/components/draft/export-modal.tsx`
-- **Langkah Berikutnya Jika Terputus:** Cek skema `Document` model utk field `doc_type`, cek endpoint list dokumen ber-filter template.
+- **Task Saat Ini:** Tidak ada task aktif — PRIORITY 2 baru saja selesai. Lanjut ke sisa roadmap (lihat bawah) atau tunggu instruksi user.
+- **Langkah Berikutnya Jika Terputus:** Baca ROADMAP di bawah, semua Priority 1-3 sudah selesai per commit ini.
+
+## ✅ PRIORITY 2 SELESAI (Folder Sync → Template Library)
+- Backend: `POST /documents/sync` (`documents.py`) sekarang set `doc_type = "template"` otomatis untuk file `.docx` (via `DOCX_MIME` check), `doc_type = "document"` untuk selainnya. Update juga jalan di re-sync dokumen existing.
+- Backend: `GET /documents/{id}/download` — re-download bytes .docx asli dari Drive by `source_drive_id` (fungsi baru `drive_sync.download_file_bytes()`), khusus dokumen `doc_type == "template"`.
+- Frontend: `lib/api.ts` punya `downloadTemplateDocument(docId)`. `ExportModal` tab Template menampilkan dropdown "Pilih Template dari Library Drive" (hasil filter `listDocuments()` where `docType === "template"`), pilih → fetch blob → dibungkus jadi `File` → masuk ke alur `applyTemplateFile()` yang sama dengan upload manual (reuse, tidak ada endpoint duplikat untuk clone/structure mode).
+- Verifikasi: `npx tsc --noEmit` clean, `app.routers.documents` import OK.
 
 ## ✅ PRIORITY 3 SELESAI (Multi-Format Proposal Types)
 - Backend: `POST /draft/export-docx` mendukung `matrix`, `narrative`, `sow`, `solution_brief`, `mom`. `POST /draft/export-pptx` generate Pitch Deck (`python-pptx`).

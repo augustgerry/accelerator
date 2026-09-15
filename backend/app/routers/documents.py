@@ -2,13 +2,14 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Document, DocumentChunk
 from app.db import get_session
-from app.services.drive_sync import fetch_and_extract_text, list_drive_files
+from app.services.drive_sync import DOCX_MIME, download_file_bytes, fetch_and_extract_text, list_drive_files
 from app.services.embeddings import chunk_text, embed_text
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -75,6 +76,28 @@ def get_document_chunks(
     }
 
 
+@router.get("/{doc_id}/download")
+def download_document(
+    doc_id: str,
+    workspace_id: str = settings.default_workspace_id,
+    session: Session = Depends(get_session),
+):
+    """Re-download the original .docx for a template document from Drive,
+    so the frontend can pick a template from the library without a manual upload."""
+    doc = session.get(Document, doc_id)
+    if not doc or doc.workspace_id != workspace_id:
+        raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan")
+    if doc.doc_type != "template" or not doc.source_drive_id:
+        raise HTTPException(status_code=400, detail="Dokumen ini bukan template Word")
+
+    data = download_file_bytes(doc.source_drive_id)
+    return StreamingResponse(
+        iter([data]),
+        media_type=DOCX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{doc.title}"'},
+    )
+
+
 @router.get("/summary")
 def get_summary(
     workspace_id: str = settings.default_workspace_id,
@@ -117,6 +140,7 @@ def sync_from_drive(
         try:
             text = fetch_and_extract_text(f["id"])
             division = f["folderPath"].split("/")[0] if f["folderPath"] else "presales"
+            doc_type = "template" if f["mimeType"] == DOCX_MIME else "document"
 
             doc = session.get(Document, f["id"])
             if doc is None:
@@ -124,7 +148,7 @@ def sync_from_drive(
                     id=f["id"],
                     workspace_id=workspace_id,
                     title=f["name"],
-                    doc_type="document",
+                    doc_type=doc_type,
                     division=division,
                     source_drive_id=f["id"],
                 )
@@ -132,6 +156,7 @@ def sync_from_drive(
             else:
                 doc.title = f["name"]
                 doc.division = division
+                doc.doc_type = doc_type
             doc.updated_at = datetime.utcnow()
 
             session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == doc.id))
