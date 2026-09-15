@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost";
+  size?: "sm" | "md" | "lg";
 };
 
 const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
@@ -11,8 +12,15 @@ const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
   ghost: "text-text-secondary hover:bg-surface",
 };
 
+const sizes: Record<NonNullable<ButtonProps["size"]>, string> = {
+  sm: "px-2.5 py-1 text-xs",
+  md: "px-3.5 py-2 text-sm",
+  lg: "px-4 py-2.5 text-base",
+};
+
 export function Button({
   variant = "primary",
+  size = "md",
   className,
   children,
   ...props
@@ -20,8 +28,9 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50",
+        "inline-flex items-center gap-2 rounded-md font-medium transition-colors disabled:opacity-50",
         variants[variant],
+        sizes[size],
         className
       )}
       {...props}

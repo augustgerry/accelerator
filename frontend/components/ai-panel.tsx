@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sparkles, Send, FileText, Globe, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/lib/types";
@@ -45,20 +45,22 @@ export function AiPanel({
   mode: initialMode,
   messages: initialMessages,
   allowModeSwitch = false,
+  initialQuery = "",
 }: {
   mode: Mode;
   messages: ChatMessage[];
   allowModeSwitch?: boolean;
+  initialQuery?: string;
 }) {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialQuery || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
-    const question = input.trim();
+  const handleSendWithQuery = async (queryText: string) => {
+    if (!queryText.trim() || loading) return;
+    const question = queryText.trim();
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -74,7 +76,7 @@ export function AiPanel({
       const reply =
         mode === "research"
           ? await researchExternal(question)
-          : await askKnowledgeBase(question); // draft mode wired separately (needs uploaded TOR)
+          : await askKnowledgeBase(question);
       setMessages((prev) => [...prev, reply]);
     } catch (err) {
       setError(
@@ -86,6 +88,14 @@ export function AiPanel({
       setLoading(false);
     }
   };
+
+  const handleSend = () => handleSendWithQuery(input);
+
+  useEffect(() => {
+    if (initialQuery && initialQuery.trim()) {
+      handleSendWithQuery(initialQuery);
+    }
+  }, [initialQuery]);
 
   return (
     <div className="flex h-full w-[380px] flex-col border-l border-surface-border bg-surface-raised">

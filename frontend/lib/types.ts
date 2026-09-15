@@ -23,3 +23,52 @@ export type IndexedDocument = {
   updatedAt: string;
   sizeLabel?: string;
 };
+
+export type RequirementStatus = "todo" | "draft" | "final";
+
+export type RequirementItem = {
+  id: string;
+  title: string;
+  requirement_text: string;
+  category: string;
+  draft_text: string;
+  status: RequirementStatus;
+  sources?: SourceCitation[];
+  isGenerating?: boolean;
+  error?: string;
+};
+
+export type SegmentItemApi = {
+  id: string;
+  title: string;
+  requirement_text: string;
+  category: string;
+};
+
+export type DraftItemApiResponse = {
+  item_id: string;
+  draft_text: string;
+  sources_used: number;
+  sources: SourceCitation[];
+};
+
+export type TemplateSection = {
+  index: number;
+  style_name: string;
+  level: number;
+  text: string;
+  font_name?: string | null;
+  font_size_pt?: number | null;
+  is_bold?: boolean | null;
+  is_italic?: boolean | null;
+  alignment?: string | null;
+};
+
+export type TemplateInfo = {
+  template_name: string;
+  default_font_name: string;
+  default_font_size_pt: number;
+  section_count: number;
+  sections: TemplateSection[];
+};
+

@@ -1,4 +1,13 @@
-import type { ChatMessage, IndexedDocument, SourceCitation } from "@/lib/types";
+import type {
+  ChatMessage,
+  IndexedDocument,
+  SourceCitation,
+  SegmentItemApi,
+  DraftItemApiResponse,
+  TemplateInfo,
+  TemplateSection,
+} from "@/lib/types";
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -63,7 +72,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function askKnowledgeBase(question: string): Promise<ChatMessage> {
-  const data = await postJson<{ answer: string; sources_used: number }>(
+  const data = await postJson<{ answer: string; sources_used: number; sources?: unknown[] }>(
     "/query",
     { question }
   );
@@ -73,6 +82,25 @@ export async function askKnowledgeBase(question: string): Promise<ChatMessage> {
     content: data.answer,
     mode: "qa",
   };
+}
+
+export type SearchResultChunk = {
+  id: string;
+  title: string;
+  docType: string;
+  division?: string | null;
+  source: string;
+  chunk_text: string;
+};
+
+export type SearchResult = {
+  answer: string;
+  sources_used: number;
+  sources: SearchResultChunk[];
+};
+
+export async function searchKnowledgeBase(question: string): Promise<SearchResult> {
+  return postJson<SearchResult>("/query", { question });
 }
 
 export async function generateDraft(
@@ -112,4 +140,93 @@ export async function researchExternal(query: string): Promise<ChatMessage> {
     citations,
     mode: "research",
   };
+}
+
+export async function segmentTor(torText: string): Promise<SegmentItemApi[]> {
+  const data = await postJson<{ items: SegmentItemApi[] }>("/draft/segment", {
+    tor_text: torText,
+  });
+  return data.items;
+}
+
+export async function generateItemDraft(
+  itemId: string,
+  requirementText: string,
+  instruction?: string,
+  torContext?: string
+): Promise<DraftItemApiResponse> {
+  const data = await postJson<DraftItemApiResponse>("/draft/item", {
+    item_id: itemId,
+    requirement_text: requirementText,
+    instruction: instruction || undefined,
+    tor_context: torContext || undefined,
+  });
+  return data;
+}
+
+export async function exportProposalDocx(payload: {
+  document_title: string;
+  template_type: "matrix" | "narrative";
+  font_name?: string;
+  company_name?: string;
+  items: Array<{
+    id: string;
+    title: string;
+    requirement_text: string;
+    category: string;
+    draft_text: string;
+    status: string;
+  }>;
+}): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/draft/export-docx`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal membuat dokumen Word (${res.status}): ${detail}`);
+  }
+  return res.blob();
+}
+
+export async function uploadTemplate(file: File): Promise<TemplateInfo> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_BASE}/draft/upload-template`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal membaca template (${res.status}): ${detail}`);
+  }
+  return res.json();
+}
+
+export async function exportFromTemplate(payload: {
+  document_title: string;
+  company_name?: string;
+  items: Array<{
+    id: string;
+    title: string;
+    requirement_text: string;
+    category: string;
+    draft_text: string;
+    status: string;
+  }>;
+  template_default_font: string;
+  template_default_font_size: number;
+  template_sections: TemplateSection[];
+}): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/draft/export-from-template`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal membuat dokumen dari template (${res.status}): ${detail}`);
+  }
+  return res.blob();
 }
