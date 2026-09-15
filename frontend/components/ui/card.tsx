@@ -32,7 +32,7 @@ export function CardHeader({
     <div className="flex items-start justify-between border-b border-surface-border px-5 py-4">
       <div>
         {eyebrow && (
-          <p className="mb-1 text-xs font-medium tracking-wide text-text-muted">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wider text-text-muted">
             {eyebrow}
           </p>
         )}

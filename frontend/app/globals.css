@@ -7,7 +7,7 @@
     @apply bg-surface text-text-primary antialiased;
   }
   ::selection {
-    @apply bg-accent-soft text-accent-strong;
+    @apply bg-accent-soft text-accent-ink;
   }
 }
 

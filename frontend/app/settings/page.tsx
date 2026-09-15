@@ -19,7 +19,7 @@ export default function SettingsPage() {
           <CardHeader
             title="Google Drive"
             eyebrow="Sumber dokumen"
-            action={<Badge tone="gold">Belum terhubung</Badge>}
+            action={<Badge tone="accent">Belum terhubung</Badge>}
           />
           <div className="space-y-3 p-5">
             <p className="text-sm text-text-secondary">
@@ -68,7 +68,7 @@ export default function SettingsPage() {
               </div>
               <Switch checked={researchEnabled} onChange={setResearchEnabled} />
             </div>
-            <p className="rounded-md bg-gold-soft px-3 py-2 text-xs text-gold">
+            <p className="rounded-md bg-accent-soft px-3 py-2 text-xs text-accent-ink">
               Biaya ~$10 per 1.000 pencarian, di luar biaya token normal.
               Matikan kalau tidak dipakai untuk kontrol biaya.
             </p>

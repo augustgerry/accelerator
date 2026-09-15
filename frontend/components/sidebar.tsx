@@ -24,12 +24,12 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-screen w-64 flex-col bg-ink-950 text-white/90">
+    <aside className="flex h-screen w-64 flex-col border-r border-surface-border bg-white text-text-primary">
       <div className="flex items-center gap-2.5 px-5 py-5">
         <Logo />
         <div>
-          <p className="text-sm font-semibold text-white">Synapse</p>
-          <p className="text-[11px] text-white/40">Internal Knowledge · v0.1</p>
+          <p className="text-sm font-semibold text-text-primary">Synapse</p>
+          <p className="text-[11px] text-text-muted">Internal Knowledge · v0.1</p>
         </div>
       </div>
 
@@ -42,10 +42,10 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                "flex items-center gap-2.5 rounded-md border-l-2 px-3 py-2 text-sm transition-colors",
                 active
-                  ? "bg-white/10 text-white"
-                  : "text-white/60 hover:bg-white/5 hover:text-white/90"
+                  ? "border-accent bg-accent-soft text-text-primary"
+                  : "border-transparent text-text-secondary hover:bg-surface hover:text-text-primary"
               )}
             >
               <Icon size={16} strokeWidth={1.8} />
@@ -55,9 +55,9 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-white/10 px-5 py-4">
-        <p className="text-xs font-medium text-white">Gerry August</p>
-        <p className="text-[11px] text-white/40">Presales · Workspace: SMG</p>
+      <div className="border-t border-surface-border px-5 py-4">
+        <p className="text-xs font-medium text-text-primary">Gerry August</p>
+        <p className="text-[11px] text-text-muted">Presales · Workspace: SMG</p>
       </div>
     </aside>
   );

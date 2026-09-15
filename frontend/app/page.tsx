@@ -22,7 +22,7 @@ export default function DashboardPage() {
         {stats.map((s) => (
           <Card key={s.label} className="p-4">
             <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-accent-soft">
-              <s.icon size={16} className="text-accent-strong" />
+              <s.icon size={16} className="text-accent-ink" />
             </div>
             <p className="text-2xl font-semibold text-text-primary">{s.value}</p>
             <p className="text-sm text-text-secondary">{s.label}</p>
@@ -36,7 +36,7 @@ export default function DashboardPage() {
           <CardHeader
             title="Belum ada dokumen terindeks"
             eyebrow="Mulai dari sini"
-            action={<Badge tone="gold">Setup diperlukan</Badge>}
+            action={<Badge tone="accent">Setup diperlukan</Badge>}
           />
           <div className="p-5 text-sm text-text-secondary">
             Hubungkan folder Google Drive lo di halaman{" "}

@@ -93,9 +93,9 @@ export function AiPanel({
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent-soft">
             {mode === "research" ? (
-              <Globe size={14} className="text-accent-strong" />
+              <Globe size={14} className="text-accent-ink" />
             ) : (
-              <Sparkles size={14} className="text-accent-strong" />
+              <Sparkles size={14} className="text-accent-ink" />
             )}
           </div>
           <div>
@@ -113,10 +113,10 @@ export function AiPanel({
                 key={m}
                 onClick={() => setMode(m)}
                 className={cn(
-                  "flex-1 rounded-sm py-1.5 text-xs font-medium transition-colors",
+                  "flex-1 rounded-sm border-b-2 py-1.5 text-xs font-medium transition-colors",
                   mode === m
-                    ? "bg-ink-950 text-white"
-                    : "text-text-secondary hover:bg-surface"
+                    ? "border-accent text-text-primary"
+                    : "border-transparent text-text-secondary hover:bg-surface"
                 )}
               >
                 {m === "qa" ? "Internal" : "Riset Eksternal"}
@@ -153,7 +153,7 @@ export function AiPanel({
                     key={c.id}
                     className={cn(
                       "flex items-center gap-1.5 text-xs",
-                      c.source === "external" ? "text-gold" : "text-accent-strong"
+                      c.source === "external" ? "text-text-secondary" : "text-secondary"
                     )}
                   >
                     {c.source === "external" ? (
@@ -196,7 +196,7 @@ export function AiPanel({
             <button
               key={q}
               onClick={() => setInput(q)}
-              className="block w-full rounded-md border border-surface-border px-3 py-1.5 text-left text-xs text-text-secondary hover:border-accent hover:text-accent-strong"
+              className="block w-full rounded-md border border-surface-border px-3 py-1.5 text-left text-xs text-text-secondary hover:border-secondary hover:text-secondary"
             >
               {q}
             </button>

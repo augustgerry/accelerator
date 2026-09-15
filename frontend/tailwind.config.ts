@@ -6,29 +6,29 @@ const config: Config = {
     extend: {
       colors: {
         ink: {
-          950: "#0A0F1A",
-          900: "#0E1524",
-          800: "#141D30",
-          700: "#1C2740",
+          950: "#0B0F19",
+          900: "#111827",
+          800: "#1F2430",
+          700: "#2B3140",
         },
         surface: {
-          DEFAULT: "#F6F7F9",
+          DEFAULT: "#F7F8FA",
           raised: "#FFFFFF",
-          border: "#E4E7EC",
+          border: "#E5E7EB",
         },
         text: {
-          primary: "#151B2B",
+          primary: "#1A1D29",
           secondary: "#5B6473",
-          muted: "#8A93A3",
+          muted: "#9CA3AF",
         },
         accent: {
-          DEFAULT: "#0E7C86",
-          soft: "#E4F3F3",
-          strong: "#0B646C",
+          DEFAULT: "#F0C239",
+          soft: "#FDF6DC",
+          ink: "#17171A",
         },
-        gold: {
-          DEFAULT: "#A9803D",
-          soft: "#F6EFE1",
+        secondary: {
+          DEFAULT: "#2F5FE0",
+          soft: "#EAF0FE",
         },
       },
       fontFamily: {
