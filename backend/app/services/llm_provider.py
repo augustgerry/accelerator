@@ -336,11 +336,10 @@ def _fallback_map_items_to_sections(headings: list[dict], items: list[dict]) -> 
         category_lower = (it.get("category") or "").lower()
         if not category_lower:
             continue
+        keywords = [kw for kw in category_lower.split() if len(kw) > 2]
         for h in headings:
             heading_lower = h["text"].lower()
-            if category_lower in heading_lower or any(
-                kw in heading_lower for kw in category_lower.split()
-            ):
+            if category_lower in heading_lower or any(kw in heading_lower for kw in keywords):
                 result[it["id"]] = h["index"]
                 break
     return result
