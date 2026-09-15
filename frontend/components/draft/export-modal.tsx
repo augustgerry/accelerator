@@ -469,6 +469,21 @@ export function ExportModal({
                   </button>
                 </div>
 
+                {/* Target document type — controls wording/labels (SoW, Solution Brief, MoM, dll) */}
+                <div className="flex items-center gap-1.5 mb-4 text-xs">
+                  <span className="font-semibold text-text-primary">Jenis Dokumen:</span>
+                  <select
+                    value={templateDocType}
+                    onChange={(e) => setTemplateDocType(e.target.value as typeof templateDocType)}
+                    className="rounded border border-surface-border bg-surface px-2.5 py-1 text-xs text-text-primary outline-none focus:border-accent"
+                  >
+                    <option value="proposal">Proposal Teknis</option>
+                    <option value="sow">Statement of Work (SoW)</option>
+                    <option value="solution_brief">Solution Brief</option>
+                    <option value="mom">Minutes of Meeting (MoM)</option>
+                  </select>
+                </div>
+
                 <p className="text-xs text-text-muted mb-3 leading-relaxed">
                   {templateMode === "clone"
                     ? <>
