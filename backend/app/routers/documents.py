@@ -19,18 +19,60 @@ def list_documents(
     workspace_id: str = settings.default_workspace_id,
     session: Session = Depends(get_session),
 ):
-    stmt = select(Document).where(Document.workspace_id == workspace_id)
-    docs = session.execute(stmt).scalars().all()
+    stmt = (
+        select(
+            Document,
+            func.count(DocumentChunk.id).label("chunk_count"),
+        )
+        .outerjoin(DocumentChunk, Document.id == DocumentChunk.document_id)
+        .where(Document.workspace_id == workspace_id)
+        .group_by(Document.id)
+        .order_by(Document.updated_at.desc())
+    )
+    rows = session.execute(stmt).all()
     return [
         {
             "id": d.id,
             "title": d.title,
             "docType": d.doc_type,
             "division": d.division,
+            "chunkCount": chunk_count,
             "updatedAt": d.updated_at.isoformat(),
         }
-        for d in docs
+        for d, chunk_count in rows
     ]
+
+
+@router.get("/{doc_id}/chunks")
+def get_document_chunks(
+    doc_id: str,
+    workspace_id: str = settings.default_workspace_id,
+    session: Session = Depends(get_session),
+):
+    doc = session.get(Document, doc_id)
+    if not doc or doc.workspace_id != workspace_id:
+        raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan")
+
+    stmt = (
+        select(DocumentChunk)
+        .where(DocumentChunk.document_id == doc_id, DocumentChunk.workspace_id == workspace_id)
+    )
+    chunks = session.execute(stmt).scalars().all()
+    return {
+        "documentId": doc.id,
+        "title": doc.title,
+        "docType": doc.doc_type,
+        "division": doc.division,
+        "totalChunks": len(chunks),
+        "chunks": [
+            {
+                "id": c.id,
+                "content": c.content,
+                "length": len(c.content),
+            }
+            for c in chunks
+        ],
+    }
 
 
 @router.get("/summary")

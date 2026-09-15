@@ -1,6 +1,7 @@
 import type {
   ChatMessage,
   IndexedDocument,
+  DocumentChunksResponse,
   SourceCitation,
   SegmentItemApi,
   DraftItemApiResponse,
@@ -22,6 +23,10 @@ async function getJson<T>(path: string): Promise<T> {
 
 export async function listDocuments(): Promise<IndexedDocument[]> {
   return getJson<IndexedDocument[]>("/documents");
+}
+
+export async function getDocumentChunks(docId: string): Promise<DocumentChunksResponse> {
+  return getJson<DocumentChunksResponse>(`/documents/${encodeURIComponent(docId)}/chunks`);
 }
 
 export type DocumentsSummary = {

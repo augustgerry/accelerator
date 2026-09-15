@@ -18,10 +18,26 @@ export type ChatMessage = {
 export type IndexedDocument = {
   id: string;
   title: string;
-  docType: SourceCitation["docType"];
+  docType: SourceCitation["docType"] | string;
   division: string;
   updatedAt: string;
   sizeLabel?: string;
+  chunkCount?: number;
+};
+
+export type DocumentChunkItem = {
+  id: string;
+  content: string;
+  length: number;
+};
+
+export type DocumentChunksResponse = {
+  documentId: string;
+  title: string;
+  docType: string;
+  division: string;
+  totalChunks: number;
+  chunks: DocumentChunkItem[];
 };
 
 export type RequirementStatus = "todo" | "draft" | "final";

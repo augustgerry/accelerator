@@ -3,6 +3,17 @@
 
 ---
 
+## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
+- **Task Terakhir Selesai:** ✅ PRIORITY 1: Documents Page Enhancement & Chunk Preview (`GET /documents/{id}/chunks`, Drawer UI, Division filtering, Sorting, Copy chunk)
+- **Task Saat Ini:** PRIORITY 2: Template Library & Multi-Format Proposal (SoW, Solution Brief, MoM, PPT Deck)
+- **Sub-task Aktif:**
+  1. Menambahkan support jenis output di `backend/app/routers/draft.py` (Technical Proposal, SoW, Solution Brief, MoM)
+  2. Menambahkan selector jenis dokumen di `ExportModal` (`frontend/components/draft/export-modal.tsx`)
+- **File Yang Sedang Disentuh:** `backend/app/routers/draft.py` -> `frontend/components/draft/export-modal.tsx`
+- **Langkah Berikutnya Jika Terputus:** Lanjutkan endpoint generator PPT deck / multi-type template di backend.
+
+---
+
 ## 🗂️ PROJECT OVERVIEW
 
 **Nama:** Synapse Knowledge Accelerator
