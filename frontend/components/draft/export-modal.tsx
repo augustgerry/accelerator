@@ -76,6 +76,7 @@ export function ExportModal({
   const [pptxTemplateFile, setPptxTemplateFile] = useState<File | null>(null);
   const [generatingPptxClone, setGeneratingPptxClone] = useState(false);
   const [pptxCloneError, setPptxCloneError] = useState<string | null>(null);
+  const [pickingPptxLibraryId, setPickingPptxLibraryId] = useState<string | null>(null);
 
   // ── Template library (Google Drive templates, tagged doc_type = "template")
   const [templateLibrary, setTemplateLibrary] = useState<IndexedDocument[] | null>(null);
@@ -294,6 +295,22 @@ export function ExportModal({
     setPptxTemplateFile(file);
     setPptxCloneError(null);
     e.target.value = "";
+  };
+
+  const handlePickLibraryPptx = async (doc: IndexedDocument) => {
+    setPickingPptxLibraryId(doc.id);
+    setPptxCloneError(null);
+    try {
+      const blob = await downloadTemplateDocument(doc.id);
+      const file = new File([blob], doc.title, {
+        type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      });
+      setPptxTemplateFile(file);
+    } catch (err) {
+      setPptxCloneError(err instanceof Error ? err.message : "Gagal mengambil template");
+    } finally {
+      setPickingPptxLibraryId(null);
+    }
   };
 
   const handleGeneratePptxClone = async () => {
@@ -560,12 +577,12 @@ export function ExportModal({
                         <div className="flex items-center gap-2 text-xs text-text-muted">
                           <Loader2 size={13} className="animate-spin" /> Memuat daftar template...
                         </div>
-                      ) : templateLibrary && templateLibrary.length > 0 ? (
+                      ) : docxTemplateLibrary.length > 0 ? (
                         <select
                           value=""
                           disabled={pickingLibraryId !== null}
                           onChange={(e) => {
-                            const doc = templateLibrary.find((d) => d.id === e.target.value);
+                            const doc = docxTemplateLibrary.find((d) => d.id === e.target.value);
                             if (doc) handlePickLibraryTemplate(doc);
                           }}
                           className="w-full rounded border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent disabled:opacity-60"
@@ -573,7 +590,7 @@ export function ExportModal({
                           <option value="" disabled>
                             {pickingLibraryId ? "Mengambil template..." : "— Pilih dari Drive —"}
                           </option>
-                          {templateLibrary.map((d) => (
+                          {docxTemplateLibrary.map((d) => (
                             <option key={d.id} value={d.id}>
                               {d.title}{d.division ? ` (${d.division})` : ""}
                             </option>
