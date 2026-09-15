@@ -281,6 +281,16 @@ knowledge-accelerator/
 - `frontend/lib/api.ts` dan `frontend/components/draft/export-modal.tsx`: preflight otomatis tampil di Export Wizard sebagai blocking issue atau warning ringkas.
 - Verifikasi: sample draft kosong terdeteksi sebagai blocking issue, backend compile bersih, `npx tsc --noEmit` exit 0, dan diagnostics bersih.
 
+### ✅ Next Batch Poin 9-10: Live Smoke Verification
+- `npm run build`: berhasil, lint/type validation dan static generation semua route berhasil; `/library` ikut ter-build.
+- `backend/venv`: `alembic upgrade head` berhasil menjalankan migration proposal sessions dan Drive modified time sampai `e4f5a6b7c8d9`.
+- Backend import smoke test berhasil dan memuat 10 route.
+- Tidak ada API LLM berbayar yang dipanggil saat verifikasi.
+
+**STATUS ROADMAP 6-10: SELESAI.** Search filters, evidence/confidence, export visual preflight, dan live smoke verification sudah selesai.
+
+**GAP TERPISAH YANG MASIH TERSISA:** PDF yang benar-benar mengikuti layout Word/PPTX template secara penuh. PDF branded dan preview sudah tersedia; full-fidelity template PDF memerlukan renderer Office/headless conversion atau pipeline khusus.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.
