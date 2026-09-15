@@ -684,6 +684,41 @@ async def upload_template(file: UploadFile):
     )
 
 
+DOC_TYPE_LABELS = {
+    "proposal": {
+        "cover_subtitle": "Tanggapan Teknis atas",
+        "requirement_label": "Klausul / Kebutuhan Tender",
+        "response_label": "Tanggapan {company}",
+        "fallback_heading": "Tanggapan Teknis Tambahan",
+    },
+    "sow": {
+        "cover_subtitle": "Statement of Work untuk",
+        "requirement_label": "Klausul Acuan",
+        "response_label": "Rincian Lingkup Eksekusi",
+        "fallback_heading": "Rincian Lingkup Tambahan",
+    },
+    "solution_brief": {
+        "cover_subtitle": "Solution Brief untuk",
+        "requirement_label": "Tantangan Kebutuhan",
+        "response_label": "Solusi & Keunggulan {company}",
+        "fallback_heading": "Solusi Tambahan",
+    },
+    "mom": {
+        "cover_subtitle": "Minutes of Meeting untuk",
+        "requirement_label": "Poin Diskusi / Pertanyaan Klien",
+        "response_label": "Tanggapan & Klarifikasi {company}",
+        "fallback_heading": "Poin Tambahan",
+    },
+}
+
+
+def _get_doc_type_labels(template_type: str, company_name: str) -> dict:
+    """Wording per target document type, so the template-following flow speaks
+    like a SoW/Solution Brief/MoM instead of always sounding like a proposal."""
+    labels = DOC_TYPE_LABELS.get(template_type, DOC_TYPE_LABELS["proposal"])
+    return {k: v.format(company=company_name) if "{company}" in v else v for k, v in labels.items()}
+
+
 class ExportFromTemplateItem(BaseModel):
     id: str
     title: str
@@ -702,6 +737,8 @@ class ExportFromTemplateRequest(BaseModel):
     template_default_font_size: float = 11.0
     # Serialized template sections (only headings + major body paragraphs)
     template_sections: list[TemplateSectionInfo]
+    # Target document type: "proposal" | "sow" | "solution_brief" | "mom" — controls wording/labels
+    template_type: str = "proposal"
 
 
 @router.post("/export-from-template")
