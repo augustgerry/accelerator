@@ -308,6 +308,7 @@ export async function exportProposalPdf(payload: {
   primary_color?: string;
   accent_color?: string;
   footer_text?: string;
+  logo_data_url?: string;
   items: Array<{
     id: string;
     title: string;

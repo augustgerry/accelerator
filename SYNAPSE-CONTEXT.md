@@ -238,6 +238,12 @@ knowledge-accelerator/
 - UI menampilkan `Auto-saved` atau `Belum tersimpan ke server` tanpa mengganggu editor.
 - Verifikasi: `npx tsc --noEmit` exit 0, diagnostics bersih, dan `git diff --check` bersih.
 
+### ✅ Next Batch Poin 2: Company Logo Branding
+- `frontend/app/settings/page.tsx`: upload logo PNG/JPG/WebP maksimal 1,5 MB, preview, dan hapus logo.
+- `frontend/components/draft/export-modal.tsx` dan `frontend/lib/api.ts`: logo branding ikut dikirim ke PDF download dan Preview PDF.
+- `backend/app/routers/draft.py`: validasi data URL dan image bytes dengan Pillow sebelum render logo pada halaman pertama PDF; logo rusak diabaikan dengan aman.
+- Verifikasi: `npx tsc --noEmit` exit 0, frontend diagnostics bersih, backend compile bersih, dan sample invalid/valid logo sama-sama menghasilkan response PDF aman.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

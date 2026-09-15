@@ -498,6 +498,7 @@ class ExportPdfRequest(BaseModel):
     primary_color: str = "#111827"
     accent_color: str = "#2F5FE0"
     footer_text: str = ""
+    logo_data_url: str = ""
     items: list[ExportDocxItem]
 
 
@@ -505,6 +506,7 @@ class ExportPdfRequest(BaseModel):
 def export_proposal_pdf(payload: ExportPdfRequest):
     """Generate a professional PDF without requiring Word or LibreOffice."""
     from datetime import datetime
+    import base64
     from fastapi.responses import StreamingResponse
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER
@@ -519,6 +521,19 @@ def export_proposal_pdf(payload: ExportPdfRequest):
     accent_hex = payload.accent_color if hex_color_pattern.match(payload.accent_color) else "#2F5FE0"
     primary_color = colors.HexColor(primary_hex)
     accent_color = colors.HexColor(accent_hex)
+    logo_bytes = None
+    if payload.logo_data_url.startswith("data:image/") and ";base64," in payload.logo_data_url:
+        try:
+            decoded_logo = base64.b64decode(
+                payload.logo_data_url.split(";base64,", 1)[1], validate=True
+            )
+            from PIL import Image
+
+            with Image.open(io.BytesIO(decoded_logo)) as image:
+                image.verify()
+            logo_bytes = decoded_logo
+        except (ValueError, base64.binascii.Error, OSError):
+            logo_bytes = None
 
     type_labels = {
         "matrix": "Matriks Kepatuhan Tender",
@@ -634,6 +649,19 @@ def export_proposal_pdf(payload: ExportPdfRequest):
 
     def add_page_number(canvas, document):
         canvas.saveState()
+        if logo_bytes and document.page == 1:
+            from reportlab.lib.utils import ImageReader
+
+            canvas.drawImage(
+                ImageReader(io.BytesIO(logo_bytes)),
+                18 * mm,
+                270 * mm,
+                width=34 * mm,
+                height=14 * mm,
+                preserveAspectRatio=True,
+                anchor="sw",
+                mask="auto",
+            )
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(colors.HexColor("#6B7280"))
         canvas.drawString(18 * mm, 10 * mm, payload.footer_text or payload.company_name)

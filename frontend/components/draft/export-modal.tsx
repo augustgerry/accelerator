@@ -48,6 +48,7 @@ type CorporateBranding = {
   primaryColor: string;
   accentColor: string;
   footerText: string;
+  logoDataUrl: string;
 };
 
 const DEFAULT_BRANDING: CorporateBranding = {
@@ -55,6 +56,7 @@ const DEFAULT_BRANDING: CorporateBranding = {
   primaryColor: "#111827",
   accentColor: "#2F5FE0",
   footerText: "PT Solusi Mitra Gemilang (SMG)",
+  logoDataUrl: "",
 };
 
 const BRANDING_STORAGE_KEY = "synapse-corporate-branding";
@@ -215,6 +217,7 @@ export function ExportModal({
           primary_color: branding.primaryColor,
           accent_color: branding.accentColor,
           footer_text: branding.footerText,
+          logo_data_url: branding.logoDataUrl,
           items: mappedItems,
         });
         const url = URL.createObjectURL(blob);
@@ -266,6 +269,7 @@ export function ExportModal({
         primary_color: branding.primaryColor,
         accent_color: branding.accentColor,
         footer_text: branding.footerText,
+        logo_data_url: branding.logoDataUrl,
         items: targetItems.map((it) => ({
           id: it.id,
           title: it.title,

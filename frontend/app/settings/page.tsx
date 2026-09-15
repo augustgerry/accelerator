@@ -55,6 +55,7 @@ type CorporateBranding = {
   primaryColor: string;
   accentColor: string;
   footerText: string;
+  logoDataUrl: string;
 };
 
 const DEFAULT_BRANDING: CorporateBranding = {
@@ -62,6 +63,7 @@ const DEFAULT_BRANDING: CorporateBranding = {
   primaryColor: "#111827",
   accentColor: "#2F5FE0",
   footerText: "PT Solusi Mitra Gemilang (SMG)",
+  logoDataUrl: "",
 };
 
 export default function SettingsPage() {
@@ -76,6 +78,17 @@ export default function SettingsPage() {
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [branding, setBranding] = useState<CorporateBranding>(DEFAULT_BRANDING);
   const [brandingSaved, setBrandingSaved] = useState(false);
+
+  const handleLogoUpload = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 1_500_000) {
+      alert("Logo harus berupa PNG/JPG/WebP maksimal 1,5 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setBranding((current) => ({ ...current, logoDataUrl: String(reader.result ?? "") }));
+    reader.readAsDataURL(file);
+  };
 
   // Load from localStorage
   useEffect(() => {
@@ -287,6 +300,24 @@ export default function SettingsPage() {
               Identitas ini dipakai pada cover, warna heading, tabel, dan footer PDF proposal.
             </p>
             <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1.5 text-xs font-semibold text-text-primary md:col-span-2">
+                Logo perusahaan
+                <div className="flex flex-wrap items-center gap-3 rounded-md border border-surface-border bg-surface p-3">
+                  {branding.logoDataUrl ? (
+                    <img src={branding.logoDataUrl} alt="Preview logo perusahaan" className="h-12 max-w-40 object-contain" />
+                  ) : (
+                    <div className="flex h-12 w-24 items-center justify-center rounded border border-dashed border-surface-border text-[10px] font-normal text-text-muted">Belum ada logo</div>
+                  )}
+                  <label className="cursor-pointer rounded-md border border-surface-border bg-surface-raised px-3 py-2 text-xs font-medium text-text-secondary hover:border-accent hover:text-text-primary">
+                    Upload logo
+                    <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { handleLogoUpload(e.target.files?.[0]); e.target.value = ""; }} />
+                  </label>
+                  {branding.logoDataUrl && (
+                    <button onClick={() => setBranding({ ...branding, logoDataUrl: "" })} className="text-xs font-medium text-red-600 hover:underline">Hapus</button>
+                  )}
+                  <span className="text-[11px] font-normal text-text-muted">PNG/JPG/WebP, maksimal 1,5 MB</span>
+                </div>
+              </div>
               <label className="space-y-1.5 text-xs font-semibold text-text-primary">
                 Nama perusahaan
                 <input
