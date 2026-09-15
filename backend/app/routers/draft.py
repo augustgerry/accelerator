@@ -54,6 +54,7 @@ class DraftItemRequest(BaseModel):
     requirement_text: str
     instruction: Optional[str] = None
     tor_context: Optional[str] = None
+    reference_doc_ids: list[str] = []
     workspace_id: str = settings.default_workspace_id
 
 
@@ -130,7 +131,7 @@ def quality_check_draft(payload: QualityCheckRequest):
             if normalized not in draft.replace(" ", "") and value not in missing_values:
                 missing_values.append(value)
         if missing_values:
-            issues.append("Angka atau target dari klausul belum terlihat di jawaban")
+            issues.append("Angka atau target dari brief bagian belum terlihat di jawaban")
 
         if not issues:
             score = 100
@@ -197,15 +198,16 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
         query = f"{payload.requirement_text} {payload.instruction}"
 
     kb_chunks, sources = retrieve_relevant_chunks_with_sources(
-        session, payload.workspace_id, query, top_k=5
+        session, payload.workspace_id, query, top_k=5,
+        doc_ids=payload.reference_doc_ids or None,
     )
 
     context = []
     if payload.tor_context and payload.tor_context.strip():
-        context.append(f"Konteks TOR/RFP Tambahan:\n{payload.tor_context[:2000]}")
+        context.append(f"Konteks TOR/RFP Tambahan:\n{payload.tor_context[:6000]}")
     context.extend(kb_chunks)
 
-    user_prompt = f"Klausul Kebutuhan:\n{payload.requirement_text}"
+    user_prompt = f"Brief/Tujuan Bagian Dokumen:\n{payload.requirement_text}"
     if payload.instruction:
         user_prompt += f"\n\nInstruksi Spesifik:\n{payload.instruction}"
 
@@ -215,7 +217,7 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
     except Exception as e:
         draft = (
             f"[LLM tidak tersedia: {format_llm_error(e)}]\n\n"
-            f"Referensi klausul: {payload.requirement_text}\n\n"
+            f"Brief bagian: {payload.requirement_text}\n\n"
             "Silakan tulis atau sesuaikan draf manual di sini."
         )
 
@@ -309,9 +311,9 @@ def export_preflight(payload: ExportPreflightRequest):
     total_characters = 0
 
     if not payload.items:
-        blocking_issues.append("Tidak ada klausul yang dipilih untuk diekspor")
+        blocking_issues.append("Tidak ada bagian yang dipilih untuk diekspor")
     if len(payload.items) > 60:
-        warnings.append("Jumlah klausul besar; hasil export dapat menjadi dokumen panjang")
+        warnings.append("Jumlah bagian besar; hasil export dapat menjadi dokumen panjang")
 
     for item in payload.items:
         draft = (item.draft_text or "").strip()
@@ -388,7 +390,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
 
     meta_run = sub_p.add_run(
         f"Penyusun: {payload.company_name} · Tanggal: {datetime.now().strftime('%d %B %Y')}\n"
-        f"Total Klausul Ditanggapi: {len(payload.items)} butir"
+        f"Total Bagian Tersusun: {len(payload.items)} bagian"
     )
     meta_run.font.size = Pt(9.5)
     meta_run.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
@@ -439,12 +441,12 @@ def export_proposal_docx(payload: ExportDocxRequest):
 
         doc.add_heading("2. Ruang Lingkup Pekerjaan (Scope of Work)", level=1)
         doc.add_paragraph(
-            "Ruang lingkup pekerjaan mencakup implementasi dan pemenuhan seluruh klausul teknis berikut:"
+            "Ruang lingkup pekerjaan mencakup implementasi dan pemenuhan seluruh bagian berikut:"
         )
         for idx, item in enumerate(payload.items, start=1):
             doc.add_heading(f"2.{idx} Scope: {item.title} [{item.category}]", level=2)
             req_p = doc.add_paragraph()
-            req_p.add_run(f"Klausul Acuan: {item.requirement_text}\n").italic = True
+            req_p.add_run(f"Cakupan Bagian: {item.requirement_text}\n").italic = True
             req_p.add_run("Rincian Lingkup Eksekusi:\n").bold = True
             req_p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Rincian belum ditentukan]")
             req_p.paragraph_format.space_after = Pt(10)
@@ -491,12 +493,12 @@ def export_proposal_docx(payload: ExportDocxRequest):
         # Format Minutes of Meeting (MoM) / Berita Acara
         doc.add_heading("1. Informasi Pertemuan & Agenda", level=1)
         doc.add_paragraph(
-            f"Agenda Pertemuan: Klarifikasi Teknis & Pembahasan Klausul {payload.document_title}\n"
+            f"Agenda Pertemuan: Klarifikasi Teknis & Pembahasan {payload.document_title}\n"
             f"Waktu Pelaksanaan: {datetime.now().strftime('%d %B %Y')}\n"
             f"Penyelenggara: Tim Solution Architect {payload.company_name}"
         )
 
-        doc.add_heading("2. Poin Pembahasan & Klarifikasi Klausul", level=1)
+        doc.add_heading("2. Poin Pembahasan & Klarifikasi", level=1)
         for idx, item in enumerate(payload.items, start=1):
             doc.add_heading(f"Topik {idx}: {item.title}", level=2)
             p = doc.add_paragraph()
@@ -526,7 +528,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
             doc.add_heading(f"2.{idx} {item.title} [{item.category}]", level=2)
 
             req_p = doc.add_paragraph()
-            req_run = req_p.add_run(f"Kebutuhan Dokumen Tender:\n\"{item.requirement_text}\"")
+            req_run = req_p.add_run(f"Cakupan Bagian Ini:\n{item.requirement_text}")
             req_run.italic = True
             req_run.font.color.rgb = RGBColor(0x4B, 0x55, 0x63)
             req_p.paragraph_format.left_indent = Inches(0.25)
@@ -575,7 +577,24 @@ class ExportPdfRequest(BaseModel):
     accent_color: str = "#2F5FE0"
     footer_text: str = ""
     logo_data_url: str = ""
+    customer_logo_data_url: str = ""
     items: list[ExportDocxItem]
+
+
+def _decode_logo_bytes(data_url: str) -> bytes | None:
+    if not (data_url.startswith("data:image/") and ";base64," in data_url):
+        return None
+    import base64
+
+    try:
+        decoded = base64.b64decode(data_url.split(";base64,", 1)[1], validate=True)
+        from PIL import Image
+
+        with Image.open(io.BytesIO(decoded)) as image:
+            image.verify()
+        return decoded
+    except (ValueError, base64.binascii.Error, OSError):
+        return None
 
 
 @router.post("/export-pdf")
@@ -597,19 +616,8 @@ def export_proposal_pdf(payload: ExportPdfRequest):
     accent_hex = payload.accent_color if hex_color_pattern.match(payload.accent_color) else "#2F5FE0"
     primary_color = colors.HexColor(primary_hex)
     accent_color = colors.HexColor(accent_hex)
-    logo_bytes = None
-    if payload.logo_data_url.startswith("data:image/") and ";base64," in payload.logo_data_url:
-        try:
-            decoded_logo = base64.b64decode(
-                payload.logo_data_url.split(";base64,", 1)[1], validate=True
-            )
-            from PIL import Image
-
-            with Image.open(io.BytesIO(decoded_logo)) as image:
-                image.verify()
-            logo_bytes = decoded_logo
-        except (ValueError, base64.binascii.Error, OSError):
-            logo_bytes = None
+    logo_bytes = _decode_logo_bytes(payload.logo_data_url)
+    customer_logo_bytes = _decode_logo_bytes(payload.customer_logo_data_url)
 
     type_labels = {
         "matrix": "Matriks Kepatuhan Tender",
@@ -668,7 +676,7 @@ def export_proposal_pdf(payload: ExportPdfRequest):
         paragraph(document_type.upper(), title_style),
         paragraph(payload.document_title, subtitle_style),
         paragraph(
-            f"Tanggal: {datetime.now().strftime('%d %B %Y')}  |  Total klausul: {len(payload.items)}",
+            f"Tanggal: {datetime.now().strftime('%d %B %Y')}  |  Total bagian: {len(payload.items)}",
             meta_style,
         ),
     ]
@@ -710,34 +718,46 @@ def export_proposal_pdf(payload: ExportPdfRequest):
             f"Dokumen {document_type.lower()} ini disusun oleh {payload.company_name} "
             f"untuk menjawab kebutuhan pada {payload.document_title}."
         ))
-        story.append(paragraph("Rincian Klausul dan Tanggapan", heading_style))
+        story.append(paragraph("Rincian Bagian dan Tanggapan", heading_style))
         for index, item in enumerate(payload.items, start=1):
             story.append(paragraph(f"{index}. {item.title} [{item.category}]", heading_style))
-            story.append(paragraph(f"Klausul Acuan:\n{item.requirement_text}"))
+            story.append(paragraph(f"Cakupan Bagian:\n{item.requirement_text}"))
             story.append(paragraph(
                 f"Tanggapan {payload.company_name}:\n{item.draft_text or '[Tanggapan belum disusun]'}"
             ))
         story.append(paragraph("Penutup", heading_style))
         story.append(paragraph(
-            "Dokumen ini disusun berdasarkan klausul yang tersedia dan dapat disempurnakan "
+            "Dokumen ini disusun berdasarkan bagian yang tersedia dan dapat disempurnakan "
             "setelah proses review internal."
         ))
 
     def add_page_number(canvas, document):
         canvas.saveState()
-        if logo_bytes and document.page == 1:
+        if document.page == 1:
             from reportlab.lib.utils import ImageReader
 
-            canvas.drawImage(
-                ImageReader(io.BytesIO(logo_bytes)),
-                18 * mm,
-                270 * mm,
-                width=34 * mm,
-                height=14 * mm,
-                preserveAspectRatio=True,
-                anchor="sw",
-                mask="auto",
-            )
+            if logo_bytes:
+                canvas.drawImage(
+                    ImageReader(io.BytesIO(logo_bytes)),
+                    18 * mm,
+                    270 * mm,
+                    width=34 * mm,
+                    height=14 * mm,
+                    preserveAspectRatio=True,
+                    anchor="sw",
+                    mask="auto",
+                )
+            if customer_logo_bytes:
+                canvas.drawImage(
+                    ImageReader(io.BytesIO(customer_logo_bytes)),
+                    158 * mm,
+                    270 * mm,
+                    width=34 * mm,
+                    height=14 * mm,
+                    preserveAspectRatio=True,
+                    anchor="sw",
+                    mask="auto",
+                )
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(colors.HexColor("#6B7280"))
         canvas.drawString(18 * mm, 10 * mm, payload.footer_text or payload.company_name)
@@ -822,15 +842,15 @@ def export_proposal_pptx(payload: ExportPptxRequest):
 
     p_intro = tf_body.paragraphs[0]
     p_intro.text = (
-        f"Presentasi ini menyajikan usulan solusi menyeluruh untuk {payload.document_title}. "
-        f"Kami telah menganalisis {len(payload.items)} butir kebutuhan spesifikasi teknis dan "
+        f"Presentasi ini menyajikan usulan solusi menyeluruh untuk {payload.document_title}, "
+        f"mencakup {len(payload.items)} bagian utama dan "
         "merumuskan pendekatan arsitektur terbaik."
     )
     p_intro.font.size = Pt(14)
     p_intro.font.color.rgb = RGBColor(0x37, 0x41, 0x51)
 
     points = [
-        f"Analisis Kebutuhan Teknis ({len(payload.items)} Klausul Utama)",
+        f"Analisis Kebutuhan Teknis ({len(payload.items)} Bagian Utama)",
         "Pendekatan Arsitektur Solusi Teruji & Praktik Terbaik SMG",
         "Komitmen Deliverables, Tata Kelola Proyek, dan SLA Implementasi",
         "Keunggulan Kompetitif & Nilai Tambah Kemitraan SMG",
@@ -851,7 +871,7 @@ def export_proposal_pptx(payload: ExportPptxRequest):
         hdr_box = slide.shapes.add_textbox(Inches(1.0), Inches(0.6), Inches(11.333), Inches(1.0))
         tf_hdr = hdr_box.text_frame
         p_cat = tf_hdr.paragraphs[0]
-        p_cat.text = f"KLAUSUL #{idx} · {item.category.upper()}"
+        p_cat.text = f"BAGIAN #{idx} · {item.category.upper()}"
         p_cat.font.size = Pt(11)
         p_cat.font.bold = True
         p_cat.font.color.rgb = RGBColor(0xD9, 0x77, 0x06)
@@ -1047,25 +1067,25 @@ async def upload_template(file: UploadFile):
 DOC_TYPE_LABELS = {
     "proposal": {
         "cover_subtitle": "Tanggapan Teknis atas",
-        "requirement_label": "Klausul / Kebutuhan Tender",
+        "requirement_label": "Cakupan Bagian",
         "response_label": "Tanggapan {company}",
         "fallback_heading": "Tanggapan Teknis Tambahan",
     },
     "sow": {
         "cover_subtitle": "Statement of Work untuk",
-        "requirement_label": "Klausul Acuan",
+        "requirement_label": "Cakupan Bagian",
         "response_label": "Rincian Lingkup Eksekusi",
         "fallback_heading": "Rincian Lingkup Tambahan",
     },
     "solution_brief": {
         "cover_subtitle": "Solution Brief untuk",
-        "requirement_label": "Tantangan Kebutuhan",
+        "requirement_label": "Cakupan Bagian",
         "response_label": "Solusi & Keunggulan {company}",
         "fallback_heading": "Solusi Tambahan",
     },
     "mom": {
         "cover_subtitle": "Minutes of Meeting untuk",
-        "requirement_label": "Poin Diskusi / Pertanyaan Klien",
+        "requirement_label": "Cakupan Bagian",
         "response_label": "Tanggapan & Klarifikasi {company}",
         "fallback_heading": "Poin Tambahan",
     },
@@ -1153,7 +1173,7 @@ def export_from_template(payload: ExportFromTemplateRequest):
     meta_para = doc.add_paragraph()
     meta_run = meta_para.add_run(
         f"Tanggal: {datetime.now().strftime('%d %B %Y')}  ·  "
-        f"Total Klausul: {len(payload.items)} butir"
+        f"Total Bagian: {len(payload.items)} bagian"
     )
     meta_run.font.size = Pt(9.5)
     meta_run.font.name = payload.template_default_font

@@ -23,6 +23,7 @@ def _hybrid_ranked_chunks(
     top_k: int,
     doc_type: str | None = None,
     division: str | None = None,
+    doc_ids: list[str] | None = None,
 ) -> list[DocumentChunk]:
     """Blend vector candidates with exact-term candidates before returning top-k."""
     query_embedding = embed_text(query)
@@ -32,6 +33,8 @@ def _hybrid_ranked_chunks(
         filters.append(DocumentChunk.document.has(Document.doc_type == doc_type))
     if division:
         filters.append(DocumentChunk.document.has(Document.division == division))
+    if doc_ids:
+        filters.append(DocumentChunk.document_id.in_(doc_ids))
     distance = DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
     vector_rows = session.execute(
         select(DocumentChunk, distance)
@@ -95,10 +98,11 @@ def _hybrid_chunks(
     top_k: int,
     doc_type: str | None = None,
     division: str | None = None,
+    doc_ids: list[str] | None = None,
 ) -> list[DocumentChunk]:
     return [
         candidate["chunk"]
-        for candidate in _hybrid_ranked_chunks(session, workspace_id, query, top_k, doc_type, division)
+        for candidate in _hybrid_ranked_chunks(session, workspace_id, query, top_k, doc_type, division, doc_ids)
     ]
 
 
@@ -116,8 +120,9 @@ def retrieve_relevant_chunks_with_sources(
     top_k: int = 5,
     doc_type: str | None = None,
     division: str | None = None,
+    doc_ids: list[str] | None = None,
 ) -> tuple[list[str], list[dict]]:
-    chunks = _hybrid_chunks(session, workspace_id, query, top_k, doc_type, division)
+    chunks = _hybrid_chunks(session, workspace_id, query, top_k, doc_type, division, doc_ids)
     chunk_texts = [c.content for c in chunks]
 
     seen = set()

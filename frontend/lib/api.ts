@@ -39,7 +39,7 @@ export async function getDocumentsSummary(): Promise<DocumentsSummary> {
   return getJson<DocumentsSummary>("/documents/summary");
 }
 
-export async function downloadTemplateDocument(docId: string): Promise<Blob> {
+export async function downloadDriveDocument(docId: string): Promise<Blob> {
   const res = await fetch(`${API_BASE}/documents/${encodeURIComponent(docId)}/download`);
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -47,6 +47,8 @@ export async function downloadTemplateDocument(docId: string): Promise<Blob> {
   }
   return res.blob();
 }
+
+export const downloadTemplateDocument = downloadDriveDocument;
 
 export async function syncDocuments(): Promise<{ synced: string[]; skipped: string[]; unchanged: string[] }> {
   const res = await fetch(`${API_BASE}/documents/sync`, { method: "POST" });
@@ -178,13 +180,15 @@ export async function generateItemDraft(
   itemId: string,
   requirementText: string,
   instruction?: string,
-  torContext?: string
+  torContext?: string,
+  referenceDocIds?: string[]
 ): Promise<DraftItemApiResponse> {
   const data = await postJson<DraftItemApiResponse>("/draft/item", {
     item_id: itemId,
     requirement_text: requirementText,
     instruction: instruction || undefined,
     tor_context: torContext || undefined,
+    reference_doc_ids: referenceDocIds && referenceDocIds.length > 0 ? referenceDocIds : undefined,
   });
   return data;
 }
@@ -344,6 +348,7 @@ export async function exportProposalPdf(payload: {
   accent_color?: string;
   footer_text?: string;
   logo_data_url?: string;
+  customer_logo_data_url?: string;
   items: Array<{
     id: string;
     title: string;

@@ -27,90 +27,45 @@ import {
 } from "lucide-react";
 import {
   uploadTor,
-  segmentTor,
   generateItemDraft,
   qualityCheckDraft,
   getProposalSession,
   saveProposalSession,
+  listDocuments,
   type QualityCheckResult,
 } from "@/lib/api";
 import { OnboardingModal } from "@/components/onboarding-modal";
-import type { RequirementItem, RequirementStatus, SourceCitation } from "@/lib/types";
+import type { RequirementItem, RequirementStatus, SourceCitation, IndexedDocument } from "@/lib/types";
+import { DOC_TYPES, FORMAT_LABELS, getDocType, type DraftDocTypeId, type DraftFormat } from "@/lib/document-types";
+import { SKELETONS } from "@/lib/skeletons";
 
-const SAMPLE_DEMO_ITEMS: RequirementItem[] = [
-  {
-    id: "req-1",
-    title: "Infrastruktur Virtualisasi & Compute Node",
-    requirement_text:
-      "Peserta tender wajib menyediakan infrastruktur Hyperconverged Infrastructure (HCI) minimal 3 node compute/storage terintegrasi, dengan prosesor minimal 32 core per node, memory 256GB RAM, dan all-flash storage usable minimal 20TB dengan fault tolerance n+1.",
-    category: "Teknis",
-    draft_text:
-      "Kami mengusulkan solusi HCI kelas enterprise (misal: Sangfor HCI / Nutanix) terdiri dari 3 unit node server rackmount. Masing-masing node dilengkapi dengan dual Intel Xeon Gold (total 32+ cores), 256GB DDR4 ECC RAM, serta redundant SSD All-Flash NVMe dengan usable capacity 24TB (melebihi standar minimum 20TB). Sistem mendukung arsitektur clustering 2-way / 3-way replication dengan ketersediaan high availability (HA) otomatis dan fault tolerance N+1.",
-    status: "final",
-    sources: [
-      {
-        id: "doc-101",
-        title: "Checklist Sizing HCI & Storage Sangfor 2024",
-        docType: "checklist",
-        division: "presales",
-        source: "internal",
-      },
-      {
-        id: "doc-102",
-        title: "TCO & Spesifikasi Infrastruktur Server Multi-Node",
-        docType: "TCO",
-        division: "infrastructure",
-        source: "internal",
-      },
-    ],
-  },
-  {
-    id: "req-2",
-    title: "Service Level Agreement (SLA) & On-Site Support",
-    requirement_text:
-      "Penyedia harus menyediakan dukungan teknis 24x7x365 dengan garansi response time maksimal 15 menit via hotline/remote, dan arrival time teknisi on-site maksimal 4 jam untuk insiden berkategori Critical/Severity 1 di wilayah Jabodetabek.",
-    category: "SLA & Support",
-    draft_text:
-      "PT Solusi Mitra Gemilang (SMG) berkomitmen memberikan layanan dukungan teknis 24x7x365 melalui dedicated Presales & TAC Helpdesk dengan SLA respon awal < 15 menit. Untuk insiden Severity 1 (gangguan operasional total), tim certified field engineer kami menjamin kehadiran di lokasi (on-site) dalam waktu maksimal 4 jam untuk wilayah Jabodetabek, didukung ketersediaan spare parts konsinyasi lokal di warehouse Jakarta.",
-    status: "draft",
-    sources: [
-      {
-        id: "doc-201",
-        title: "Standard SLA & Maintenance Agreement Template SMG",
-        docType: "SoW",
-        division: "presales",
-        source: "internal",
-      },
-    ],
-  },
-  {
-    id: "req-3",
-    title: "Mekanisme Backup & Disaster Recovery (DR)",
-    requirement_text:
-      "Sistem wajib memiliki kapabilitas native snapshot dan replication ke Disaster Recovery Center (DRC) terpisah dengan target RPO maksimal 15 menit dan RTO maksimal 2 jam tanpa mengganggu performa produksi.",
-    category: "Teknis",
-    draft_text: "",
-    status: "todo",
-  },
-  {
-    id: "req-4",
-    title: "Kualifikasi Project Manager & Tim Implementasi",
-    requirement_text:
-      "Tim pelaksana wajib dipimpin oleh 1 orang Project Manager bersertifikasi PMP atau Prince2 Practitioner berpengalaman minimal 5 tahun di implementasi Data Center, serta minimal 2 orang System Engineer bersertifikasi vendor level Professional.",
-    category: "Manajemen Proyek",
-    draft_text: "",
-    status: "todo",
-  },
-  {
-    id: "req-5",
-    title: "Dokumentasi, Alih Pengetahuan & Sertifikasi Pelatihan",
-    requirement_text:
-      "Penyedia wajib menyelenggarakan pelatihan resmi bersertifikat untuk minimal 5 orang staf IT internal pemberi kerja, serta menyerahkan as-built documentation, SOP operasional, dan manual book sebelum fase UAT.",
-    category: "Administrasi & Legal",
-    draft_text: "",
-    status: "todo",
-  },
-];
+// ponytail: keyword-window excerpt, not real retrieval — upgrade to embedding-based
+// local TOR search if section grounding proves weak on long/dense documents.
+function pickRelevantTorExcerpt(torText: string, sectionTitle: string, maxLen = 4000): string {
+  const paragraphs = torText.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  if (paragraphs.length === 0) return torText.slice(0, maxLen);
+
+  const keywords = sectionTitle
+    .toLowerCase()
+    .replace(/[()]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 3);
+
+  const scored = paragraphs
+    .map((p, idx) => ({
+      p,
+      idx,
+      score: keywords.reduce((acc, kw) => acc + (p.toLowerCase().includes(kw) ? 1 : 0), 0),
+    }))
+    .sort((a, b) => b.score - a.score || a.idx - b.idx);
+
+  let out = "";
+  for (const { p } of scored) {
+    if (out.length >= maxLen) break;
+    out += (out ? "\n\n" : "") + p;
+  }
+  return out.slice(0, maxLen) || torText.slice(0, maxLen);
+}
 
 const LS_KEY = "synapse-draft-session";
 const LS_SESSION_ID_KEY = "synapse-proposal-session-id";
@@ -140,7 +95,6 @@ export default function DraftPage() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [torText, setTorText] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [segmenting, setSegmenting] = useState(false);
   const [items, setItems] = useState<RequirementItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "review" | RequirementStatus>("all");
@@ -159,7 +113,11 @@ export default function DraftPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [savingSession, setSavingSession] = useState(false);
   const [sessionSaved, setSessionSaved] = useState<string | null>(null);
-  const [outputType, setOutputType] = useState<"matrix" | "narrative" | "sow" | "solution_brief" | "mom" | "pptx" | "pdf">("narrative");
+  const [docTypeId, setDocTypeId] = useState<DraftDocTypeId>("narrative");
+  const [format, setFormat] = useState<DraftFormat>("docx");
+  const [referenceDocs, setReferenceDocs] = useState<IndexedDocument[]>([]);
+  const [selectedReferenceIds, setSelectedReferenceIds] = useState<Set<string>>(new Set());
+  const [referenceSearch, setReferenceSearch] = useState("");
   const autoSavedSignature = useRef<string | null>(null);
 
   // ── Restore from localStorage on mount ──────────────────────────────────
@@ -174,6 +132,26 @@ export default function DraftPage() {
     }
     setHydrated(true);
   }, []);
+
+  // ── Load Drive documents for the "Sumber Referensi" multi-select ────────
+  useEffect(() => {
+    listDocuments().then(setReferenceDocs).catch(() => setReferenceDocs([]));
+  }, []);
+
+  const toggleReferenceDoc = (id: string) => {
+    setSelectedReferenceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const filteredReferenceDocs = useMemo(() => {
+    const q = referenceSearch.trim().toLowerCase();
+    if (!q) return referenceDocs;
+    return referenceDocs.filter((d) => d.title.toLowerCase().includes(q));
+  }, [referenceDocs, referenceSearch]);
 
   useEffect(() => {
     const rawBrief = sessionStorage.getItem("synapse-search-brief");
@@ -292,11 +270,7 @@ export default function DraftPage() {
     });
   }, [items, filterStatus, searchQuery, qualityReport]);
 
-  // Handle file upload & auto-segmentation
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processSourceFile = async (file: File) => {
     setUploading(true);
     setErrorMessage(null);
     try {
@@ -305,14 +279,13 @@ export default function DraftPage() {
       setFileName(file.name);
 
       setUploading(false);
-      setSegmenting(true);
 
-      const segmentedList = await segmentTor(extractedText);
-      const requirementItems: RequirementItem[] = segmentedList.map((seg) => ({
-        id: seg.id,
-        title: seg.title,
-        requirement_text: seg.requirement_text,
-        category: seg.category,
+      const skeleton = SKELETONS[docTypeId];
+      const requirementItems: RequirementItem[] = skeleton.map((sec) => ({
+        id: sec.id,
+        title: sec.title,
+        requirement_text: sec.description,
+        category: sec.category,
         draft_text: "",
         status: "todo",
       }));
@@ -332,7 +305,8 @@ export default function DraftPage() {
                 item.id,
                 item.requirement_text,
                 undefined,
-                extractedText.slice(0, 1500),
+                pickRelevantTorExcerpt(extractedText, item.title),
+                Array.from(selectedReferenceIds),
               );
               return { itemId: item.id, result };
             } catch {
@@ -360,18 +334,14 @@ export default function DraftPage() {
       );
     } finally {
       setUploading(false);
-      setSegmenting(false);
-      e.target.value = "";
     }
   };
 
-  // Preload demo sample
-  const handleLoadSample = () => {
-    setFileName("TOR-Pengadaan-Infrastruktur-HCI-CSUL-Finance.docx");
-    setTorText("Contoh dokumen TOR pengadaan HCI dan layanan presales...");
-    setItems(SAMPLE_DEMO_ITEMS);
-    setSelectedItemId(SAMPLE_DEMO_ITEMS[0].id);
-    setErrorMessage(null);
+  // Handle local file upload & auto-generation
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) await processSourceFile(file);
+    e.target.value = "";
   };
 
   // Reset document
@@ -405,7 +375,8 @@ export default function DraftPage() {
         item.id,
         item.requirement_text,
         instruction,
-        torText.slice(0, 1500)
+        pickRelevantTorExcerpt(torText, item.title),
+        Array.from(selectedReferenceIds)
       );
 
       setItems((prev) =>
@@ -576,7 +547,7 @@ export default function DraftPage() {
             <div className="rounded-xl border border-surface-border bg-surface-raised p-8 shadow-panel transition-all">
               <div className="flex flex-col items-center justify-center text-center">
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-accent-soft text-accent-ink shadow-subtle">
-                  {uploading || segmenting ? (
+                  {uploading ? (
                     <Loader2 size={28} className="animate-spin" />
                   ) : (
                     <UploadCloud size={28} />
@@ -584,11 +555,7 @@ export default function DraftPage() {
                 </div>
 
                 <h3 className="text-lg font-semibold text-text-primary">
-                  {uploading
-                    ? "Mengekstrak teks dokumen..."
-                    : segmenting
-                    ? "Menganalisis kebutuhan dan menyiapkan dokumen..."
-                    : "Buat Dokumen dari TOR / RFP"}
+                  {uploading ? "Mengekstrak teks dokumen..." : "Buat Dokumen dari TOR / RFP"}
                 </h3>
                 <p className="mt-1 text-sm text-text-muted max-w-md">
                   Pilih jenis dokumen, upload TOR/RFP, lalu Synapse menyusun isi berdasarkan knowledge base internal.
@@ -597,27 +564,36 @@ export default function DraftPage() {
                 <div className="mt-5 w-full max-w-md text-left">
                   <label className="mb-1.5 block text-xs font-semibold text-text-primary">Dokumen yang ingin dibuat</label>
                   <select
-                    value={outputType}
-                    onChange={(e) => setOutputType(e.target.value as typeof outputType)}
+                    value={docTypeId}
+                    onChange={(e) => {
+                      const next = e.target.value as DraftDocTypeId;
+                      setDocTypeId(next);
+                      const allowed = getDocType(next).formats;
+                      if (!allowed.includes(format)) setFormat(allowed[0]);
+                    }}
                     className="w-full rounded-md border border-surface-border bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-accent"
                   >
-                    <option value="narrative">Proposal Teknis</option>
-                    <option value="sow">Statement of Work (SoW)</option>
-                    <option value="solution_brief">Solution Brief</option>
-                    <option value="mom">Klarifikasi Teknis / MoM</option>
-                    <option value="matrix">Matriks Kepatuhan Tender</option>
-                    <option value="pptx">Pitch Deck PowerPoint</option>
-                    <option value="pdf">Proposal PDF</option>
+                    {DOC_TYPES.map((d) => (
+                      <option key={d.id} value={d.id}>{d.label}</option>
+                    ))}
                   </select>
                 </div>
 
                 <div className="mt-3 flex items-center gap-2 text-xs text-text-secondary">
-                  <span className="rounded bg-surface border border-surface-border px-2 py-0.5 font-mono">
-                    .PDF
-                  </span>
-                  <span className="rounded bg-surface border border-surface-border px-2 py-0.5 font-mono">
-                    .DOCX
-                  </span>
+                  {getDocType(docTypeId).formats.map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setFormat(f)}
+                      className={`rounded border px-2 py-0.5 font-mono transition-all ${
+                        format === f
+                          ? "border-accent bg-accent-soft text-accent-ink"
+                          : "border-surface-border bg-surface hover:border-accent"
+                      }`}
+                    >
+                      {FORMAT_LABELS[f]}
+                    </button>
+                  ))}
                 </div>
 
                 <input
@@ -631,21 +607,11 @@ export default function DraftPage() {
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                   <Button
                     variant="primary"
-                    disabled={uploading || segmenting}
+                    disabled={uploading}
                     onClick={() => fileInputRef.current?.click()}
                     className="bg-ink-900 hover:bg-ink-800 text-white min-w-[140px]"
                   >
-                    {uploading ? "Mengupload..." : "Pilih File TOR"}
-                  </Button>
-
-                  <Button
-                    variant="secondary"
-                    disabled={uploading || segmenting}
-                    onClick={handleLoadSample}
-                    className="border-surface-border hover:border-accent"
-                  >
-                    <Sparkles size={14} className="mr-1.5 text-accent-ink" />
-                    Gunakan Contoh TOR (Demo)
+                    {uploading ? "Mengupload..." : "Pilih dokumen sumber"}
                   </Button>
                 </div>
 
@@ -655,27 +621,56 @@ export default function DraftPage() {
                     <span>{errorMessage}</span>
                   </div>
                 )}
+
+                <div className="mt-6 w-full max-w-md text-left">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <label className="text-xs font-semibold text-text-primary">Sumber Referensi (opsional)</label>
+                    {selectedReferenceIds.size > 0 && (
+                      <span className="text-[11px] font-medium text-accent-ink">{selectedReferenceIds.size} dipilih</span>
+                    )}
+                  </div>
+                  <p className="mb-1.5 text-[11px] text-text-muted">
+                    Pilih beberapa dokumen dari Drive sebagai acuan jawaban, seperti sumber di NotebookLM.
+                  </p>
+                  <input
+                    type="text"
+                    value={referenceSearch}
+                    onChange={(e) => setReferenceSearch(e.target.value)}
+                    placeholder="Cari dokumen di Drive..."
+                    className="mb-1.5 w-full rounded-md border border-surface-border bg-surface px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent"
+                  />
+                  <div className="max-h-40 overflow-y-auto rounded-md border border-surface-border bg-surface p-1.5">
+                    {filteredReferenceDocs.length === 0 ? (
+                      <p className="px-1.5 py-1 text-xs text-text-muted">
+                        {referenceDocs.length === 0 ? "Drive belum tersinkron atau kosong." : "Tidak ada dokumen cocok."}
+                      </p>
+                    ) : (
+                      filteredReferenceDocs.map((doc) => (
+                        <label
+                          key={doc.id}
+                          className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-text-primary hover:bg-surface-raised"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedReferenceIds.has(doc.id)}
+                            onChange={() => toggleReferenceDoc(doc.id)}
+                            className="shrink-0 rounded border-surface-border text-accent focus:ring-accent"
+                          />
+                          <span className="truncate">{doc.title}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Loopio 3-step value prop banner */}
-            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {/* Loopio value prop banner */}
+            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="rounded-lg border border-surface-border bg-surface-raised p-4">
                 <div className="flex items-center gap-2 font-medium text-xs text-text-primary mb-1">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-soft text-accent-ink text-[10px] font-bold">
                     1
-                  </span>
-                  Pecah Butir Soal
-                </div>
-                <p className="text-xs text-text-muted">
-                  Membedah dokumen tender tebal menjadi butir-butir pertanyaan terstruktur.
-                </p>
-              </div>
-
-              <div className="rounded-lg border border-surface-border bg-surface-raised p-4">
-                <div className="flex items-center gap-2 font-medium text-xs text-text-primary mb-1">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-soft text-accent-ink text-[10px] font-bold">
-                    2
                   </span>
                   Jawaban dari Arsip
                 </div>
@@ -687,7 +682,7 @@ export default function DraftPage() {
               <div className="rounded-lg border border-surface-border bg-surface-raised p-4">
                 <div className="flex items-center gap-2 font-medium text-xs text-text-primary mb-1">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-soft text-accent-ink text-[10px] font-bold">
-                    3
+                    2
                   </span>
                   Ekspor Siap Copas
                 </div>
@@ -734,7 +729,7 @@ export default function DraftPage() {
                   <input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Cari klausul, SLA, storage..."
+                    placeholder="Cari bagian, SLA, storage..."
                     className="w-full rounded-md border border-surface-border bg-surface pl-8 pr-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent transition-colors"
                   />
                 </div>
@@ -819,7 +814,7 @@ export default function DraftPage() {
                     <div>
                       <p className="text-[11px] font-bold uppercase tracking-wide text-text-primary">Quality check</p>
                       <p className="text-[11px] text-text-muted">
-                        {qualityReport.items_with_issues} dari {qualityReport.total_items} klausul perlu review
+                        {qualityReport.items_with_issues} dari {qualityReport.total_items} bagian perlu review
                       </p>
                     </div>
                     <span className={`rounded-full px-2 py-1 text-xs font-bold ${qualityReport.overall_score >= 80 ? "bg-emerald-50 text-emerald-700" : qualityReport.overall_score >= 50 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>
@@ -842,7 +837,7 @@ export default function DraftPage() {
               <div className="flex-1 overflow-y-auto divide-y divide-surface-border">
                 {filteredItems.length === 0 ? (
                   <div className="p-8 text-center text-xs text-text-muted">
-                    Tidak ada klausul yang cocok dengan filter.
+                    Tidak ada bagian yang cocok dengan filter.
                   </div>
                 ) : (
                   filteredItems.map((item, idx) => {
@@ -974,7 +969,7 @@ export default function DraftPage() {
                   <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                        Pertanyaan / Syarat Tender Klien
+                        Tujuan Bagian Ini
                       </span>
                     </div>
                     <blockquote className="rounded-lg border-l-4 border-accent bg-surface p-4 text-xs font-normal leading-relaxed text-text-primary">
@@ -1046,7 +1041,7 @@ export default function DraftPage() {
                       <textarea
                         value={selectedItem.draft_text}
                         onChange={(e) => handleTextChange(e.target.value)}
-                        placeholder="Klik 'Buat Draf AI' atau ketik langsung respons tanggapan klausul proposal di sini..."
+                        placeholder="Klik 'Buat Draf AI' atau ketik langsung konten bagian proposal di sini..."
                         rows={8}
                         className="w-full rounded-lg border border-surface-border bg-surface p-4 text-xs leading-relaxed text-text-primary outline-none focus:border-accent font-sans transition-colors resize-y"
                       />
@@ -1147,7 +1142,8 @@ export default function DraftPage() {
             onClose={() => setIsExportOpen(false)}
             documentTitle={fileName}
             items={items}
-            initialOutputType={outputType}
+            initialDocTypeId={docTypeId}
+            initialFormat={format}
           />
         </div>
       )}

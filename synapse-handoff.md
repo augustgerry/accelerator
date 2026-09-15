@@ -1,5 +1,11 @@
 # Synapse — Internal Knowledge & Proposal Accelerator
 
+> ⚠️ **Historical / superseded.** This was the original project spec, written
+> when Draft mode was still a freeform chat. That's long done. For current
+> state, read **`SYNAPSE-CONTEXT.md`** instead — it's the actively maintained
+> handoff file. Kept here for the original product framing (Glean/Loopio
+> positioning, explicit non-goals) which is still accurate.
+
 Handoff document for continuing development. Written for another AI coding
 assistant (e.g. Antigravity/Gemini) to read and continue work from the
 current state — not a marketing doc, a working spec.

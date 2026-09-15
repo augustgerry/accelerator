@@ -4,15 +4,61 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Task Saat Ini:** Melanjutkan enhancement produk poin 2-5: PDF export, quality check, proposal sessions, dan batch review.
-- **Poin 1 selesai:** Hardening LLM provider sudah diimplementasikan di commit sesi ini. Provider/API key divalidasi, error vendor dipetakan ke pesan aman, endpoint query/draft tetap punya fallback manual/lokal, dan external research mengembalikan HTTP 503 yang actionable.
-- **Request User (verbatim intent):** User mau generator proposal (Proposal Teknis / SoW / Solution Brief / MoM / PPT Pitch Deck) bisa dikasih **landasan template** — baik upload manual atau ambil dari Template Library hasil sync Drive (Priority 2) — lalu AI ikutin template itu **sampai ke sub-bab, jenis font, ukuran font, semua detail teknis Word/PPT**, dan ngisi konten pakai AI sepintar mungkin sehingga hasil akhirnya (dikasih TOR + template) langsung jadi dengan kesalahan minim.
-- **Gap Analisis (kondisi existing vs yang diminta):**
+- **Sesi terakhir (Claude Code, lanjutan setelah Antigravity):** User pindah balik ke Antigravity. Semua kerjaan di bawah ini SUDAH SELESAI + di-commit + push. Tidak ada task aktif menggantung — tunggu instruksi baru dari user.
+- **Ringkasan kerjaan sesi ini** (urut kronologis, detail lengkap di bagian "SESI CLAUDE CODE — REDESIGN ALUR DRAFT & EXPORT" di bawah):
+  1. Nerusin kerjaan Copilot yang belum kelar: template picker di Export Modal sekarang nampilin SEMUA dokumen Drive (bukan cuma yang ditag `doc_type=template`).
+  2. Setup Gemini sebagai LLM provider cadangan (Anthropic credit habis) — lihat bagian ⚠️ LLM PROVIDER di bawah, **PENTING dicek sebelum lanjut kerja**.
+  3. **Redesign total alur Draft**: dari "pecah TOR jadi klausul lalu tanggapi satu-satu" → jadi **skeleton per sub-bab dokumen OUTPUT** (`frontend/lib/skeletons.ts`), tiap sub-bab generate draf dari TOR + knowledge base + Sumber Referensi pilihan user. Wording "klausul" diganti "bagian" di ~20 tempat termasuk teks di dalam dokumen hasil export.
+  4. Redesign Export Modal: Jenis Dokumen (6 tipe) × Format (pdf/docx/pptx) jadi kontrol terpisah, font MS Word lengkap (25 opsi), logo customer, alur wajib Preview → centang setuju → baru tombol Generate aktif.
+- **Gap Analisis (histori lama, sudah selesai semua — dibiarkan sebagai referensi):**
   1. `clone-template` (docx) — SUDAH preserve 100% formatting, tapi cuma isi placeholder token (`{{...}}`), bukan pemetaan per-sub-bab otomatis, dan cuma untuk 1 mode compiled response, belum ngerti bedanya SoW/MoM/Solution Brief.
   2. `export-from-template` (docx, mode struktur) — baca heading & font dari template, tapi pemetaan item ke section masih **keyword-matching category** (heuristic sederhana, lihat KNOWN ISSUES), belum "AI pintar" beneran, dan belum tau target `template_type` (sow/mom/dll).
   3. `export-pptx` — **BELUM ada konsep template sama sekali.** Selalu generate slide dari layout fixed hardcoded (warna, style tetap). User minta bisa upload/pilih template `.pptx` dan AI ikutin master slide/layout aslinya — ini gap paling besar.
   4. Template Library (Priority 2) — baru nyimpen & fetch `.docx`. Perlu extend juga tag/simpan `.pptx` sebagai template kalau mau dipakai utk Pitch Deck.
 - **Status:** SEMUA sub-task (1-4) SELESAI. PRIORITY 4 kelar. Lihat detail tiap sub-task di bawah. Belum ada task aktif baru — tunggu instruksi user.
+
+---
+
+## ⚠️ LLM PROVIDER — CEK INI DULU SEBELUM KERJA
+`backend/.env` sekarang `LLM_PROVIDER=gemini` (bukan `claude`). **Anthropic API key kehabisan credit balance** (dicoba, error "Kuota atau kredit provider LLM sedang habis"). `GOOGLE_API_KEY` udah diisi API key gratis dari Google AI Studio, model `gemini-3.6-flash` (default lama `gemini-1.5-flash` di `config.py` udah retired, jangan dipakai lagi). **Free tier Gemini cuma 5 request/menit** — kalau "Generate All" atau testing beruntun, gampang kena `ResourceExhausted 429`. Kalau Anthropic udah di-top-up, tinggal balikin `LLM_PROVIDER=claude` di `.env`, gak perlu ubah kode apa pun (abstraksi provider di `llm_provider.py` udah pluggable).
+
+Catatan startup Windows: jalanin backend pake `./venv/Scripts/python.exe -m uvicorn main:app --port 8000` (JANGAN pakai `venv/Scripts/uvicorn.exe` langsung — exe shim-nya kadang exit silent tanpa error di setup ini). `--reload` juga pernah kejadian gak beneran restart worker process-nya (kode lama masih kepake walau file udah diedit) — kalau curiga kode gak ke-pickup, matiin proses manual (`Stop-Process`) terus start ulang fresh tanpa `--reload` buat mastiin.
+
+---
+
+## 🔧 SESI CLAUDE CODE — REDESIGN ALUR DRAFT & EXPORT (setelah sesi Antigravity di atas)
+
+User minta lanjutin kerjaan Copilot yang kepotong, lalu iteratif redesign besar alur Draft + Export berdasar feedback langsung. Urutan kerjaan:
+
+**1. Beresin kerjaan Copilot yang kepotong (template picker Drive):**
+- `backend/app/routers/documents.py` `download_document()`: dulu nolak download dokumen yang `doc_type != "template"`. Sekarang cuma cek `source_drive_id` ada — semua dokumen Drive (bukan cuma yang ditag template) bisa dipakai sebagai contoh gaya/style di Export Modal.
+- `frontend/lib/api.ts`: `downloadTemplateDocument` di-rename konsepnya jadi `downloadDriveDocument` (alias lama tetap ada, gak break existing call site).
+- `export-modal.tsx` tab Template: filter `docType === "template"` dihapus, sekarang filter by ekstensi file (`.docx`/`.pptx`) aja — list dropdown nampilin semua dokumen Drive.
+
+**2. Setup Gemini sebagai fallback LLM provider** — lihat bagian ⚠️ LLM PROVIDER di atas.
+
+**3. Redesign total alur Draft (paling besar, atas persetujuan eksplisit user "Ganti Total"):**
+- **Sebelum:** upload TOR → LLM segmentasi jadi klausul atomik (compliance-matrix style) → tiap klausul dijawab satu-satu. User bingung apa gunanya draft/final, dan hasil pecahnya kerasa gak jelas tujuannya.
+- **Sesudah:** setiap jenis dokumen output (Proposal Teknis, SoW, dst) punya **skeleton statis** — daftar sub-bab baku (`frontend/lib/skeletons.ts`, contoh Proposal Teknis: Executive Summary, Pemahaman Kebutuhan, Solusi Teknis, Metodologi, **Maintenance Plan (PM & CM)**, Tim, Jadwal, Keunggulan, Penutup — 9 sub-bab). Upload TOR → sub-bab langsung muncul instan (gak ada LLM call buat struktur lagi) → tiap sub-bab generate draf dari TOR + knowledge base + Sumber Referensi.
+- Data model item (`id/title/requirement_text/category/draft_text/status`) ternyata generic, gak perlu diubah — cuma sumber `items` yang diganti dari hasil LLM segmentasi jadi skeleton statis. `/draft/segment` endpoint lama masih ada di backend tapi udah gak dipanggil dari frontend (harmless, dead code kalau mau dibersihin nanti).
+- Konteks TOR yang dikirim ke LLM per sub-bab sekarang pake `pickRelevantTorExcerpt()` (page.tsx) — nyortir paragraf TOR berdasar kecocokan kata kunci judul sub-bab, bukan potong 1500 karakter pertama doang. **ponytail flag:** ini keyword-matching biasa (stdlib doang), bukan embedding search — upgrade ke local embedding search kalau grounding kerasa lemah di TOR yang panjang/padat. Backend `tor_context` slice juga dinaikin dari 2000 → 6000 karakter.
+- Wording "klausul" diganti "bagian" di ~20 tempat, termasuk yang paling penting: **teks di dalam dokumen hasil export** (docx/pdf/pptx builder di `backend/app/routers/draft.py` — "Klausul Acuan" → "Cakupan Bagian", dst), bukan cuma UI.
+- "Sumber Referensi" (multi-select dokumen Drive, gaya NotebookLM) ditambah di layar upload — dipakai buat SCOPE retrieval knowledge base per generate (`backend/app/services/retrieval.py` `_hybrid_ranked_chunks` dapet param `doc_ids` baru, filter `DocumentChunk.document_id.in_(doc_ids)`). Kalau user pilih referensi, retrieval CUMA cari di dokumen itu; kalau kosong, cari di seluruh KB kayak biasa.
+
+**4. Redesign Export Modal:**
+- `frontend/lib/document-types.ts` (baru): satu sumber kebenaran mapping **Jenis Dokumen → format yang diizinkan** (6 tipe: Proposal Teknis/SoW/Solution Brief/Minutes of Meetings/Klarifikasi Teknis/Pitch Deck × pdf/docx/pptx sesuai kombinasi masing-masing), dipakai bareng di `page.tsx` (upload screen) DAN `export-modal.tsx` (Standard tab + Template tab) biar konsisten.
+- **Bug nyata yang kefix:** endpoint `/draft/export-pdf` dulu HARDCODE `template_type: "narrative"` apa pun jenis dokumen yang dipilih (jadi PDF Solution Brief/SoW ikut gaya Proposal Teknis). Sekarang ngirim jenis dokumen asli.
+- Font dropdown diperluas dari 3 opsi → 25 font standar Microsoft Word.
+- Field **Logo Customer** ditambah di step Format (khusus format PDF) — digambar di kanan-atas cover PDF, sejajar/mirror sama company logo (kiri-atas). Backend `ExportPdfRequest.customer_logo_data_url` baru, helper `_decode_logo_bytes()` dipakai bareng buat 2 logo.
+- Alur generate direstruktur: **Preview Dokumen → centang "saya setuju" → baru tombol Generate Document aktif**. Preview docx/pptx dikonversi ke PDF dulu (`convertOfficeToPdf`, udah ada sebelumnya) biar preview-nya nunjukkin font/bold/italic asli, bukan teks mentah. Ganti opsi apa pun (jenis dokumen/format/font/logo) otomatis reset gate ini, paksa preview ulang.
+- Step wizard di-rename: "Template" → "Ikuti Gaya File Lain", "Preview" → "Salin Teks" (karena isinya emang cuma salin markdown mentah, bukan preview beneran).
+- **Belum sempat:** Sumber Referensi (poin 3 di atas) belum otomatis nyambung jadi opsi di step "Ikuti Gaya File Lain" — masih dua langkah terpisah. Kalau file referensi yang dipilih itu `.docx`, idealnya bisa langsung dipakai jadi template Clone-mode tanpa pilih ulang.
+- Customer logo cuma kepasang di PDF export, belum di DOCX (ngikut pola lama — company logo juga cuma di PDF, belum pernah ada di DOCX).
+- Klarifikasi Teknis & Minutes of Meetings share wording backend yang sama (`mom` key, karena wording-nya emang mirip). Pitch Deck docx/pdf reuse wording `narrative` (belum ada style khusus pitch-deck buat docx/pdf, cuma pptx). Kalau nanti mau dibedain, tambah entry baru di `DOC_TYPE_LABELS` (`backend/app/routers/draft.py`, cari `DOC_TYPE_LABELS = {`).
+
+Semua perubahan di atas: `npx tsc --noEmit` clean, backend `py_compile` clean, dan dites end-to-end lewat browser asli (Claude in Chrome) — bukan cuma curl. Detail verifikasi ada di histori chat sesi ini kalau perlu ditelusuri lebih dalam.
+
+---
 
 ### ✅ Sub-task 1 SELESAI: LLM semantic section-mapping (ganti keyword-matching)
 - `backend/app/services/llm_provider.py`: tambah `LLMProvider.map_items_to_sections(headings, items) -> dict[item_id, heading_index]` di ABC (default fallback `_fallback_map_items_to_sections`, keyword heuristic yang tadinya inline di `draft.py`, dipindah kesini + fix bug token pendek kayak `&` ikut ke-match). `ClaudeProvider` & `GeminiProvider` override dengan LLM call (prompt semantik, item yang gak relevan boleh di-skip biar jatuh ke fallback section).
@@ -167,16 +213,16 @@ knowledge-accelerator/
 
 **Status Repositori:**
 - Branch: `main`
-- Commit Terakhir: `e01f41b` ("feat: in-place clone-template endpoint (preserves ALL docx formatting), clone mode UI in ExportModal with placeholder docs")
-- Status: **Up to date dengan origin/main (GitHub). Working tree CLEAN.**
+- Commit Terakhir: lihat `git log -1` — commit paling atas judulnya soal redesign alur Draft/Export (sesi Claude Code, lanjutan dari sesi Antigravity di atas).
+- Status: **Up to date dengan origin/main (GitHub). Working tree CLEAN** (di-push langsung setelah commit, bukan lewat auto-commit script — `auto-commit.ps1` gak jalan otomatis, harus dijalanin manual kalau mau dipakai lagi).
 - Semua file kode di backend dan frontend sudah ter-push ke GitHub repo https://github.com/augustgerry/accelerator.
+- `LLM_PROVIDER=gemini` di `.env` (Anthropic credit habis) — lihat bagian ⚠️ LLM PROVIDER di atas sebelum lanjut kerja.
 
-> 💡 **PETUNJUK UNTUK CLAUDE CODE / NEXT AGENT:**
-> Jika kamu melanjutkan sesi ini menggunakan Claude Code:
+> 💡 **PETUNJUK UNTUK AGENT BERIKUTNYA (Antigravity atau lainnya):**
 > 1. Kode sudah 100% tersinkronisasi di GitHub dan lokal.
-> 2. Backend berjalan di port 8000 (`uvicorn main:app --reload --port 8000`).
+> 2. Backend: `cd backend && ./venv/Scripts/python.exe -m uvicorn main:app --port 8000` (lihat catatan startup Windows di bagian ⚠️ LLM PROVIDER — hindari `--reload` kalau ragu, dan jangan panggil `uvicorn.exe` langsung).
 > 3. Frontend berjalan di port 3000 (`npm run dev` di folder `frontend/`).
-> 4. Silakan langsung lanjutkan task prioritas di bawah ini.
+> 4. Baca bagian "🔧 SESI CLAUDE CODE — REDESIGN ALUR DRAFT & EXPORT" di atas buat konteks lengkap kerjaan terakhir sebelum lanjutin apa pun.
 
 ---
 
@@ -404,8 +450,11 @@ npm run dev
 - Template export memakai semantic section mapping via LLM dengan fallback heuristic jika provider tidak tersedia; item yang tidak punya heading relevan masuk ke fallback section.
 - Full-fidelity PDF renderer membutuhkan Windows dengan Microsoft Word/PowerPoint terpasang; environment tanpa Office memakai fallback ReportLab PDF.
 - Backend masih perlu GDrive credentials (credentials.json) untuk fitur sync dokumen
+- `frontend/lib/document-types.ts` (baru) — satu sumber kebenaran Jenis Dokumen × Format yang diizinkan, dipakai `page.tsx` dan `export-modal.tsx`.
+- `frontend/lib/skeletons.ts` (baru) — daftar sub-bab default per Jenis Dokumen, dipakai buat populate item begitu TOR di-upload (gak ada LLM call buat struktur lagi).
+- `backend/app/routers/draft.py` `/draft/segment` masih ada tapi udah gak dipanggil dari frontend (draft mode sekarang skeleton-based, bukan segmentasi TOR).
 
 ---
 
-*Last updated: AUTO-SAVED oleh skrip auto-commit*
-*Agent: Antigravity (Google Deepmind)*
+*Last updated: sesi Claude Code (redesign alur Draft/Export), lanjutan dari sesi Antigravity di atas.*
+*Agent sebelumnya: Antigravity (Google Deepmind). User pindah balik ke Antigravity setelah sesi ini.*

@@ -35,13 +35,15 @@ import {
   type ExportPreflightResult,
 } from "@/lib/api";
 import type { RequirementItem, TemplateInfo, IndexedDocument } from "@/lib/types";
+import { DOC_TYPES, FORMAT_LABELS, getDocType, type DraftDocTypeId, type DraftFormat } from "@/lib/document-types";
 
 interface ExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   documentTitle: string;
   items: RequirementItem[];
-  initialOutputType?: "matrix" | "narrative" | "sow" | "solution_brief" | "mom" | "pptx" | "pdf";
+  initialDocTypeId?: DraftDocTypeId;
+  initialFormat?: DraftFormat;
 }
 
 type ExportTab = "standard" | "template" | "text";
@@ -63,6 +65,15 @@ const DEFAULT_BRANDING: CorporateBranding = {
   logoDataUrl: "",
 };
 
+// Standard fonts bundled with Microsoft Word / Microsoft 365.
+const MS_WORD_FONTS = [
+  "Calibri", "Arial", "Times New Roman", "Cambria", "Georgia", "Garamond",
+  "Verdana", "Tahoma", "Trebuchet MS", "Segoe UI", "Book Antiqua",
+  "Century Gothic", "Consolas", "Courier New", "Franklin Gothic Medium",
+  "Lucida Sans", "Palatino Linotype", "Rockwell", "Corbel", "Constantia",
+  "Bookman Old Style", "Candara", "Cabin", "Gill Sans MT", "Impact",
+];
+
 const BRANDING_STORAGE_KEY = "synapse-corporate-branding";
 
 export function ExportModal({
@@ -70,14 +81,17 @@ export function ExportModal({
   onClose,
   documentTitle,
   items,
-  initialOutputType = "matrix",
+  initialDocTypeId = "narrative",
+  initialFormat = "docx",
 }: ExportModalProps) {
   // ── Standard tab state
   const [onlyFinal, setOnlyFinal] = useState(false);
-  const [templateType, setTemplateType] = useState<
-    "matrix" | "narrative" | "sow" | "solution_brief" | "mom" | "pptx" | "pdf"
-  >("matrix");
+  const [docTypeId, setDocTypeId] = useState<DraftDocTypeId>("narrative");
+  const [format, setFormat] = useState<DraftFormat>("docx");
   const [fontName, setFontName] = useState<string>("Calibri");
+  const [customerLogoDataUrl, setCustomerLogoDataUrl] = useState<string>("");
+  const [previewedOnce, setPreviewedOnce] = useState(false);
+  const [agreedToExport, setAgreedToExport] = useState(false);
   const [copied, setCopied] = useState(false);
   const [downloadingDocx, setDownloadingDocx] = useState(false);
   const [previewingPdf, setPreviewingPdf] = useState(false);
@@ -98,9 +112,10 @@ export function ExportModal({
     if (isOpen) {
       setExportStep(1);
       setActiveTab("standard");
-      setTemplateType(initialOutputType);
+      setDocTypeId(initialDocTypeId);
+      setFormat(initialFormat);
     }
-  }, [initialOutputType, isOpen]);
+  }, [initialDocTypeId, initialFormat, isOpen]);
 
   // ── Tab state
   const [activeTab, setActiveTab] = useState<ExportTab>("standard");
@@ -121,9 +136,17 @@ export function ExportModal({
   const [convertingTemplatePdf, setConvertingTemplatePdf] = useState(false);
   const [templateOnlyFinal, setTemplateOnlyFinal] = useState(false);
   const [templateMode, setTemplateMode] = useState<"structure" | "clone">("clone");
-  const [templateDocType, setTemplateDocType] = useState<
-    "proposal" | "sow" | "solution_brief" | "mom"
-  >("proposal");
+  const [templateDocType, setTemplateDocType] = useState<DraftDocTypeId>("narrative");
+  // The template-clone/structure backend uses "proposal" where the plain docx/pdf
+  // export uses "narrative" for the same Proposal Teknis wording — two legacy key spaces.
+  const TEMPLATE_BACKEND_TYPE: Record<DraftDocTypeId, "proposal" | "sow" | "solution_brief" | "mom"> = {
+    narrative: "proposal",
+    sow: "sow",
+    solution_brief: "solution_brief",
+    mom: "mom",
+    klarifikasi_teknis: "mom",
+    pitch_deck: "proposal",
+  };
 
   // ── PPTX clone-template state (separate from docx flow — no structure parsing needed)
   const pptxTemplateInputRef = useRef<HTMLInputElement>(null);
@@ -133,7 +156,7 @@ export function ExportModal({
   const [pptxCloneError, setPptxCloneError] = useState<string | null>(null);
   const [pickingPptxLibraryId, setPickingPptxLibraryId] = useState<string | null>(null);
 
-  // ── Template library (Google Drive templates, tagged doc_type = "template")
+  // ── Google Drive examples/templates
   const [templateLibrary, setTemplateLibrary] = useState<IndexedDocument[] | null>(null);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryPickError, setLibraryPickError] = useState<string | null>(null);
@@ -143,7 +166,7 @@ export function ExportModal({
     if (activeTab !== "template" || templateLibrary !== null) return;
     setLibraryLoading(true);
     listDocuments()
-      .then((docs) => setTemplateLibrary(docs.filter((d) => d.docType === "template")))
+      .then((docs) => setTemplateLibrary(docs))
       .catch(() => setTemplateLibrary([]))
       .finally(() => setLibraryLoading(false));
   }, [activeTab, templateLibrary]);
@@ -172,13 +195,20 @@ export function ExportModal({
         draft_text: it.draft_text,
         status: it.status,
       })),
-      templateType,
+      getDocType(docTypeId).backendType,
     )
       .then((report) => { if (!cancelled) setPreflight(report); })
       .catch(() => { if (!cancelled) setPreflight(null); })
       .finally(() => { if (!cancelled) setPreflightLoading(false); });
     return () => { cancelled = true; };
-  }, [isOpen, targetItems.length, templateType]);
+  }, [isOpen, targetItems.length, docTypeId]);
+
+  // Any change to what will actually be generated invalidates the last preview —
+  // force a fresh look before the export gets re-armed.
+  useEffect(() => {
+    setPreviewedOnce(false);
+    setAgreedToExport(false);
+  }, [docTypeId, format, fontName, customerLogoDataUrl, onlyFinal]);
 
   const templateTargetItems = items.filter((it) => {
     if (templateOnlyFinal) return it.status === "final";
@@ -190,21 +220,11 @@ export function ExportModal({
   const compiledText = targetItems
     .map((it, idx) => {
       const response = it.draft_text.trim() || "[Belum ada respons/draf]";
-      return `### ${idx + 1}. ${it.title} [${it.category}]\n**Klausul TOR:**\n> ${it.requirement_text}\n\n**Tanggapan/Spesifikasi Usulan SMG:**\n${response}\n\n---\n`;
+      return `### ${idx + 1}. ${it.title} [${it.category}]\n**Cakupan Bagian:**\n> ${it.requirement_text}\n\n**Tanggapan/Spesifikasi Usulan SMG:**\n${response}\n\n---\n`;
     })
     .join("\n");
 
-  const formatLabels: Record<string, string> = {
-    matrix: "Matriks Kepatuhan Tender (Tabel)",
-    narrative: "Proposal Teknis Naratif",
-    sow: "Statement of Work (SoW)",
-    solution_brief: "Solution Brief",
-    mom: "Minutes of Meeting (MoM)",
-    pptx: "Slide Presentation (.pptx)",
-    pdf: "Dokumen PDF",
-  };
-
-  const fullExportContent = `# Tanggapan Teknis & Dokumen: ${documentTitle}\nTanggal Ekspor: ${new Date().toLocaleDateString("id-ID")}\nFormat Dokumen: ${formatLabels[templateType] || templateType}\nTotal Klausul Terjawab: ${targetItems.length} dari ${items.length}\n\n---\n\n${compiledText}`;
+  const fullExportContent = `# Tanggapan Teknis & Dokumen: ${documentTitle}\nTanggal Ekspor: ${new Date().toLocaleDateString("id-ID")}\nFormat Dokumen: ${getDocType(docTypeId).label} (${FORMAT_LABELS[format]})\nTotal Bagian Terjawab: ${targetItems.length} dari ${items.length}\n\n---\n\n${compiledText}`;
 
   const handleCopy = async () => {
     try {
@@ -216,75 +236,65 @@ export function ExportModal({
     }
   };
 
+  // Builds the export file for the current Jenis Dokumen/Format choice, without
+  // triggering a download — shared by the preview step and the final generate step.
+  const generateStandardBlob = async (): Promise<{ blob: Blob; ext: "docx" | "pdf" | "pptx"; filenamePrefix: string }> => {
+    const mappedItems = targetItems.map((it) => ({
+      id: it.id,
+      title: it.title,
+      requirement_text: it.requirement_text,
+      category: it.category,
+      draft_text: it.draft_text,
+      status: it.status,
+    }));
+    const docType = getDocType(docTypeId);
+
+    if (format === "pptx") {
+      const blob = await exportProposalPptx({
+        document_title: documentTitle,
+        company_name: branding.companyName,
+        items: mappedItems,
+      });
+      return { blob, ext: "pptx", filenamePrefix: docType.fileLabel };
+    }
+    if (format === "pdf") {
+      const blob = await exportProposalPdf({
+        document_title: documentTitle,
+        template_type: docType.backendType,
+        company_name: branding.companyName,
+        primary_color: branding.primaryColor,
+        accent_color: branding.accentColor,
+        footer_text: branding.footerText,
+        logo_data_url: branding.logoDataUrl,
+        customer_logo_data_url: customerLogoDataUrl,
+        items: mappedItems,
+      });
+      return { blob, ext: "pdf", filenamePrefix: docType.fileLabel };
+    }
+    const blob = await exportProposalDocx({
+      document_title: documentTitle,
+      template_type: docType.backendType,
+      font_name: fontName,
+      company_name: "PT Solusi Mitra Gemilang (SMG)",
+      items: mappedItems,
+    });
+    return { blob, ext: "docx", filenamePrefix: docType.fileLabel };
+  };
+
   const handleDownloadDocx = async () => {
     if (targetItems.length === 0) return;
     setDownloadingDocx(true);
     try {
+      const { blob, ext, filenamePrefix } = await generateStandardBlob();
       const cleanTitle = documentTitle.replace(/\.[^/.]+$/, "").replace(/\s+/g, "-");
-      const mappedItems = targetItems.map((it) => ({
-        id: it.id,
-        title: it.title,
-        requirement_text: it.requirement_text,
-        category: it.category,
-        draft_text: it.draft_text,
-        status: it.status,
-      }));
-
-      if (templateType === "pptx") {
-        const blob = await exportProposalPptx({
-          document_title: documentTitle,
-          company_name: branding.companyName,
-          items: mappedItems,
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", `PitchDeck-${cleanTitle}.pptx`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else if (templateType === "pdf") {
-        const blob = await exportProposalPdf({
-          document_title: documentTitle,
-          template_type: "narrative",
-          company_name: branding.companyName,
-          primary_color: branding.primaryColor,
-          accent_color: branding.accentColor,
-          footer_text: branding.footerText,
-          logo_data_url: branding.logoDataUrl,
-          items: mappedItems,
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", `Proposal-${cleanTitle}.pdf`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        const blob = await exportProposalDocx({
-          document_title: documentTitle,
-          template_type: templateType,
-          font_name: fontName,
-          company_name: "PT Solusi Mitra Gemilang (SMG)",
-          items: mappedItems,
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        const prefix =
-          templateType === "sow"
-            ? "SoW"
-            : templateType === "solution_brief"
-            ? "SolutionBrief"
-            : templateType === "mom"
-            ? "MoM"
-            : "Proposal";
-        link.setAttribute("download", `${prefix}-${cleanTitle}.docx`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `${filenamePrefix}-${cleanTitle}.${ext}`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Gagal mengunduh dokumen");
     } finally {
@@ -296,33 +306,21 @@ export function ExportModal({
     if (targetItems.length === 0 || previewingPdf) return;
     setPreviewingPdf(true);
     try {
-      const blob = await exportProposalPdf({
-        document_title: documentTitle,
-        template_type: "narrative",
-        company_name: branding.companyName,
-        primary_color: branding.primaryColor,
-        accent_color: branding.accentColor,
-        footer_text: branding.footerText,
-        logo_data_url: branding.logoDataUrl,
-        items: targetItems.map((it) => ({
-          id: it.id,
-          title: it.title,
-          requirement_text: it.requirement_text,
-          category: it.category,
-          draft_text: it.draft_text,
-          status: it.status,
-        })),
-      });
-      const url = URL.createObjectURL(blob);
+      const { blob, ext } = await generateStandardBlob();
+      // Non-PDF formats get converted so the preview mirrors real fonts/bold/italic,
+      // not just a plain-text approximation.
+      const pdfBlob = ext === "pdf" ? blob : await convertOfficeToPdf(blob, `preview.${ext}`);
+      const url = URL.createObjectURL(pdfBlob);
       const previewWindow = window.open(url, "_blank", "noopener,noreferrer");
       if (!previewWindow) {
         URL.revokeObjectURL(url);
-        alert("Preview diblokir browser. Izinkan pop-up untuk membuka PDF.");
+        alert("Preview diblokir browser. Izinkan pop-up untuk membuka dokumen.");
       } else {
         window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
       }
+      setPreviewedOnce(true);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Gagal membuka preview PDF");
+      alert(err instanceof Error ? err.message : "Gagal membuka preview dokumen");
     } finally {
       setPreviewingPdf(false);
     }
@@ -387,7 +385,7 @@ export function ExportModal({
           templateFile,
           document_title: documentTitle,
           company_name: "PT Solusi Mitra Gemilang (SMG)",
-          document_type: templateDocType,
+          document_type: TEMPLATE_BACKEND_TYPE[templateDocType],
           items: templateTargetItems.map((it) => ({
             id: it.id, title: it.title, requirement_text: it.requirement_text,
             category: it.category, draft_text: it.draft_text, status: it.status,
@@ -397,7 +395,7 @@ export function ExportModal({
         blob = await exportFromTemplate({
           document_title: documentTitle,
           company_name: "PT Solusi Mitra Gemilang (SMG)",
-          template_type: templateDocType,
+          template_type: TEMPLATE_BACKEND_TYPE[templateDocType],
           items: templateTargetItems.map((it) => ({
             id: it.id, title: it.title, requirement_text: it.requirement_text,
             category: it.category, draft_text: it.draft_text, status: it.status,
@@ -432,13 +430,13 @@ export function ExportModal({
             templateFile,
             document_title: documentTitle,
             company_name: branding.companyName,
-            document_type: templateDocType,
+            document_type: TEMPLATE_BACKEND_TYPE[templateDocType],
             items: templateTargetItems,
           })
         : await exportFromTemplate({
             document_title: documentTitle,
             company_name: branding.companyName,
-            template_type: templateDocType,
+            template_type: TEMPLATE_BACKEND_TYPE[templateDocType],
             items: templateTargetItems,
             template_default_font: templateInfo.default_font_name,
             template_default_font_size: templateInfo.default_font_size_pt,
@@ -541,9 +539,9 @@ export function ExportModal({
   };
 
   const STEPS: { key: ExportStep; label: string; caption: string; icon: React.ReactNode }[] = [
-    { key: 1, label: "Format", caption: "Pilih output", icon: <Table2 size={14} /> },
-    { key: 2, label: "Template", caption: "Opsional", icon: <Wand2 size={14} /> },
-    { key: 3, label: "Preview", caption: "Review hasil", icon: <Eye size={14} /> },
+    { key: 1, label: "Format & Generate", caption: "Pilih output", icon: <Table2 size={14} /> },
+    { key: 2, label: "Ikuti Gaya File Lain", caption: "Opsional", icon: <Wand2 size={14} /> },
+    { key: 3, label: "Salin Teks", caption: "Markdown", icon: <Eye size={14} /> },
   ];
 
   // Headings from template for preview
@@ -599,23 +597,42 @@ export function ExportModal({
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border bg-surface px-6 py-3 text-xs">
               <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-text-primary">Jenis Output:</span>
+                  <span className="font-semibold text-text-primary">Jenis Dokumen:</span>
                   <select
-                    value={templateType}
-                    onChange={(e) => setTemplateType(e.target.value as any)}
+                    value={docTypeId}
+                    onChange={(e) => {
+                      const next = e.target.value as DraftDocTypeId;
+                      setDocTypeId(next);
+                      const allowed = getDocType(next).formats;
+                      if (!allowed.includes(format)) setFormat(allowed[0]);
+                    }}
                     className="rounded border border-surface-border bg-surface-raised px-2.5 py-1 text-xs text-text-primary font-medium outline-none focus:border-accent cursor-pointer"
                   >
-                    <option value="matrix">📋 Matriks Kepatuhan Tender (.docx)</option>
-                    <option value="narrative">📄 Proposal Teknis Naratif (.docx)</option>
-                    <option value="sow">📑 Statement of Work / SoW (.docx)</option>
-                    <option value="solution_brief">💡 Solution Brief (.docx)</option>
-                    <option value="mom">📝 Minutes of Meeting / MoM (.docx)</option>
-                    <option value="pptx">📊 Presentation Pitch Deck (.pptx)</option>
-                    <option value="pdf">📕 Proposal PDF (.pdf)</option>
+                    {DOC_TYPES.map((d) => (
+                      <option key={d.id} value={d.id}>{d.label}</option>
+                    ))}
                   </select>
                 </div>
 
-                {templateType !== "pptx" && templateType !== "pdf" && (
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-text-primary">Format:</span>
+                  <div className="flex rounded border border-surface-border bg-surface-raised p-0.5">
+                    {getDocType(docTypeId).formats.map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setFormat(f)}
+                        className={`rounded px-2 py-1 text-xs font-medium transition-all ${
+                          format === f ? "bg-accent-soft text-accent-ink" : "text-text-muted hover:text-text-primary"
+                        }`}
+                      >
+                        {FORMAT_LABELS[f]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {format === "docx" && (
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-text-primary">Font:</span>
                     <select
@@ -623,10 +640,44 @@ export function ExportModal({
                       onChange={(e) => setFontName(e.target.value)}
                       className="rounded border border-surface-border bg-surface-raised px-2.5 py-1 text-xs text-text-primary outline-none focus:border-accent"
                     >
-                      <option value="Calibri">Calibri</option>
-                      <option value="Arial">Arial</option>
-                      <option value="Times New Roman">Times New Roman</option>
+                      {MS_WORD_FONTS.map((f) => (
+                        <option key={f} value={f}>{f}</option>
+                      ))}
                     </select>
+                  </div>
+                )}
+
+                {format === "pdf" && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-text-primary">Logo Customer:</span>
+                    {customerLogoDataUrl ? (
+                      <div className="flex items-center gap-1.5">
+                        <img src={customerLogoDataUrl} alt="Logo customer" className="h-6 w-auto rounded border border-surface-border bg-white p-0.5" />
+                        <button
+                          type="button"
+                          onClick={() => setCustomerLogoDataUrl("")}
+                          className="text-[11px] text-red-600 hover:underline"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer rounded border border-dashed border-surface-border px-2.5 py-1 text-xs text-text-muted hover:border-accent hover:text-text-primary">
+                        Upload logo...
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = () => setCustomerLogoDataUrl(String(reader.result ?? ""));
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                      </label>
+                    )}
                   </div>
                 )}
               </div>
@@ -658,14 +709,14 @@ export function ExportModal({
               {targetItems.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-text-muted">
                   <AlertCircle size={32} />
-                  <p className="text-sm font-medium text-text-primary">Belum ada klausul Draf atau Final.</p>
-                  <p className="text-xs">Ubah status klausul di halaman utama terlebih dahulu.</p>
+                  <p className="text-sm font-medium text-text-primary">Belum ada bagian Draf atau Final.</p>
+                  <p className="text-xs">Ubah status bagian di halaman utama terlebih dahulu.</p>
                 </div>
               ) : (
                 <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
                   <div className="flex items-center justify-between border-b border-surface-border pb-3 mb-4">
                     <span className="text-xs font-semibold text-text-primary flex items-center gap-1.5">
-                      {templateType === "pptx" ? (
+                      {format === "pptx" ? (
                         <Presentation size={15} className="text-amber-500" />
                       ) : (
                         <FileText size={15} className="text-secondary" />
@@ -673,7 +724,7 @@ export function ExportModal({
                       Pratinjau Butir ({targetItems.length} butir ditanggapi)
                     </span>
                     <span className="text-[11px] text-text-muted">
-                      Target: {formatLabels[templateType]}
+                      Target: {getDocType(docTypeId).label} ({FORMAT_LABELS[format]})
                     </span>
                   </div>
                   <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
@@ -694,8 +745,8 @@ export function ExportModal({
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-surface-border px-6 py-4 bg-surface-raised">
-              {templateType === "pdf" && (
+            <div className="flex flex-col gap-3 border-t border-surface-border px-6 py-4 bg-surface-raised">
+              <div className="flex flex-wrap items-center justify-end gap-3">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -704,29 +755,47 @@ export function ExportModal({
                   className="min-w-[150px]"
                 >
                   {previewingPdf ? (
-                    <><Loader2 size={14} className="mr-1.5 animate-spin" />Menyiapkan...</>
+                    <><Loader2 size={14} className="mr-1.5 animate-spin" />Menyiapkan preview...</>
                   ) : (
-                    <><Eye size={14} className="mr-1.5" />Preview PDF</>
+                    <><Eye size={14} className="mr-1.5" />{previewedOnce ? "Preview Ulang" : "Preview Dokumen"}</>
                   )}
                 </Button>
-              )}
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleDownloadDocx}
-                disabled={targetItems.length === 0 || downloadingDocx}
-                className="bg-ink-900 hover:bg-ink-800 text-white min-w-[200px]"
-              >
-                {downloadingDocx ? (
-                  <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat File...</>
-                ) : templateType === "pptx" ? (
-                  <><Presentation size={14} className="mr-1.5 text-accent" />Unduh Slide PPTX (.pptx)</>
-                ) : templateType === "pdf" ? (
-                  <><FileDown size={14} className="mr-1.5 text-accent" />Unduh PDF (.pdf)</>
-                ) : (
-                  <><FileDown size={14} className="mr-1.5 text-accent" />Unduh Dokumen Word (.docx)</>
-                )}
-              </Button>
+              </div>
+
+              <label className={`flex items-center gap-2 text-xs ${previewedOnce ? "cursor-pointer text-text-primary" : "cursor-not-allowed text-text-muted"}`}>
+                <input
+                  type="checkbox"
+                  checked={agreedToExport}
+                  disabled={!previewedOnce}
+                  onChange={(e) => setAgreedToExport(e.target.checked)}
+                  className="rounded border-surface-border text-accent focus:ring-accent disabled:opacity-50"
+                />
+                <span>
+                  {previewedOnce
+                    ? "Saya sudah review preview dan setuju untuk export dokumen ini."
+                    : "Klik \"Preview Dokumen\" dulu sebelum bisa export."}
+                </span>
+              </label>
+
+              <div className="flex justify-end">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleDownloadDocx}
+                  disabled={targetItems.length === 0 || downloadingDocx || !agreedToExport}
+                  className="bg-ink-900 hover:bg-ink-800 text-white min-w-[220px] disabled:opacity-50"
+                >
+                  {downloadingDocx ? (
+                    <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat File...</>
+                  ) : format === "pptx" ? (
+                    <><Presentation size={14} className="mr-1.5 text-accent" />Generate Document (.pptx)</>
+                  ) : format === "pdf" ? (
+                    <><FileDown size={14} className="mr-1.5 text-accent" />Generate Document (.pdf)</>
+                  ) : (
+                    <><FileDown size={14} className="mr-1.5 text-accent" />Generate Document (.docx)</>
+                  )}
+                </Button>
+              </div>
             </div>
           </>
         )}
@@ -772,13 +841,12 @@ export function ExportModal({
                   <span className="font-semibold text-text-primary">Jenis Dokumen:</span>
                   <select
                     value={templateDocType}
-                    onChange={(e) => setTemplateDocType(e.target.value as typeof templateDocType)}
+                    onChange={(e) => setTemplateDocType(e.target.value as DraftDocTypeId)}
                     className="rounded border border-surface-border bg-surface px-2.5 py-1 text-xs text-text-primary outline-none focus:border-accent"
                   >
-                    <option value="proposal">Proposal Teknis</option>
-                    <option value="sow">Statement of Work (SoW)</option>
-                    <option value="solution_brief">Solution Brief</option>
-                    <option value="mom">Minutes of Meeting (MoM)</option>
+                    {DOC_TYPES.map((d) => (
+                      <option key={d.id} value={d.id}>{d.label}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -805,11 +873,11 @@ export function ExportModal({
                   <>
                     <div className="mb-3">
                       <span className="text-xs font-semibold text-text-primary block mb-1.5">
-                        Pilih Template dari Library Drive
+                        Pilih Contoh/Template dari Library Drive
                       </span>
                       {libraryLoading ? (
                         <div className="flex items-center gap-2 text-xs text-text-muted">
-                          <Loader2 size={13} className="animate-spin" /> Memuat daftar template...
+                          <Loader2 size={13} className="animate-spin" /> Memuat daftar dokumen...
                         </div>
                       ) : docxTemplateLibrary.length > 0 ? (
                         <select
@@ -822,7 +890,7 @@ export function ExportModal({
                           className="w-full rounded border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent disabled:opacity-60"
                         >
                           <option value="" disabled>
-                            {pickingLibraryId ? "Mengambil template..." : "— Pilih dari Drive —"}
+                            {pickingLibraryId ? "Mengambil dokumen..." : "— Pilih dari Drive —"}
                           </option>
                           {docxTemplateLibrary.map((d) => (
                             <option key={d.id} value={d.id}>
@@ -832,7 +900,7 @@ export function ExportModal({
                         </select>
                       ) : (
                         <p className="text-xs text-text-muted">
-                          Belum ada template di library. Sync Google Drive dulu di halaman Documents, atau upload manual di bawah.
+                          Belum ada dokumen .docx di library. Sync Google Drive dulu di halaman Documents, atau upload manual di bawah.
                         </p>
                       )}
                       {libraryPickError && (
@@ -942,7 +1010,7 @@ export function ExportModal({
               {templateInfo && (
                 <div className="flex items-center justify-between rounded-lg border border-surface-border bg-surface px-4 py-2.5 text-xs">
                   <span className="text-text-secondary">
-                    {templateTargetItems.length} klausul akan dimasukkan ke dalam template
+                    {templateTargetItems.length} bagian akan dimasukkan ke dalam template
                   </span>
                   <label className="flex items-center gap-1.5 cursor-pointer text-text-secondary hover:text-text-primary">
                     <input
@@ -968,7 +1036,7 @@ export function ExportModal({
                   <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{ITEM_TITLE}}"}</code>,{" "}
                   <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{ITEM_REQUIREMENT}}"}</code>,{" "}
                   <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{ITEM_RESPONSE}}"}</code> — slide
-                  itu akan digandakan sekali per klausul. Slide lain (cover/closing) cukup pakai{" "}
+                  itu akan digandakan sekali per bagian. Slide lain (cover/closing) cukup pakai{" "}
                   <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{DOCUMENT_TITLE}}"}</code>,{" "}
                   <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{COMPANY_NAME}}"}</code>,{" "}
                   <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{DATE}}"}</code>. Desain, warna,
@@ -979,11 +1047,11 @@ export function ExportModal({
                   <>
                     <div className="mb-3">
                       <span className="text-xs font-semibold text-text-primary block mb-1.5">
-                        Pilih Template dari Library Drive
+                        Pilih Contoh/Template dari Library Drive
                       </span>
                       {libraryLoading ? (
                         <div className="flex items-center gap-2 text-xs text-text-muted">
-                          <Loader2 size={13} className="animate-spin" /> Memuat daftar template...
+                          <Loader2 size={13} className="animate-spin" /> Memuat daftar dokumen...
                         </div>
                       ) : pptxTemplateLibrary.length > 0 ? (
                         <select
@@ -1006,7 +1074,7 @@ export function ExportModal({
                         </select>
                       ) : (
                         <p className="text-xs text-text-muted">
-                          Belum ada template PPTX di library. Sync Google Drive dulu, atau upload manual di bawah.
+                          Belum ada dokumen .pptx di library. Sync Google Drive dulu, atau upload manual di bawah.
                         </p>
                       )}
                     </div>
@@ -1133,14 +1201,14 @@ export function ExportModal({
                 />
                 <span>Hanya Final ({items.filter((i) => i.status === "final").length})</span>
               </label>
-              <span className="text-text-muted">{targetItems.length} klausul · format Markdown</span>
+              <span className="text-text-muted">{targetItems.length} bagian · format Markdown</span>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 bg-surface/30">
               {targetItems.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-text-muted">
                   <AlertCircle size={32} />
-                  <p className="text-sm font-medium text-text-primary">Belum ada klausul Draf atau Final.</p>
+                  <p className="text-sm font-medium text-text-primary">Belum ada bagian Draf atau Final.</p>
                 </div>
               ) : (
                 <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">

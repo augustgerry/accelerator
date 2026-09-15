@@ -87,8 +87,8 @@ def download_document(
     doc = session.get(Document, doc_id)
     if not doc or doc.workspace_id != workspace_id:
         raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan")
-    if doc.doc_type != "template" or not doc.source_drive_id:
-        raise HTTPException(status_code=400, detail="Dokumen ini bukan template")
+    if not doc.source_drive_id:
+        raise HTTPException(status_code=400, detail="Dokumen ini tidak memiliki sumber Google Drive")
 
     media_type = PPTX_MIME if doc.title.lower().endswith(".pptx") else DOCX_MIME
     data = download_file_bytes(doc.source_drive_id)

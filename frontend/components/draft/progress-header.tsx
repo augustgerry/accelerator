@@ -60,7 +60,7 @@ export function ProgressHeader({
                   {fileName}
                 </h2>
                 <span className="rounded-full bg-surface border border-surface-border px-2 py-0.5 text-[11px] font-medium text-text-secondary">
-                  {total} klausul
+                  {total} bagian
                 </span>
                 {lastSaved && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
