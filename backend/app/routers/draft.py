@@ -624,3 +624,136 @@ def _insert_item_block(doc, item: "ExportFromTemplateItem", font_name: str, font
     resp_run.font.name = font_name
     resp_run.font.size = Pt(font_size)
     resp_para.paragraph_format.space_after = Pt(10)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IN-PLACE TEMPLATE CLONING
+# Upload actual .docx template + items → replace placeholders → return filled .docx
+# Preserves ALL original formatting: styles, headers, footers, tables, margins.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/clone-template")
+async def clone_template(
+    template: UploadFile,
+    items_json: str = "",
+    document_title: str = "",
+    company_name: str = "PT Solusi Mitra Gemilang (SMG)",
+):
+    """
+    In-place template cloning endpoint.
+
+    Form fields:
+      - template: the .docx template file binary (multipart file upload)
+      - items_json: JSON string of [{id, title, requirement_text, category, draft_text, status}]
+      - document_title: title of the TOR/RFP document
+      - company_name: name of the responding company
+
+    Supported placeholders in the template (case-insensitive):
+      {{COMPILED_RESPONSES}}  or  [TANGGAPAN_SEMUA]  — replaced with all items formatted
+      {{DOCUMENT_TITLE}}                              — TOR/RFP document name
+      {{COMPANY_NAME}}                               — company name
+      {{TOTAL_ITEMS}}                                — total count
+      {{DATE}}                                       — today's date
+
+    The template structure (headings, fonts, page layout, headers/footers, tables)
+    is preserved exactly. Only placeholder text is substituted.
+    """
+    import json
+    import re
+    from datetime import datetime
+    from fastapi import Form
+    from fastapi.responses import StreamingResponse
+    from docx import Document as DocxDocument
+    from docx.shared import Pt, RGBColor, Inches
+
+    # Read template bytes
+    data = await template.read()
+    name = (template.filename or "template.docx").lower()
+    if not (name.endswith(".docx") or template.content_type == (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )):
+        raise HTTPException(status_code=400, detail="Template harus berformat .docx")
+
+    # Parse items
+    try:
+        raw_items = json.loads(items_json) if items_json.strip() else []
+    except Exception:
+        raw_items = []
+
+    # Build replacement values
+    today = datetime.now().strftime("%d %B %Y")
+    final_items = [it for it in raw_items if it.get("status") in ("final", "draft") and it.get("draft_text", "").strip()]
+
+    # Build the compiled responses block
+    compiled_lines = []
+    for idx, it in enumerate(final_items, start=1):
+        compiled_lines.append(
+            f"{idx}. {it.get('title', '')} [{it.get('category', '')}]\n"
+            f"Klausul Tender: {it.get('requirement_text', '')}\n"
+            f"Tanggapan {company_name}:\n{it.get('draft_text', '')}\n"
+            f"{'─' * 60}"
+        )
+    compiled_text = "\n\n".join(compiled_lines) if compiled_lines else "[Belum ada tanggapan yang berstatus Draf atau Final]"
+
+    REPLACEMENTS = {
+        r"\{\{COMPILED_RESPONSES\}\}": compiled_text,
+        r"\[TANGGAPAN_SEMUA\]": compiled_text,
+        r"\[ISI_KONTEN\]": compiled_text,
+        r"\{\{DOCUMENT_TITLE\}\}": document_title or "—",
+        r"\[JUDUL_DOKUMEN\]": document_title or "—",
+        r"\{\{COMPANY_NAME\}\}": company_name,
+        r"\[NAMA_PERUSAHAAN\]": company_name,
+        r"\{\{TOTAL_ITEMS\}\}": str(len(final_items)),
+        r"\{\{DATE\}\}": today,
+        r"\[TANGGAL\]": today,
+    }
+
+    def _replace_in_paragraph(para) -> bool:
+        """Replace placeholder tokens in a paragraph's runs, preserving run formatting."""
+        # Merge all run text for detection
+        full_text = "".join(r.text for r in para.runs)
+        new_text = full_text
+        for pattern, replacement in REPLACEMENTS.items():
+            new_text = re.sub(pattern, replacement, new_text, flags=re.IGNORECASE)
+        if new_text == full_text:
+            return False
+        # Clear all runs and put replacement in first run
+        if para.runs:
+            para.runs[0].text = new_text
+            for r in para.runs[1:]:
+                r.text = ""
+        else:
+            para.add_run(new_text)
+        return True
+
+    # Open template and replace placeholders throughout
+    doc = DocxDocument(io.BytesIO(data))
+
+    for para in doc.paragraphs:
+        _replace_in_paragraph(para)
+
+    # Also process tables
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    _replace_in_paragraph(para)
+
+    # Also process headers and footers
+    for section in doc.sections:
+        for header_para in (section.header.paragraphs if section.header else []):
+            _replace_in_paragraph(header_para)
+        for footer_para in (section.footer.paragraphs if section.footer else []):
+            _replace_in_paragraph(footer_para)
+
+    bio = io.BytesIO()
+    doc.save(bio)
+    bio.seek(0)
+
+    clean_name = "".join(c for c in (document_title or "Proposal") if c.isalnum() or c in ("-", "_")).strip() or "Proposal"
+    return StreamingResponse(
+        bio,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="Proposal-Cloned-{clean_name}.docx"'},
+    )
+

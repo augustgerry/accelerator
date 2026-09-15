@@ -230,3 +230,33 @@ export async function exportFromTemplate(payload: {
   }
   return res.blob();
 }
+
+export async function cloneTemplate(payload: {
+  templateFile: File;
+  document_title: string;
+  company_name?: string;
+  items: Array<{
+    id: string;
+    title: string;
+    requirement_text: string;
+    category: string;
+    draft_text: string;
+    status: string;
+  }>;
+}): Promise<Blob> {
+  const form = new FormData();
+  form.append("template", payload.templateFile);
+  form.append("items_json", JSON.stringify(payload.items));
+  form.append("document_title", payload.document_title);
+  form.append("company_name", payload.company_name ?? "PT Solusi Mitra Gemilang (SMG)");
+
+  const res = await fetch(`${API_BASE}/draft/clone-template`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal clone template (${res.status}): ${detail}`);
+  }
+  return res.blob();
+}

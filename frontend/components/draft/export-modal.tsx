@@ -18,7 +18,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { exportProposalDocx, uploadTemplate, exportFromTemplate } from "@/lib/api";
+import { exportProposalDocx, uploadTemplate, exportFromTemplate, cloneTemplate } from "@/lib/api";
 import type { RequirementItem, TemplateInfo } from "@/lib/types";
 
 interface ExportModalProps {
@@ -49,10 +49,12 @@ export function ExportModal({
   // ── Template tab state
   const templateInputRef = useRef<HTMLInputElement>(null);
   const [templateInfo, setTemplateInfo] = useState<TemplateInfo | null>(null);
+  const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [uploadingTemplate, setUploadingTemplate] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [exportingFromTemplate, setExportingFromTemplate] = useState(false);
   const [templateOnlyFinal, setTemplateOnlyFinal] = useState(false);
+  const [templateMode, setTemplateMode] = useState<"structure" | "clone">("clone");
 
   if (!isOpen) return null;
 
@@ -133,6 +135,7 @@ export function ExportModal({
   const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setTemplateFile(file);
     setUploadingTemplate(true);
     setTemplateError(null);
     try {
@@ -150,26 +153,36 @@ export function ExportModal({
     if (!templateInfo || templateTargetItems.length === 0) return;
     setExportingFromTemplate(true);
     try {
-      const blob = await exportFromTemplate({
-        document_title: documentTitle,
-        company_name: "PT Solusi Mitra Gemilang (SMG)",
-        items: templateTargetItems.map((it) => ({
-          id: it.id,
-          title: it.title,
-          requirement_text: it.requirement_text,
-          category: it.category,
-          draft_text: it.draft_text,
-          status: it.status,
-        })),
-        template_default_font: templateInfo.default_font_name,
-        template_default_font_size: templateInfo.default_font_size_pt,
-        template_sections: templateInfo.sections,
-      });
+      let blob: Blob;
+      if (templateMode === "clone" && templateFile) {
+        blob = await cloneTemplate({
+          templateFile,
+          document_title: documentTitle,
+          company_name: "PT Solusi Mitra Gemilang (SMG)",
+          items: templateTargetItems.map((it) => ({
+            id: it.id, title: it.title, requirement_text: it.requirement_text,
+            category: it.category, draft_text: it.draft_text, status: it.status,
+          })),
+        });
+      } else {
+        blob = await exportFromTemplate({
+          document_title: documentTitle,
+          company_name: "PT Solusi Mitra Gemilang (SMG)",
+          items: templateTargetItems.map((it) => ({
+            id: it.id, title: it.title, requirement_text: it.requirement_text,
+            category: it.category, draft_text: it.draft_text, status: it.status,
+          })),
+          template_default_font: templateInfo.default_font_name,
+          template_default_font_size: templateInfo.default_font_size_pt,
+          template_sections: templateInfo.sections,
+        });
+      }
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       const cleanTitle = documentTitle.replace(/\.[^/.]+$/, "").replace(/\s+/g, "-");
-      link.setAttribute("download", `Proposal-FromTemplate-${cleanTitle}.docx`);
+      const suffix = templateMode === "clone" ? "Cloned" : "FromTemplate";
+      link.setAttribute("download", `Proposal-${suffix}-${cleanTitle}.docx`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -330,8 +343,48 @@ export function ExportModal({
                   <Wand2 size={16} className="text-accent-ink" />
                   <h4 className="text-sm font-bold text-text-primary">Upload Template Word (.docx)</h4>
                 </div>
-                <p className="text-xs text-text-muted mb-4 leading-relaxed">
-                  Upload template proposal resmi perusahaan Anda. AI akan mengikuti <strong className="text-text-primary">struktur sub-bab, jenis font, ukuran font</strong>, dan semua format dari template — lalu mengisi konten secara otomatis dari draft yang sudah dibuat.
+
+                {/* Mode toggle */}
+                <div className="flex rounded-lg border border-surface-border bg-surface p-0.5 text-xs mb-4">
+                  <button
+                    onClick={() => setTemplateMode("clone")}
+                    className={`flex-1 rounded-md py-1.5 px-2 font-medium transition-all ${
+                      templateMode === "clone"
+                        ? "bg-surface-raised text-accent-ink shadow-subtle"
+                        : "text-text-muted hover:text-text-primary"
+                    }`}
+                  >
+                    🔁 Clone Langsung (Ganti Placeholder)
+                  </button>
+                  <button
+                    onClick={() => setTemplateMode("structure")}
+                    className={`flex-1 rounded-md py-1.5 px-2 font-medium transition-all ${
+                      templateMode === "structure"
+                        ? "bg-surface-raised text-accent-ink shadow-subtle"
+                        : "text-text-muted hover:text-text-primary"
+                    }`}
+                  >
+                    🏗️ Susun dari Struktur Template
+                  </button>
+                </div>
+
+                <p className="text-xs text-text-muted mb-3 leading-relaxed">
+                  {templateMode === "clone"
+                    ? <>
+                        <strong className="text-text-primary">Mode Clone:</strong> Template DOCX di-kopi persis,
+                        lalu teks placeholder diganti dengan konten AI. Semua style, header, footer, tabel,
+                        dan margin dipertahankan 100%.{" "}
+                        <span className="text-accent-ink font-medium">Placeholder yang didukung:</span>{" "}
+                        <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{COMPILED_RESPONSES}}"}</code>{", "}
+                        <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{DOCUMENT_TITLE}}"}</code>{", "}
+                        <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{DATE}}"}</code>
+                      </>
+                    : <>
+                        <strong className="text-text-primary">Mode Struktur:</strong> AI membaca heading,
+                        font, dan level dari template, lalu membangun ulang dokumen dengan konten AI
+                        ditempatkan di bawah heading yang sesuai kategorinya.
+                      </>
+                  }
                 </p>
 
                 {!templateInfo ? (
