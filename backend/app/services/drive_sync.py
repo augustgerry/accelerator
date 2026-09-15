@@ -27,6 +27,7 @@ FOLDER_MIME = "application/vnd.google-apps.folder"
 GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
 PDF_MIME = "application/pdf"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
 
 def _get_credentials() -> Credentials:
@@ -138,6 +139,17 @@ def fetch_and_extract_text(file_id: str) -> str:
 
         doc = DocxDocument(io.BytesIO(_download_media(service, file_id)))
         return "\n".join(p.text for p in doc.paragraphs)
+
+    if mime == PPTX_MIME:
+        from pptx import Presentation
+
+        prs = Presentation(io.BytesIO(_download_media(service, file_id)))
+        return "\n".join(
+            shape.text_frame.text
+            for slide in prs.slides
+            for shape in slide.shapes
+            if shape.has_text_frame
+        )
 
     if mime.startswith("text/"):
         return _download_media(service, file_id).decode("utf-8")
