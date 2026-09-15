@@ -86,7 +86,8 @@ knowledge-accelerator/
 - [x] Dashboard page (hero search bar + 2 action cards: Glean + Loopio)
 - [x] **Search page** — Glean dual-panel: left=citation cards dengan keyword highlight, right=AI synthesized answer + source list
 - [x] **Draft page** — Loopio checklist: upload TOR → segment → per-item editor dengan status (todo/draft/final), search/filter, custom instruction, copy, progress bar
-- [x] `ProgressHeader` component
+- [x] **Auto-save localStorage** — draft items + fileName disimpan otomatis ke localStorage setiap kali ada perubahan. Dipulihkan saat browser refresh. Timestamp lastSaved tampil di ProgressHeader.
+- [x] `ProgressHeader` component (termasuk `lastSaved` indicator)
 - [x] `ExportModal` — 3 tab: Word Standar (matrix/narrative), Template Word (upload+preview+generate), Salin/Markdown
 - [x] `OnboardingModal`
 - [x] `lib/api.ts` — semua API functions: uploadTor, segmentTor, generateItemDraft, exportProposalDocx, uploadTemplate, exportFromTemplate, searchKnowledgeBase

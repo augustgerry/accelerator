@@ -103,6 +103,28 @@ const SAMPLE_DEMO_ITEMS: RequirementItem[] = [
   },
 ];
 
+const LS_KEY = "synapse-draft-session";
+
+function loadFromStorage(): { fileName: string; torText: string; items: RequirementItem[] } | null {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveToStorage(fileName: string, torText: string, items: RequirementItem[]) {
+  try {
+    // Strip isGenerating/error flags before saving
+    const clean = items.map(({ isGenerating: _ig, error: _e, ...rest }) => rest);
+    localStorage.setItem(LS_KEY, JSON.stringify({ fileName, torText, items: clean }));
+  } catch {
+    /* storage full or private mode — silently ignore */
+  }
+}
+
 export default function DraftPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -119,6 +141,30 @@ export default function DraftPage() {
   const [copiedItem, setCopiedItem] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  // ── Restore from localStorage on mount ──────────────────────────────────
+  useEffect(() => {
+    const saved = loadFromStorage();
+    if (saved && saved.fileName && saved.items.length > 0) {
+      setFileName(saved.fileName);
+      setTorText(saved.torText ?? "");
+      setItems(saved.items);
+      setSelectedItemId(saved.items[0]?.id ?? null);
+      setLastSaved("(restored)");
+    }
+    setHydrated(true);
+  }, []);
+
+  // ── Auto-save to localStorage whenever items or fileName changes ─────────
+  useEffect(() => {
+    if (!hydrated || !fileName || items.length === 0) return;
+    saveToStorage(fileName, torText, items);
+    const time = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setLastSaved(time);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, fileName, hydrated]);
 
   // Active selected item
   const selectedItem = useMemo(() => {
@@ -196,6 +242,8 @@ export default function DraftPage() {
     setItems([]);
     setSelectedItemId(null);
     setErrorMessage(null);
+    setLastSaved(null);
+    try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
   };
 
   // Generate draft for a single item
@@ -425,6 +473,7 @@ export default function DraftPage() {
             onOpenExport={() => setIsExportOpen(true)}
             onResetFile={handleReset}
             isDraftingAll={isDraftingAll}
+            lastSaved={lastSaved ?? undefined}
           />
 
           {/* Split Workspace */}
