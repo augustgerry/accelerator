@@ -145,6 +145,22 @@ class ClaudeProvider(LLMProvider):
 
         return _fallback_segment_text(text)
 
+    def map_items_to_sections(self, headings: list[dict], items: list[dict]) -> dict[str, int]:
+        if not headings or not items:
+            return {}
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=2000,
+                system=_MAPPING_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": _build_mapping_prompt(headings, items)}],
+            )
+            raw = "".join(b.text for b in response.content if hasattr(b, "text"))
+            return _clean_mapping_result(_parse_json_object(raw), headings, items)
+        except Exception as e:
+            logger.warning("Claude section mapping failed, using keyword fallback: %s", e)
+            return _fallback_map_items_to_sections(headings, items)
+
 
 class GeminiProvider(LLMProvider):
     def __init__(self):
