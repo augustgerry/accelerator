@@ -1069,3 +1069,178 @@ async def clone_template(
         headers={"Content-Disposition": f'attachment; filename="Proposal-Cloned-{clean_name}.docx"'},
     )
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IN-PLACE PPTX TEMPLATE CLONING
+# User's own designed .pptx deck is reused as-is. One slide marked with
+# {{ITEM_*}} placeholders is treated as the repeatable "item slide" and
+# duplicated once per TOR item; every other slide only gets the global
+# {{DOCUMENT_TITLE}} / {{COMPANY_NAME}} / {{DATE}} / {{TOTAL_ITEMS}} tokens
+# substituted. This preserves the template's own design (colors, fonts,
+# master layout) instead of generating the fixed hardcoded deck /export-pptx does.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_ITEM_MARKER_RE = __import__("re").compile(r"\{\{ITEM_[A-Z]+\}\}", __import__("re").IGNORECASE)
+
+
+def _pptx_slide_text(slide) -> str:
+    parts = []
+    for shape in slide.shapes:
+        if shape.has_text_frame:
+            parts.append(shape.text_frame.text)
+    return "\n".join(parts)
+
+
+def _pptx_replace_in_text_frame(text_frame, replacements: dict) -> None:
+    import re
+
+    for para in text_frame.paragraphs:
+        full_text = "".join(r.text for r in para.runs)
+        if not full_text:
+            continue
+        new_text = full_text
+        for pattern, value in replacements.items():
+            new_text = re.sub(pattern, value, new_text, flags=re.IGNORECASE)
+        if new_text == full_text:
+            continue
+        if para.runs:
+            para.runs[0].text = new_text
+            for r in para.runs[1:]:
+                r.text = ""
+        else:
+            para.add_run().text = new_text
+
+
+def _pptx_replace_in_slide(slide, replacements: dict) -> None:
+    for shape in slide.shapes:
+        if shape.has_text_frame:
+            _pptx_replace_in_text_frame(shape.text_frame, replacements)
+
+
+def _duplicate_pptx_slide(prs, slide):
+    """Deep-copy `slide`'s shapes onto a brand new slide using the same layout.
+    ponytail: XML-only shape copy — an item slide with its own embedded image
+    or chart won't carry that media over onto the duplicates; extend by also
+    copying `slide.part.rels` if item slides start needing per-item images.
+    Tables/grouped shapes aren't scanned for {{...}} placeholders either.
+    """
+    import copy
+
+    new_slide = prs.slides.add_slide(slide.slide_layout)
+    for shape in list(new_slide.shapes):
+        shape._element.getparent().remove(shape._element)
+    for shape in slide.shapes:
+        new_slide.shapes._spTree.append(copy.deepcopy(shape._element))
+    return new_slide
+
+
+def _move_pptx_slide(prs, old_index: int, new_index: int) -> None:
+    xml_slides = prs.slides._sldIdLst
+    slides = list(xml_slides)
+    xml_slides.remove(slides[old_index])
+    xml_slides.insert(new_index, slides[old_index])
+
+
+def _delete_pptx_slide(prs, index: int) -> None:
+    from docx.oxml.ns import qn  # same qn() helper works for pptx's r:id attr
+
+    xml_slides = prs.slides._sldIdLst
+    slides = list(xml_slides)
+    rId = slides[index].get(qn("r:id"))
+    prs.part.drop_rel(rId)
+    xml_slides.remove(slides[index])
+
+
+@router.post("/clone-template-pptx")
+async def clone_template_pptx(
+    template: UploadFile,
+    items_json: str = "",
+    document_title: str = "",
+    company_name: str = "PT Solusi Mitra Gemilang (SMG)",
+):
+    """
+    In-place PPTX template cloning. Form fields:
+      - template: the .pptx template file binary
+      - items_json: JSON string of [{id, title, requirement_text, category, draft_text, status}]
+      - document_title, company_name
+
+    Supported placeholders:
+      Global (any slide):        {{DOCUMENT_TITLE}}, {{COMPANY_NAME}}, {{DATE}}, {{TOTAL_ITEMS}}
+      Per-item (repeatable slide): {{ITEM_INDEX}}, {{ITEM_TITLE}}, {{ITEM_CATEGORY}},
+                                    {{ITEM_REQUIREMENT}}, {{ITEM_RESPONSE}}
+
+    Exactly one slide in the template must contain an {{ITEM_*}} marker — that
+    slide is duplicated once per item (in order) and removed from the final deck;
+    every other slide is kept as-is with only the global tokens substituted.
+    """
+    import json
+    from datetime import datetime
+    from fastapi.responses import StreamingResponse
+    from pptx import Presentation
+
+    data = await template.read()
+    name = (template.filename or "template.pptx").lower()
+    if not (name.endswith(".pptx") or template.content_type == (
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    )):
+        raise HTTPException(status_code=400, detail="Template harus berformat .pptx")
+
+    try:
+        raw_items = json.loads(items_json) if items_json.strip() else []
+    except Exception:
+        raw_items = []
+    final_items = [it for it in raw_items if it.get("status") in ("final", "draft") and it.get("draft_text", "").strip()]
+    if not final_items:
+        raise HTTPException(status_code=400, detail="Tidak ada item berstatus Draf/Final untuk dimasukkan ke slide")
+
+    prs = Presentation(io.BytesIO(data))
+
+    item_slide_index = next(
+        (i for i, s in enumerate(prs.slides) if _ITEM_MARKER_RE.search(_pptx_slide_text(s))),
+        None,
+    )
+    if item_slide_index is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Template PPTX tidak punya slide dengan placeholder {{ITEM_TITLE}}/{{ITEM_RESPONSE}} dll. "
+                   "Tandai satu slide sebagai slide-per-item dengan placeholder tersebut.",
+        )
+    item_slide = list(prs.slides)[item_slide_index]
+
+    today = datetime.now().strftime("%d %B %Y")
+    global_replacements = {
+        r"\{\{DOCUMENT_TITLE\}\}": document_title or "—",
+        r"\{\{COMPANY_NAME\}\}": company_name,
+        r"\{\{DATE\}\}": today,
+        r"\{\{TOTAL_ITEMS\}\}": str(len(final_items)),
+    }
+
+    for i, it in enumerate(final_items, start=1):
+        new_slide = _duplicate_pptx_slide(prs, item_slide)
+        item_replacements = {
+            **global_replacements,
+            r"\{\{ITEM_INDEX\}\}": str(i),
+            r"\{\{ITEM_TITLE\}\}": it.get("title", ""),
+            r"\{\{ITEM_CATEGORY\}\}": it.get("category", ""),
+            r"\{\{ITEM_REQUIREMENT\}\}": it.get("requirement_text", ""),
+            r"\{\{ITEM_RESPONSE\}\}": it.get("draft_text", ""),
+        }
+        _pptx_replace_in_slide(new_slide, item_replacements)
+        _move_pptx_slide(prs, len(prs.slides) - 1, item_slide_index + i - 1)
+
+    _delete_pptx_slide(prs, item_slide_index + len(final_items))
+
+    for slide in prs.slides:
+        _pptx_replace_in_slide(slide, global_replacements)
+
+    bio = io.BytesIO()
+    prs.save(bio)
+    bio.seek(0)
+
+    clean_name = "".join(c for c in (document_title or "PitchDeck") if c.isalnum() or c in ("-", "_")).strip() or "PitchDeck"
+    return StreamingResponse(
+        bio,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={"Content-Disposition": f'attachment; filename="PitchDeck-Cloned-{clean_name}.pptx"'},
+    )
+
