@@ -147,11 +147,13 @@ knowledge-accelerator/
 **File:** `frontend/app/documents/page.tsx` & `backend/app/routers/documents.py`
 - Tambahkan endpoint `GET /documents/{id}/chunks` untuk ambil preview chunk dokumen.
 - Di frontend UI: expand dokumen saat diklik untuk menampilkan cuplikan teks chunk-chunk yang tersimpan di pgvector.
+- **STATUS: SELESAI** (commit `6e1af4d`).
 
 ### 🟡 PRIORITY 2: Folder Sync → Template Library (Google Drive Integration)
 **File:** `backend/app/routers/documents.py` & `frontend/components/draft/export-modal.tsx`
 - Saat sync Google Drive, deteksi dokumen template (.docx) dan beri tag `doc_type = "template"`.
 - Di `ExportModal` tab template: sediakan opsi dropdown "Pilih Template dari Library Drive" tanpa user harus upload file manual setiap kali.
+- **STATUS: SELESAI** (commit `814bd73`).
 
 ### 🟡 PRIORITY 3: Multi-Format Proposal Types (SoW, Solution Brief, MoM, PPT Deck)
 **File:** `backend/app/routers/draft.py` & `frontend/components/draft/export-modal.tsx`
