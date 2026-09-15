@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { searchKnowledgeBase, type SearchResult } from "@/lib/api";
 import { CitationDrawer } from "@/components/search/citation-drawer";
+import { HighlightedText } from "@/components/search/highlighted-text";
+import { AnswerWithCitations } from "@/components/search/answer-with-citations";
 
 const LS_HISTORY_KEY = "synapse-search-history";
 const LS_BOOKMARKS_KEY = "synapse-search-bookmarks";
@@ -62,32 +64,6 @@ const DOC_TYPE_COLORS: Record<string, string> = {
 };
 
 type ConversationMessage = { role: "user" | "assistant"; content: string };
-
-function highlightKeywords(text: string, query: string): string {
-  if (!query.trim()) return text;
-  const words = query.trim().split(/\s+/).filter((w) => w.length > 2);
-  if (words.length === 0) return text;
-  const pattern = new RegExp(`(${words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
-  return text.replace(pattern, "**$1**");
-}
-
-function HighlightedText({ text, query }: { text: string; query: string }) {
-  const highlighted = highlightKeywords(text, query);
-  const parts = highlighted.split(/\*\*(.*?)\*\*/g);
-  return (
-    <span>
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <mark key={i} className="bg-accent-soft text-accent-ink rounded px-0.5 font-medium">
-            {part}
-          </mark>
-        ) : (
-          <span key={i}>{part}</span>
-        )
-      )}
-    </span>
-  );
-}
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -272,13 +248,24 @@ function SearchContent() {
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             <History size={12} className="text-text-muted" />
             {history.slice(0, 6).map((h, i) => (
-              <button
+              <span
                 key={i}
-                onClick={() => doSearch(h)}
-                className="rounded-full border border-surface-border bg-surface px-3 py-1 text-xs text-text-secondary hover:border-accent hover:text-accent-ink transition-colors"
+                className="group flex items-center gap-1 rounded-full border border-surface-border bg-surface pl-3 pr-1.5 py-1 text-xs text-text-secondary hover:border-accent hover:text-accent-ink transition-colors"
               >
-                {h}
-              </button>
+                <button onClick={() => doSearch(h)} className="max-w-[220px] truncate">
+                  {h}
+                </button>
+                <button
+                  onClick={() => {
+                    const updated = history.filter((item) => item !== h);
+                    localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(updated));
+                    setHistory(updated);
+                  }}
+                  className="rounded-full p-0.5 text-text-muted opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
+                >
+                  <X size={10} />
+                </button>
+              </span>
             ))}
           </div>
         )}
@@ -288,13 +275,24 @@ function SearchContent() {
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Bookmark size={12} className="text-text-muted" />
             {bookmarks.slice(0, 6).map((b, i) => (
-              <button
+              <span
                 key={i}
-                onClick={() => doSearch(b.question)}
-                className="rounded-full border border-secondary/40 bg-secondary-soft px-3 py-1 text-xs text-secondary hover:border-secondary transition-colors"
+                className="group flex items-center gap-1 rounded-full border border-secondary/40 bg-secondary-soft pl-3 pr-1.5 py-1 text-xs text-secondary hover:border-secondary transition-colors"
               >
-                {b.question}
-              </button>
+                <button onClick={() => doSearch(b.question)} className="max-w-[220px] truncate">
+                  {b.question}
+                </button>
+                <button
+                  onClick={() => {
+                    const updated = bookmarks.filter((item) => item.question !== b.question);
+                    localStorage.setItem(LS_BOOKMARKS_KEY, JSON.stringify(updated));
+                    setBookmarks(updated);
+                  }}
+                  className="rounded-full p-0.5 text-secondary opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
+                >
+                  <X size={10} />
+                </button>
+              </span>
             ))}
           </div>
         )}
@@ -441,9 +439,18 @@ function SearchContent() {
                 </div>
                 <div className="rounded-lg border-l-4 border-accent bg-surface p-4">
                   <p className="text-sm leading-relaxed text-text-primary whitespace-pre-wrap">
-                    {result.answer}
+                    <AnswerWithCitations
+                      text={result.answer}
+                      sourceCount={result.sources.length}
+                      onCitationClick={(idx) => setSelectedChunkIdx(idx)}
+                    />
                   </p>
                 </div>
+                {result.sources.length === 0 && (
+                  <p className="mt-2 flex items-center gap-1.5 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800">
+                    Tidak ditemukan dokumen relevan di knowledge base — jawaban di atas bersifat umum, bukan hasil grounding dokumen internal.
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button
                     onClick={createDocumentFromAnswer}
@@ -535,7 +542,10 @@ function SearchContent() {
       <CitationDrawer
         chunk={selectedChunk}
         index={selectedChunkIdx ?? 0}
+        total={result?.sources.length ?? 0}
+        query={query}
         onClose={() => setSelectedChunkIdx(null)}
+        onNavigate={(nextIndex) => setSelectedChunkIdx(nextIndex)}
       />
     </div>
   );

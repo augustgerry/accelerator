@@ -20,12 +20,14 @@ import {
   ChevronRight,
   FileCode,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 import {
   getDocumentsSummary,
   syncDocuments,
   listDocuments,
   getDocumentChunks,
+  deleteDocument,
   type DocumentsSummary,
 } from "@/lib/api";
 import type { IndexedDocument, DocumentChunksResponse, DocumentChunkItem } from "@/lib/types";
@@ -40,6 +42,7 @@ export default function DocumentsPage() {
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedDivision, setSelectedDivision] = useState<string>("all");
   const [selectedExt, setSelectedExt] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"updated" | "title" | "chunks">("updated");
@@ -50,6 +53,15 @@ export default function DocumentsPage() {
   const [chunksData, setChunksData] = useState<DocumentChunksResponse | null>(null);
   const [chunkFilter, setChunkFilter] = useState("");
   const [copiedChunkId, setCopiedChunkId] = useState<string | null>(null);
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const loadData = async () => {
     setLoading(true);
@@ -131,9 +143,9 @@ export default function DocumentsPage() {
     return documents
       .filter((d) => {
         const matchesSearch =
-          d.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          d.division?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          d.docType?.toLowerCase().includes(searchQuery.toLowerCase());
+          d.title.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
+          d.division?.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
+          d.docType?.toLowerCase().includes(debouncedQuery.toLowerCase());
         const matchesDivision =
           selectedDivision === "all" || d.division === selectedDivision;
         const matchesExt =
@@ -145,7 +157,37 @@ export default function DocumentsPage() {
         if (sortBy === "chunks") return (b.chunkCount || 0) - (a.chunkCount || 0);
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
-  }, [documents, searchQuery, selectedDivision, sortBy]);
+  }, [documents, debouncedQuery, selectedDivision, selectedExt, sortBy]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) =>
+      prev.size === filteredDocs.length ? new Set() : new Set(filteredDocs.map((d) => d.id))
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Hapus ${selectedIds.size} dokumen dari index? Dokumen asli di Google Drive tidak terhapus.`)) return;
+    setDeleting(true);
+    try {
+      await Promise.all(Array.from(selectedIds).map((id) => deleteDocument(id)));
+      setSelectedIds(new Set());
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal menghapus sebagian dokumen.");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // Filtered chunks in modal
   const filteredChunks = useMemo(() => {
@@ -316,6 +358,36 @@ export default function DocumentsPage() {
             </div>
           </div>
 
+          {/* Bulk Action Bar */}
+          {filteredDocs.length > 0 && (
+            <div className="px-5 py-2.5 border-b border-surface-border bg-surface-base flex items-center gap-3 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.size > 0 && selectedIds.size === filteredDocs.length}
+                  onChange={toggleSelectAll}
+                  className="rounded border-surface-border"
+                />
+                Pilih Semua
+              </label>
+              {selectedIds.size > 0 && (
+                <>
+                  <span className="text-text-muted">{selectedIds.size} dipilih</span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={deleting}
+                    onClick={handleBulkDelete}
+                    className="gap-1.5 text-red-600 hover:bg-red-50 ml-auto"
+                  >
+                    {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    Hapus dari Index
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Table / List View */}
           <div className="divide-y divide-surface-border">
             {loading ? (
@@ -344,6 +416,13 @@ export default function DocumentsPage() {
                   className="p-4 sm:px-6 hover:bg-surface-raised/60 transition-colors flex items-center justify-between gap-4 group"
                 >
                   <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(doc.id)}
+                      onChange={() => toggleSelect(doc.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="shrink-0 rounded border-surface-border"
+                    />
                     <div className="w-9 h-9 rounded-lg bg-surface-raised border border-surface-border flex items-center justify-center text-accent flex-shrink-0 group-hover:border-accent transition-colors">
                       <FileText size={17} />
                     </div>

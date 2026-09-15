@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { X, FileText, Download, ExternalLink, Loader2, Copy, Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, Download, ExternalLink, Loader2, Copy, Check, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { downloadDriveDocument, type SearchResultChunk } from "@/lib/api";
 import { getFileExtension } from "@/lib/utils";
+import { HighlightedText } from "@/components/search/highlighted-text";
 
 const DOC_TYPE_COLORS: Record<string, string> = {
   checklist: "bg-blue-50 border-blue-200 text-blue-700",
@@ -17,11 +18,17 @@ const DOC_TYPE_COLORS: Record<string, string> = {
 export function CitationDrawer({
   chunk,
   index,
+  total,
+  query = "",
   onClose,
+  onNavigate,
 }: {
   chunk: SearchResultChunk | null;
   index: number;
+  total: number;
+  query?: string;
   onClose: () => void;
+  onNavigate: (nextIndex: number) => void;
 }) {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -29,6 +36,22 @@ export function CitationDrawer({
 
   const open = !!chunk;
   const ext = chunk ? getFileExtension(chunk.title) : "";
+
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowRight" && index < total - 1) onNavigate(index + 1);
+      else if (e.key === "ArrowLeft" && index > 0) onNavigate(index - 1);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, index, total]);
+
+  const formattedDate = chunk?.updated_at
+    ? new Date(chunk.updated_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+    : null;
 
   const handleDownload = async () => {
     if (!chunk) return;
@@ -103,14 +126,38 @@ export function CitationDrawer({
                   <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                     Relevansi {chunk.confidence}%
                   </span>
+                  {formattedDate && (
+                    <span className="flex items-center gap-1 rounded bg-surface px-1.5 py-0.5 text-[10px] text-text-muted border border-surface-border">
+                      <Clock size={10} />
+                      {formattedDate}
+                    </span>
+                  )}
                 </div>
               </div>
-              <button
-                onClick={onClose}
-                className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-border hover:text-text-primary"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  onClick={() => onNavigate(index - 1)}
+                  disabled={index <= 0}
+                  title="Kutipan sebelumnya"
+                  className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-border hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  onClick={() => onNavigate(index + 1)}
+                  disabled={index >= total - 1}
+                  title="Kutipan berikutnya"
+                  className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-border hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <ChevronRight size={16} />
+                </button>
+                <button
+                  onClick={onClose}
+                  className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-border hover:text-text-primary"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {/* Snippet */}
@@ -138,7 +185,7 @@ export function CitationDrawer({
               </div>
               <div className="rounded-lg border border-surface-border bg-surface-raised p-4">
                 <p className="whitespace-pre-wrap text-xs leading-relaxed text-text-primary">
-                  {chunk.chunk_text}
+                  <HighlightedText text={chunk.chunk_text} query={query} />
                 </p>
               </div>
 

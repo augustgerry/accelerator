@@ -50,6 +50,14 @@ export async function downloadDriveDocument(docId: string): Promise<Blob> {
 
 export const downloadTemplateDocument = downloadDriveDocument;
 
+export async function deleteDocument(docId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/documents/${encodeURIComponent(docId)}`, { method: "DELETE" });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal menghapus dokumen (${res.status}): ${detail}`);
+  }
+}
+
 export async function syncDocuments(): Promise<{ synced: string[]; skipped: string[]; unchanged: string[] }> {
   const res = await fetch(`${API_BASE}/documents/sync`, { method: "POST" });
   if (!res.ok) {
@@ -109,6 +117,7 @@ export type SearchResultChunk = {
   chunk_text: string;
   confidence: number;
   matched_terms: string[];
+  updated_at?: string | null;
 };
 
 export type SearchResult = {
@@ -205,6 +214,7 @@ export type QualityCheckResult = {
     score: number;
     issues: string[];
     missing_values: string[];
+    suggestions?: string[];
   }>;
 };
 
@@ -217,6 +227,28 @@ export async function qualityCheckDraft(items: Array<{
   status: string;
 }>): Promise<QualityCheckResult> {
   return postJson<QualityCheckResult>("/draft/quality-check", { items });
+}
+
+export type RecommendedSection = {
+  id: string;
+  title: string;
+  category: string;
+  requirement_text: string;
+  rationale: string;
+};
+
+export type RecommendStructureResponse = {
+  items: RecommendedSection[];
+  summary: string;
+};
+
+export async function recommendStructure(payload: {
+  tor_text: string;
+  doc_type: string;
+  document_title?: string;
+  instruction?: string;
+}): Promise<RecommendStructureResponse> {
+  return postJson<RecommendStructureResponse>("/draft/recommend-structure", payload);
 }
 
 export type ExportPreflightResult = {

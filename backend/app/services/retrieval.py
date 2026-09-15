@@ -168,6 +168,7 @@ def retrieve_chunks_with_full_metadata(
             "chunk_text": c.content or "",
             "confidence": round(max(0.05, min(0.99, candidate["score"])) * 100),
             "matched_terms": candidate.get("matched_tokens", []),
+            "updatedAt": doc.updated_at.isoformat() if doc and doc.updated_at else None,
         })
     return results
 

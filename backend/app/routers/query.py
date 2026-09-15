@@ -28,6 +28,7 @@ class ChunkResult(BaseModel):
     chunk_text: str = ""
     confidence: int = 0
     matched_terms: list[str] = []
+    updated_at: Optional[str] = None
 
 
 class QueryResponse(BaseModel):
@@ -79,6 +80,7 @@ def query_knowledge_base(
             chunk_text=r.get("chunk_text", ""),
             confidence=r.get("confidence", 0),
             matched_terms=r.get("matched_terms", []),
+            updated_at=r.get("updatedAt"),
         )
         for r in chunk_records
     ]

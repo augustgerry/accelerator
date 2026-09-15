@@ -126,6 +126,18 @@ Kerja terisolasi di `frontend/app/search/`, `frontend/components/search/`, `fron
 - Verifikasi: `npx tsc --noEmit` di `frontend/` exit 0. Belum ditest manual lewat browser (`npm run dev`) — kalau mau validasi UI, jalankan dev server lalu coba klik chip sitasi di `/search` dan filter ekstensi di `/documents`.
 - Tidak ada perubahan backend/database sama sekali di sesi ini — seluruh fitur reuse endpoint & field yang sudah ada (`/documents/{id}/download`, `Document.id == source_drive_id`, `title` yang sudah menyimpan ekstensi asli).
 
+### Lanjutan (batch 2) — masih di branch `feat/search-citation-drawer`
+Enhancement lanjutan atas ide sendiri (disetujui user "gas aja semua"). Kali ini ADA sentuhan backend, tapi tetap sama sekali tidak menyentuh `backend/app/routers/draft.py` maupun `frontend/app/draft/`:
+- **Inline citation markers di jawaban AI:** `backend/app/services/llm_provider.py` — `_build_system_prompt(mode="qa")` sekarang instruksikan LLM sisipkan penanda `[1]`, `[2]` dst tepat di kalimat yang memakai potongan konteks tsb. Helper baru `_format_context_chunks()` menomori tiap chunk sebelum dikirim ke LLM (`[1] ...`, `[2] ...`) — HANYA untuk `mode="qa"` (dipanggil dari `query.py`); `mode="draft"` (dipakai `draft.py`) tetap format lama, tidak terpengaruh sama sekali. Frontend baru `components/search/answer-with-citations.tsx` mem-parse `[n]` di teks jawaban jadi chip yang bisa diklik → buka `CitationDrawer` ke sumber ke-n.
+- **Recency indicator di drawer:** `backend/app/services/retrieval.py` `retrieve_chunks_with_full_metadata()` dan `backend/app/routers/query.py` `ChunkResult` nambah field `updated_at` (dari `Document.updated_at`). `CitationDrawer` nampilin tanggal ini sebagai badge kecil.
+- **Keyboard nav di drawer:** Esc buat tutup, panah kiri/kanan buat pindah antar sitasi tanpa balik ke list kiri — plus tombol chevron prev/next di header drawer.
+- **Highlight keyword di snippet drawer:** snippet lengkap di drawer sekarang pakai `HighlightedText` yang sama (diekstrak ke `components/search/highlighted-text.tsx`, dipakai bareng oleh `search/page.tsx` dan `citation-drawer.tsx` — no duplication).
+- **Empty-grounding warning:** kalau `sources.length === 0` tapi tetap ada jawaban AI, tampil banner kuning kecil "jawaban ini bersifat umum, bukan hasil grounding dokumen internal" — mencegah user salah percaya jawaban itu grounded.
+- **Hapus item individual dari history/bookmark:** tombol X kecil per-chip (muncul on-hover) di `search/page.tsx`, tidak perlu reset semua lewat Settings lagi.
+- **Bulk delete dokumen di `/documents`:** endpoint baru `DELETE /documents/{doc_id}` (`backend/app/routers/documents.py`) — hapus dokumen + chunks dari index (TIDAK menghapus file aslinya di Google Drive). Frontend: checkbox per-baris + "Pilih Semua" + tombol "Hapus dari Index" dengan `confirm()` guard, plus `deleteDocument()` baru di `lib/api.ts`.
+- **Debounce local search `/documents`:** input pencarian di-debounce 250ms (`debouncedQuery` state) sebelum masuk filter `useMemo`, biar gak re-filter tiap keystroke kalau daftar dokumen sudah besar.
+- Verifikasi: `npx tsc --noEmit` (frontend) exit 0, `python -m py_compile` (backend, file yang diubah: `documents.py`, `query.py`, `retrieval.py`, `llm_provider.py`) OK. Belum ditest manual end-to-end lewat browser dengan LLM asli (citation marker `[n]` tergantung LLM benar-benar patuh instruksi — kalau kualitasnya kurang, snippet drawer + grid referensi tetap jadi fallback cara buka sitasi tanpa marker).
+
 ---
 
 ## 🗂️ PROJECT OVERVIEW
