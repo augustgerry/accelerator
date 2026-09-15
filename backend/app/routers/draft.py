@@ -792,7 +792,7 @@ def export_from_template(payload: ExportFromTemplateRequest):
 
     placed_item_ids: set[str] = set()
 
-    for sec in payload.template_sections:
+    for idx, sec in enumerate(payload.template_sections):
         style_name = sec.style_name
         text = sec.text.strip()
 
@@ -822,18 +822,8 @@ def export_from_template(payload: ExportFromTemplateRequest):
                 if sec.is_italic is not None:
                     run.italic = sec.is_italic
 
-            # After a heading, insert matching draft items (by keyword match or category)
-            matched_items = []
-            heading_lower = text.lower()
-            for cat, cat_items in items_by_category.items():
-                cat_lower = cat.lower()
-                if (
-                    cat_lower in heading_lower
-                    or any(kw in heading_lower for kw in cat_lower.split())
-                ):
-                    matched_items.extend(cat_items)
-
-            for item in matched_items:
+            # After a heading, insert items the AI mapped to this specific heading
+            for item in items_by_heading_index.get(idx, []):
                 if item.id in placed_item_ids:
                     continue
                 placed_item_ids.add(item.id)
