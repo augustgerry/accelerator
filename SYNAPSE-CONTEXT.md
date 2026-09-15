@@ -19,6 +19,13 @@
 - Verifikasi: `py_compile` OK, import OK, unit test fallback heuristic OK, integration test `export_from_template` dengan fake provider (monkeypatch) — item ke-mapping tampil persis di bawah heading yang benar, item ter-skip jatuh ke placeholder/fallback section, docx ke-generate valid.
 - Belum jalan test pakai LLM asli (Claude/Gemini) — cuma ke-tes lewat fake provider supaya gak ada cost API call. Kalau mau validasi kualitas mapping asli, jalanin end-to-end lewat UI dengan API key aktif.
 
+### ✅ Sub-task 2 SELESAI: template_type/document_type awareness (SoW/Solution Brief/MoM/Proposal wording)
+- `backend/app/routers/draft.py`: dict `DOC_TYPE_LABELS` + helper `_get_doc_type_labels(template_type, company_name)` — per jenis dokumen nyimpen `cover_subtitle`, `requirement_label`, `response_label`, `fallback_heading` (mis. SoW pakai "Klausul Acuan" / "Rincian Lingkup Eksekusi", MoM pakai "Poin Diskusi / Pertanyaan Klien" / "Tanggapan & Klarifikasi", dll).
+- `ExportFromTemplateRequest` dapat field baru `template_type: str = "proposal"`. `export_from_template()` pakai `labels` ini utk cover subtitle, heading fallback, dan diteruskan ke `_insert_item_block()` (signature nambah param `labels`) buat label requirement/response per item.
+- `clone_template()` (endpoint `/draft/clone-template`) dapat form field baru `document_type: str = "proposal"`, dipakai di compiled_lines placeholder block ({{COMPILED_RESPONSES}}) biar wording ikut jenis dokumen juga.
+- Frontend: `lib/api.ts` — `exportFromTemplate()` terima `template_type?`, `cloneTemplate()` terima `document_type?`. `ExportModal` tab Template ada dropdown baru "Jenis Dokumen" (Proposal Teknis/SoW/Solution Brief/MoM) di atas mode toggle Clone/Struktur, state `templateDocType`, diteruskan ke kedua mode export.
+- Verifikasi: `npx tsc --noEmit` clean, backend `py_compile` + import OK, integration test `export_from_template` utk keempat `template_type` (cover subtitle & fallback heading berubah sesuai), integration test `clone_template` dengan `document_type="sow"` (compiled block pakai "Klausul Acuan"/"Rincian Lingkup Eksekusi").
+
 ## ✅ PRIORITY 2 SELESAI (Folder Sync → Template Library)
 - Backend: `POST /documents/sync` (`documents.py`) sekarang set `doc_type = "template"` otomatis untuk file `.docx` (via `DOCX_MIME` check), `doc_type = "document"` untuk selainnya. Update juga jalan di re-sync dokumen existing.
 - Backend: `GET /documents/{id}/download` — re-download bytes .docx asli dari Drive by `source_drive_id` (fungsi baru `drive_sync.download_file_bytes()`), khusus dokumen `doc_type == "template"`.
