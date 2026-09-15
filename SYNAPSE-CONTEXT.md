@@ -218,6 +218,12 @@ knowledge-accelerator/
 - `frontend/app/draft/page.tsx`: `Generate All` memproses batch maksimal 3 item paralel agar respons lebih cepat tanpa membanjiri provider.
 - Verifikasi: `npx tsc --noEmit` exit 0, diagnostics semua file UI bersih, dan `git diff --check` bersih.
 
+### ✅ Enhancement: Export Wizard
+- `frontend/components/draft/export-modal.tsx`: navigasi export diringkas menjadi tiga langkah: `Format`, `Template`, dan `Preview`.
+- Modal selalu kembali ke langkah Format saat dibuka agar workflow konsisten.
+- Panel lama tetap dipakai di balik wizard, sehingga export Word/PDF/PPTX, template, dan Markdown tidak berubah kontraknya.
+- Verifikasi: `npx tsc --noEmit` exit 0, diagnostics bersih, dan `git diff --check` bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

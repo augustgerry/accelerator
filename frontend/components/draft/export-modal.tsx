@@ -41,6 +41,7 @@ interface ExportModalProps {
 }
 
 type ExportTab = "standard" | "template" | "text";
+type ExportStep = 1 | 2 | 3;
 
 type CorporateBranding = {
   companyName: string;
@@ -84,8 +85,21 @@ export function ExportModal({
     }
   }, []);
 
+  useEffect(() => {
+    if (isOpen) {
+      setExportStep(1);
+      setActiveTab("standard");
+    }
+  }, [isOpen]);
+
   // ── Tab state
   const [activeTab, setActiveTab] = useState<ExportTab>("standard");
+  const [exportStep, setExportStep] = useState<ExportStep>(1);
+
+  const goToExportStep = (step: ExportStep) => {
+    setExportStep(step);
+    setActiveTab(step === 1 ? "standard" : step === 2 ? "template" : "text");
+  };
 
   // ── Template tab state
   const templateInputRef = useRef<HTMLInputElement>(null);
@@ -424,10 +438,10 @@ export function ExportModal({
     }
   };
 
-  const TABS: { key: ExportTab; label: string; icon: React.ReactNode }[] = [
-    { key: "standard", label: "Format Dokumen & Slide", icon: <Table2 size={14} /> },
-    { key: "template", label: "Gunakan Template Word", icon: <Wand2 size={14} /> },
-    { key: "text", label: "Salin / Markdown", icon: <FileCode2 size={14} /> },
+  const STEPS: { key: ExportStep; label: string; caption: string; icon: React.ReactNode }[] = [
+    { key: 1, label: "Format", caption: "Pilih output", icon: <Table2 size={14} /> },
+    { key: 2, label: "Template", caption: "Opsional", icon: <Wand2 size={14} /> },
+    { key: 3, label: "Preview", caption: "Review hasil", icon: <Eye size={14} /> },
   ];
 
   // Headings from template for preview
@@ -454,20 +468,25 @@ export function ExportModal({
           </button>
         </div>
 
-        {/* ── Tab Navigation ────────────────────────────────────────────────── */}
-        <div className="flex border-b border-surface-border bg-surface px-4">
-          {TABS.map((tab) => (
+        {/* ── Export Wizard Steps ───────────────────────────────────────────── */}
+        <div className="grid grid-cols-3 border-b border-surface-border bg-surface px-3 sm:px-4">
+          {STEPS.map((step) => (
             <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-all border-b-2 -mb-px ${
-                activeTab === tab.key
+              key={step.key}
+              onClick={() => goToExportStep(step.key)}
+              className={`flex items-center justify-center gap-2 border-b-2 px-2 py-2.5 text-xs font-medium transition-all sm:justify-start sm:px-4 ${
+                exportStep === step.key
                   ? "border-accent text-accent-ink"
                   : "border-transparent text-text-muted hover:text-text-primary"
               }`}
             >
-              {tab.icon}
-              {tab.label}
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full ${exportStep >= step.key ? "bg-accent-soft text-accent-ink" : "bg-surface-raised"}`}>
+                {step.icon}
+              </span>
+              <span className="text-left">
+                <span className="block">{step.key}. {step.label}</span>
+                <span className="hidden text-[10px] font-normal text-text-muted sm:block">{step.caption}</span>
+              </span>
             </button>
           ))}
         </div>
