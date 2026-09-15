@@ -244,6 +244,12 @@ knowledge-accelerator/
 - `backend/app/routers/draft.py`: validasi data URL dan image bytes dengan Pillow sebelum render logo pada halaman pertama PDF; logo rusak diabaikan dengan aman.
 - Verifikasi: `npx tsc --noEmit` exit 0, frontend diagnostics bersih, backend compile bersih, dan sample invalid/valid logo sama-sama menghasilkan response PDF aman.
 
+### ✅ Next Batch Poin 3: Dashboard Cleanup
+- `frontend/app/page.tsx`: dashboard diringkas menjadi search utama, `New Proposal`, `Open Library`, status knowledge base, dan `Recent Projects`.
+- Copy panjang serta dua kartu fitur besar dihapus agar entry point lebih cepat dipahami.
+- Recent project memakai session backend dan membuka Draft melalui mekanisme restore yang sudah ada.
+- Verifikasi: `npx tsc --noEmit` exit 0, diagnostics dashboard bersih, dan `git diff --check` bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

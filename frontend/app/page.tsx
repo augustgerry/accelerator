@@ -7,16 +7,14 @@ import { OnboardingModal } from "@/components/onboarding-modal";
 import { Button } from "@/components/ui/button";
 import {
   Search,
-  Sparkles,
   FileEdit,
   ArrowRight,
   Database,
   CheckCircle2,
-  FolderSync,
   HelpCircle,
-  FileText,
+  Clock3,
 } from "lucide-react";
-import { getDocumentsSummary, type DocumentsSummary } from "@/lib/api";
+import { getDocumentsSummary, listProposalSessions, type DocumentsSummary, type ProposalSession } from "@/lib/api";
 
 const SUGGESTED_SEARCHES = [
   "SLA response time & teknisi on-site SMBC",
@@ -30,11 +28,15 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [summary, setSummary] = useState<DocumentsSummary | null>(null);
+  const [recentProjects, setRecentProjects] = useState<ProposalSession[]>([]);
 
   useEffect(() => {
-    getDocumentsSummary()
-      .then((data) => setSummary(data))
-      .catch((e) => console.error("Could not fetch summary:", e));
+    Promise.all([getDocumentsSummary(), listProposalSessions().catch(() => [])])
+      .then(([data, projects]) => {
+        setSummary(data);
+        setRecentProjects(projects.slice(0, 3));
+      })
+      .catch((e) => console.error("Could not fetch dashboard data:", e));
   }, []);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -114,72 +116,49 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* TWO PRIMARY ACTION CARDS (GLEAN vs LOOPIO) */}
-        <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2">
-          {/* Card 1: Glean Model (Search) */}
-          <div
-            onClick={() => router.push("/search")}
-            className="group cursor-pointer rounded-xl border border-surface-border bg-surface-raised p-6 shadow-subtle hover:border-accent hover:shadow-panel transition-all duration-200 relative flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-soft text-accent-ink group-hover:scale-105 transition-transform">
-                  <Search size={22} />
-                </div>
-                <span className="rounded-full bg-surface border border-surface-border px-2.5 py-0.5 text-[11px] font-semibold text-text-secondary">
-                  Glean Model
-                </span>
-              </div>
-
-              <h2 className="text-lg font-bold text-text-primary group-hover:text-ink-900">
-                Tanya Knowledge Base Internal
-              </h2>
-              <p className="mt-2 text-xs leading-relaxed text-text-muted">
-                Cari arsip proposal, sizing checklist, dan spesifikasi masa lalu dengan
-                jawaban natural dan sitasi dokumen sumber yang dapat diverifikasi.
-              </p>
-            </div>
-
-            <div className="mt-6 flex items-center justify-between border-t border-surface-border pt-4">
-              <span className="text-xs font-semibold text-text-primary group-hover:underline flex items-center gap-1">
-                Buka Pencarian <ArrowRight size={13} />
-              </span>
-              <span className="text-[11px] text-text-muted">Q&A Tanya Jawab</span>
-            </div>
-          </div>
-
-          {/* Card 2: Loopio Model (Draft Accelerator) */}
-          <div
+        <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <button
             onClick={() => router.push("/draft")}
-            className="group cursor-pointer rounded-xl border border-surface-border bg-surface-raised p-6 shadow-subtle hover:border-accent hover:shadow-panel transition-all duration-200 relative flex flex-col justify-between"
+            className="group flex items-center justify-between rounded-lg border border-surface-border bg-surface-raised px-4 py-3 text-left transition-colors hover:border-accent hover:bg-accent-soft/30"
           >
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-soft text-accent-ink group-hover:scale-105 transition-transform">
-                  <FileEdit size={22} />
-                </div>
-                <span className="rounded-full bg-accent-soft border border-accent/40 px-2.5 py-0.5 text-[11px] font-semibold text-accent-ink">
-                  Loopio Model
-                </span>
-              </div>
+            <span className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-accent-soft text-accent-ink"><FileEdit size={17} /></span>
+              <span><span className="block text-sm font-semibold">New Proposal</span><span className="block text-[11px] text-text-muted">Upload TOR / RFP dan mulai drafting</span></span>
+            </span>
+            <ArrowRight size={15} className="text-text-muted transition-transform group-hover:translate-x-0.5" />
+          </button>
+          <button
+            onClick={() => router.push("/library")}
+            className="group flex items-center justify-between rounded-lg border border-surface-border bg-surface-raised px-4 py-3 text-left transition-colors hover:border-secondary hover:bg-secondary-soft/30"
+          >
+            <span className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-secondary-soft text-secondary"><Database size={17} /></span>
+              <span><span className="block text-sm font-semibold">Open Library</span><span className="block text-[11px] text-text-muted">Documents, templates, dan projects</span></span>
+            </span>
+            <ArrowRight size={15} className="text-text-muted transition-transform group-hover:translate-x-0.5" />
+          </button>
+        </div>
 
-              <h2 className="text-lg font-bold text-text-primary group-hover:text-ink-900">
-                Akselerator Tanggapan Tender (TOR / RFP)
-              </h2>
-              <p className="mt-2 text-xs leading-relaxed text-text-muted">
-                Upload dokumen tender klien, otomatis pecah menjadi checklist butir soal,
-                susun draf tanggapan siap copas per klausul, dan ekspor proposal 1-klik.
-              </p>
+        {recentProjects.length > 0 && (
+          <div className="mt-8">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-text-muted">Recent Projects</h2>
+              <button onClick={() => router.push("/library")} className="text-xs font-medium text-secondary hover:underline">Lihat semua</button>
             </div>
-
-            <div className="mt-6 flex items-center justify-between border-t border-surface-border pt-4">
-              <span className="text-xs font-semibold text-text-primary group-hover:underline flex items-center gap-1">
-                Buka Checklist Tender <ArrowRight size={13} />
-              </span>
-              <span className="text-[11px] text-accent-ink font-medium">Loopio Checklist</span>
+            <div className="divide-y divide-surface-border overflow-hidden rounded-lg border border-surface-border bg-surface-raised">
+              {recentProjects.map((project) => (
+                <button
+                  key={project.id}
+                  onClick={() => { localStorage.setItem("synapse-proposal-session-id", project.id); router.push("/draft"); }}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface"
+                >
+                  <span className="min-w-0"><span className="block truncate text-xs font-semibold">{project.title}</span><span className="mt-0.5 block text-[11px] text-text-muted">{project.items.length} klausul · {project.status}</span></span>
+                  <span className="flex shrink-0 items-center gap-1 text-[10px] text-text-muted"><Clock3 size={12} />{new Date(project.updated_at).toLocaleDateString("id-ID")}</span>
+                </button>
+              ))}
             </div>
           </div>
-        </div>
+        )}
 
         {/* BOTTOM HELPER & STATUS BAR */}
         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-surface-border bg-surface-raised px-6 py-3.5 shadow-subtle text-xs">
