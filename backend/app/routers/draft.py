@@ -763,12 +763,28 @@ def export_from_template(payload: ExportFromTemplateRequest):
 
     doc.add_paragraph()  # spacer
 
-    # ── Compile items categorically ────────────────────────────────────────────
-    # Group items by category so they can be placed under template headings
     from collections import defaultdict
-    items_by_category: dict[str, list[ExportFromTemplateItem]] = defaultdict(list)
-    for it in payload.items:
-        items_by_category[it.category].append(it)
+
+    # ── AI section mapping: match each item to the most fitting template heading ──
+    headings = [
+        {"index": idx, "text": sec.text.strip()}
+        for idx, sec in enumerate(payload.template_sections)
+        if sec.text.strip() and (sec.level > 0 or "heading" in sec.style_name.lower())
+    ]
+    items_for_mapping = [
+        {
+            "id": it.id,
+            "title": it.title,
+            "category": it.category,
+            "requirement_text": it.requirement_text,
+        }
+        for it in payload.items
+    ]
+    item_to_heading_index = get_llm_provider().map_items_to_sections(headings, items_for_mapping)
+    items_by_id = {it.id: it for it in payload.items}
+    items_by_heading_index: dict[int, list[ExportFromTemplateItem]] = defaultdict(list)
+    for item_id, heading_index in item_to_heading_index.items():
+        items_by_heading_index[heading_index].append(items_by_id[item_id])
 
     # ── Replay template structure ──────────────────────────────────────────────
     PLACEHOLDER_RE = r"\{\{.*?\}\}|\[ISI_KONTEN\]|\[TANGGAPAN\]|\[CONTENT\]|\[FILL\]"
