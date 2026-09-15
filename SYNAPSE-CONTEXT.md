@@ -316,6 +316,11 @@ knowledge-accelerator/
 - `frontend/app/library/page.tsx` dan sidebar: sumber diberi nama Google Drive/Drive, bukan library manual.
 - Verifikasi: `npm run build` exit 0, backend compile bersih, dan diagnostics Search/Draft/Settings/Drive bersih.
 
+### ✅ Export Client Exception Fix
+- Root cause: `ExportModal` melakukan `return null` sebelum hook preflight dipanggil, sehingga urutan React hooks berubah saat modal dibuka/tutup.
+- Fix: guard `!isOpen` dipindahkan setelah seluruh hooks.
+- Verifikasi: `npm run build` exit 0, diagnostics `export-modal.tsx` bersih, dan `git diff --check` bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

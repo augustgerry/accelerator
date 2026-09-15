@@ -151,8 +151,6 @@ export function ExportModal({
   const docxTemplateLibrary = (templateLibrary ?? []).filter((d) => d.title.toLowerCase().endsWith(".docx"));
   const pptxTemplateLibrary = (templateLibrary ?? []).filter((d) => d.title.toLowerCase().endsWith(".pptx"));
 
-  if (!isOpen) return null;
-
   const targetItems = items.filter((it) => {
     if (onlyFinal) return it.status === "final";
     return it.status === "final" || it.status === "draft";
@@ -186,6 +184,8 @@ export function ExportModal({
     if (templateOnlyFinal) return it.status === "final";
     return it.status === "final" || it.status === "draft";
   });
+
+  if (!isOpen) return null;
 
   const compiledText = targetItems
     .map((it, idx) => {
