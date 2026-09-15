@@ -34,6 +34,14 @@
 - Verifikasi: `npx tsc --noEmit` clean, backend `py_compile` + import OK, **end-to-end test dengan .pptx asli** dibuat via `python-pptx` (3 slide: cover+item+closing) → hasil 4 slide dengan urutan & isi benar (2 item slide ke-duplikasi & ke-isi sesuai data, cover/closing ke-substitusi global token). Test error path (template tanpa marker `{{ITEM_*}}`) juga confirmed raise HTTPException 400 yang jelas.
 - Belum ditest manual lewat browser (cuma tsc + backend function test) — kalau mau validasi UI beneran, jalanin `npm run dev` + `uvicorn` lalu coba upload `.pptx` asli lewat modal.
 
+### ✅ Sub-task 4 SELESAI: Template Library sekarang juga nyimpen `.pptx`
+- `backend/app/services/drive_sync.py`: tambah konstanta `PPTX_MIME`, dan `fetch_and_extract_text()` sekarang bisa ekstrak teks dari `.pptx` (baca semua `shape.text_frame.text` per slide via `python-pptx`) — sebelumnya file `.pptx` di folder Drive selalu ke-skip pas sync (mimeType gak dikenali).
+- `backend/app/routers/documents.py`: `doc_type = "template"` sekarang berlaku utk `.docx` MAUPUN `.pptx` (`f["mimeType"] in (DOCX_MIME, PPTX_MIME)`). Endpoint `/documents/{id}/download` milih `media_type` dari ekstensi `doc.title` (bukan field DB baru — sengaja gak nambah kolom/migration, ekstensi filename yang udah kesimpen di `title` cukup).
+- Frontend: `templateLibrary` di-split jadi `docxTemplateLibrary` (dropdown tab Template mode docx) dan `pptxTemplateLibrary` (dropdown baru di card "Clone Template PowerPoint"), masing-masing filter by ekstensi filename. Pilih dari dropdown PPTX langsung `setPptxTemplateFile()` (gak lewat parsing struktur, karena PPTX clone gak butuh itu).
+- Verifikasi: `npx tsc --noEmit` clean, backend `py_compile` + import OK, unit-check logic doc_type tagging & media_type selection.
+
+**PRIORITY 4 KELAR SEPENUHNYA.** Semua 4 sub-task selesai: LLM semantic mapping, wording per jenis dokumen, PPTX template-following, dan template library yang nyimpen kedua format.
+
 ## ✅ PRIORITY 2 SELESAI (Folder Sync → Template Library)
 - Backend: `POST /documents/sync` (`documents.py`) sekarang set `doc_type = "template"` otomatis untuk file `.docx` (via `DOCX_MIME` check), `doc_type = "document"` untuk selainnya. Update juga jalan di re-sync dokumen existing.
 - Backend: `GET /documents/{id}/download` — re-download bytes .docx asli dari Drive by `source_drive_id` (fungsi baru `drive_sync.download_file_bytes()`), khusus dokumen `doc_type == "template"`.
