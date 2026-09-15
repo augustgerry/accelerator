@@ -340,7 +340,7 @@ knowledge-accelerator/
   2. `ExportFromTemplateRequest` / `clone-template` perlu tau `template_type` target (proposal/sow/solution_brief/mom) supaya AI tau gaya bahasa & struktur yang diharapkan per section.
   3. PPTX template-following (gap terbesar, belum ada sama sekali): terima upload/pilih `.pptx` template dari library, baca slide master/layout & placeholder asli (pakai `python-pptx` baca `slide.slide_layout`, `placeholders`), lalu AI isi teks per placeholder sesuai konten TOR — bukan generate slide baru dari layout fixed hardcoded seperti sekarang.
   4. Extend Template Library (Priority 2) supaya sync Drive juga tag `.pptx` sebagai `doc_type = "template"` (sekarang cuma docx yang di-tag, lihat `documents.py` `DOCX_MIME` check).
-- **STATUS: BELUM MULAI** — masih scoping, tunggu keputusan user mulai dari sub-task mana.
+- **STATUS: SELESAI** — semantic mapping, document-type awareness, DOCX/PPTX template cloning, template library PPTX, dan Office-rendered full-fidelity PDF sudah tersedia.
 
 ---
 
@@ -381,7 +381,8 @@ npm run dev
 ## 🐛 KNOWN ISSUES / NOTES
 
 - `retrieve_chunks_with_full_metadata` tidak dedup per dokumen — satu dokumen bisa muncul beberapa kali di search results (by design, tiap chunk = 1 card)
-- Template export (`export-from-template`) menggunakan keyword matching antara heading text dan item category — kalau nama heading di template tidak cocok dengan category name (Teknis/SLA dll), items akan masuk ke "Tanggapan Teknis Tambahan" fallback section
+- Template export memakai semantic section mapping via LLM dengan fallback heuristic jika provider tidak tersedia; item yang tidak punya heading relevan masuk ke fallback section.
+- Full-fidelity PDF renderer membutuhkan Windows dengan Microsoft Word/PowerPoint terpasang; environment tanpa Office memakai fallback ReportLab PDF.
 - Backend masih perlu GDrive credentials (credentials.json) untuk fitur sync dokumen
 
 ---
