@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -31,6 +31,29 @@ def list_documents(
         }
         for d in docs
     ]
+
+
+@router.get("/summary")
+def get_summary(
+    workspace_id: str = settings.default_workspace_id,
+    session: Session = Depends(get_session),
+):
+    total_documents = session.execute(
+        select(func.count()).select_from(Document).where(Document.workspace_id == workspace_id)
+    ).scalar_one()
+    total_chunks = session.execute(
+        select(func.count())
+        .select_from(DocumentChunk)
+        .where(DocumentChunk.workspace_id == workspace_id)
+    ).scalar_one()
+    last_synced_at = session.execute(
+        select(func.max(Document.updated_at)).where(Document.workspace_id == workspace_id)
+    ).scalar_one()
+    return {
+        "totalDocuments": total_documents,
+        "totalChunks": total_chunks,
+        "lastSyncedAt": last_synced_at.isoformat() if last_synced_at else None,
+    }
 
 
 @router.post("/sync")

@@ -21,5 +21,5 @@ export type IndexedDocument = {
   docType: SourceCitation["docType"];
   division: string;
   updatedAt: string;
-  sizeLabel: string;
+  sizeLabel?: string;
 };

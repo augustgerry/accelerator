@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, UploadFile
+import io
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -34,6 +36,23 @@ def generate_draft(payload: DraftRequest, session: Session = Depends(get_session
 
 @router.post("/upload")
 async def upload_tor(file: UploadFile):
-    """Accepts a TOR/RFP file, extracts text, returns it for use in /draft.
-    TODO: route to pypdf or python-docx based on file.content_type."""
-    raise NotImplementedError
+    """Accepts a TOR/RFP file, extracts text, returns it for use in /draft."""
+    data = await file.read()
+    name = (file.filename or "").lower()
+
+    if file.content_type == "application/pdf" or name.endswith(".pdf"):
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(data))
+        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    elif name.endswith(".docx") or file.content_type == (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ):
+        from docx import Document as DocxDocument
+
+        doc = DocxDocument(io.BytesIO(data))
+        text = "\n".join(p.text for p in doc.paragraphs)
+    else:
+        raise HTTPException(status_code=400, detail="Only PDF or DOCX files are supported")
+
+    return {"text": text}

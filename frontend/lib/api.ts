@@ -1,6 +1,53 @@
-import type { ChatMessage, SourceCitation } from "@/lib/types";
+import type { ChatMessage, IndexedDocument, SourceCitation } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+async function getJson<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`API ${path} failed (${res.status}): ${detail}`);
+  }
+  return res.json();
+}
+
+export async function listDocuments(): Promise<IndexedDocument[]> {
+  return getJson<IndexedDocument[]>("/documents");
+}
+
+export type DocumentsSummary = {
+  totalDocuments: number;
+  totalChunks: number;
+  lastSyncedAt: string | null;
+};
+
+export async function getDocumentsSummary(): Promise<DocumentsSummary> {
+  return getJson<DocumentsSummary>("/documents/summary");
+}
+
+export async function syncDocuments(): Promise<{ synced: string[]; skipped: string[] }> {
+  const res = await fetch(`${API_BASE}/documents/sync`, { method: "POST" });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`API /documents/sync failed (${res.status}): ${detail}`);
+  }
+  return res.json();
+}
+
+export async function uploadTor(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_BASE}/draft/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`API /draft/upload failed (${res.status}): ${detail}`);
+  }
+  const data: { text: string } = await res.json();
+  return data.text;
+}
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
