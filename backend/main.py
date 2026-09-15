@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import query, draft, documents, health, research
+from app.routers import query, draft, documents, health, research, sessions
 from app.services.embeddings import warm_up
 
 app = FastAPI(
@@ -27,3 +27,4 @@ app.include_router(query.router)
 app.include_router(draft.router)
 app.include_router(documents.router)
 app.include_router(research.router)
+app.include_router(sessions.router)

@@ -15,6 +15,9 @@ interface ProgressHeaderProps {
   onQualityCheck: () => void;
   isCheckingQuality: boolean;
   qualityScore?: number;
+  onSaveSession: () => void;
+  isSavingSession: boolean;
+  sessionSaved?: string;
 }
 
 export function ProgressHeader({
@@ -28,6 +31,9 @@ export function ProgressHeader({
   onQualityCheck,
   isCheckingQuality,
   qualityScore,
+  onSaveSession,
+  isSavingSession,
+  sessionSaved,
 }: ProgressHeaderProps) {
   const total = items.length;
   const finalCount = items.filter((it) => it.status === "final").length;
@@ -129,6 +135,17 @@ export function ProgressHeader({
           >
             <ShieldCheck size={14} className={isCheckingQuality ? "animate-pulse text-accent-ink" : "text-accent-ink"} />
             <span>{isCheckingQuality ? "Memeriksa..." : qualityScore !== undefined ? `Quality ${qualityScore}` : "Cek Kualitas"}</span>
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onSaveSession}
+            disabled={isSavingSession}
+            className="flex items-center gap-1.5 border-surface-border hover:border-accent"
+          >
+            <FileText size={14} className={isSavingSession ? "animate-pulse text-accent-ink" : "text-accent-ink"} />
+            <span>{isSavingSession ? "Menyimpan..." : sessionSaved ?? "Simpan Project"}</span>
           </Button>
 
           <Button

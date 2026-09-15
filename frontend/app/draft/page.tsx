@@ -24,7 +24,15 @@ import {
   SendHorizontal,
   ChevronRight,
 } from "lucide-react";
-import { uploadTor, segmentTor, generateItemDraft, qualityCheckDraft, type QualityCheckResult } from "@/lib/api";
+import {
+  uploadTor,
+  segmentTor,
+  generateItemDraft,
+  qualityCheckDraft,
+  getProposalSession,
+  saveProposalSession,
+  type QualityCheckResult,
+} from "@/lib/api";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import type { RequirementItem, RequirementStatus, SourceCitation } from "@/lib/types";
 
@@ -104,6 +112,7 @@ const SAMPLE_DEMO_ITEMS: RequirementItem[] = [
 ];
 
 const LS_KEY = "synapse-draft-session";
+const LS_SESSION_ID_KEY = "synapse-proposal-session-id";
 
 function loadFromStorage(): { fileName: string; torText: string; items: RequirementItem[] } | null {
   try {
@@ -145,6 +154,9 @@ export default function DraftPage() {
   const [hydrated, setHydrated] = useState(false);
   const [qualityReport, setQualityReport] = useState<QualityCheckResult | null>(null);
   const [checkingQuality, setCheckingQuality] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [savingSession, setSavingSession] = useState(false);
+  const [sessionSaved, setSessionSaved] = useState<string | null>(null);
 
   // ── Restore from localStorage on mount ──────────────────────────────────
   useEffect(() => {
@@ -157,6 +169,28 @@ export default function DraftPage() {
       setLastSaved("(restored)");
     }
     setHydrated(true);
+  }, []);
+
+  // Restore the last server-backed project when a session id exists.
+  useEffect(() => {
+    let cancelled = false;
+    const savedSessionId = localStorage.getItem(LS_SESSION_ID_KEY);
+    if (!savedSessionId) return;
+    setSessionId(savedSessionId);
+    getProposalSession(savedSessionId)
+      .then((saved) => {
+        if (cancelled || !saved.file_name || saved.items.length === 0) return;
+        setFileName(saved.file_name);
+        setTorText(saved.tor_text);
+        setItems(saved.items);
+        setSelectedItemId(saved.items[0]?.id ?? null);
+        setSessionSaved("Project dipulihkan");
+      })
+      .catch(() => {
+        localStorage.removeItem(LS_SESSION_ID_KEY);
+        setSessionId(null);
+      });
+    return () => { cancelled = true; };
   }, []);
 
   // ── Auto-save to localStorage whenever items or fileName changes ─────────
@@ -245,7 +279,12 @@ export default function DraftPage() {
     setSelectedItemId(null);
     setErrorMessage(null);
     setLastSaved(null);
-    try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
+    setSessionId(null);
+    setSessionSaved(null);
+    try {
+      localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(LS_SESSION_ID_KEY);
+    } catch { /* ignore */ }
   };
 
   // Generate draft for a single item
@@ -323,6 +362,31 @@ export default function DraftPage() {
       setErrorMessage(err instanceof Error ? err.message : "Gagal menjalankan quality check");
     } finally {
       setCheckingQuality(false);
+    }
+  };
+
+  const handleSaveSession = async () => {
+    if (!fileName || items.length === 0 || savingSession) return;
+    setSavingSession(true);
+    try {
+      const saved = await saveProposalSession(
+        {
+          title: fileName.replace(/\.[^/.]+$/, ""),
+          file_name: fileName,
+          tor_text: torText,
+          items: items.map(({ isGenerating: _isGenerating, error: _error, ...item }) => item),
+          status: items.every((item) => item.status === "final") ? "completed" : "draft",
+        },
+        sessionId ?? undefined,
+      );
+      setSessionId(saved.id);
+      localStorage.setItem(LS_SESSION_ID_KEY, saved.id);
+      setSessionSaved("Tersimpan");
+      setTimeout(() => setSessionSaved(null), 2500);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Gagal menyimpan project");
+    } finally {
+      setSavingSession(false);
     }
   };
 
@@ -499,6 +563,9 @@ export default function DraftPage() {
             onQualityCheck={handleQualityCheck}
             isCheckingQuality={checkingQuality}
             qualityScore={qualityReport?.overall_score}
+            onSaveSession={handleSaveSession}
+            isSavingSession={savingSession}
+            sessionSaved={sessionSaved ?? undefined}
           />
 
           {/* Split Workspace */}

@@ -205,6 +205,13 @@ knowledge-accelerator/
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.
 - Verifikasi: scoring test menghasilkan status warning/fail sesuai input, backend compile bersih, `npx tsc --noEmit` exit 0, dan diagnostics editor bersih.
 
+### ✅ Enhancement Poin 4: Persistent Proposal Sessions
+- `backend/app/models.py` dan migration `d3b4c5d6e7f8`: tambah tabel `proposal_sessions` untuk menyimpan title, TOR, item draft, status, dan timestamp per workspace.
+- `backend/app/routers/sessions.py`: CRUD session (`GET/POST /sessions`, `GET/PUT/DELETE /sessions/{session_id}`).
+- `frontend/lib/api.ts` dan `frontend/app/draft/page.tsx`: tombol Simpan Project, create/update session, restore session terakhir, tetap mempertahankan localStorage sebagai fallback cepat.
+- `frontend/components/draft/progress-header.tsx`: indikator simpan session.
+- Verifikasi: backend/app dan migration compile bersih, migration head `d3b4c5d6e7f8`, route methods terdaftar di router session, `npx tsc --noEmit` exit 0, dan diagnostics editor bersih.
+
 ### 🟡 PRIORITY 2: Folder Sync → Template Library (Google Drive Integration)
 **File:** `backend/app/routers/documents.py` & `frontend/components/draft/export-modal.tsx`
 - Saat sync Google Drive, deteksi dokumen template (.docx) dan beri tag `doc_type = "template"`.

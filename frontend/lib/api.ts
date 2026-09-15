@@ -203,6 +203,50 @@ export async function qualityCheckDraft(items: Array<{
   return postJson<QualityCheckResult>("/draft/quality-check", { items });
 }
 
+export type ProposalSession = {
+  id: string;
+  title: string;
+  file_name: string;
+  tor_text: string;
+  items: Array<{
+    id: string;
+    title: string;
+    requirement_text: string;
+    category: string;
+    draft_text: string;
+    status: "todo" | "draft" | "final";
+    sources?: SourceCitation[];
+  }>;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type ProposalSessionPayload = Omit<ProposalSession, "id" | "created_at" | "updated_at"> & {
+  workspace_id?: string;
+};
+
+export async function getProposalSession(sessionId: string): Promise<ProposalSession> {
+  return getJson<ProposalSession>(`/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export async function saveProposalSession(
+  payload: ProposalSessionPayload,
+  sessionId?: string,
+): Promise<ProposalSession> {
+  const path = sessionId ? `/sessions/${encodeURIComponent(sessionId)}` : "/sessions";
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: sessionId ? "PUT" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal menyimpan project (${res.status}): ${detail}`);
+  }
+  return res.json();
+}
+
 export async function exportProposalDocx(payload: {
   document_title: string;
   template_type: "matrix" | "narrative" | "sow" | "solution_brief" | "mom";
