@@ -4,7 +4,8 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Task Saat Ini:** Scoping PRIORITY 4 (belum mulai coding) — "Full-Fidelity Template-Following Generator" untuk semua jenis dokumen.
+- **Task Saat Ini:** Melanjutkan enhancement produk poin 2-5: PDF export, quality check, proposal sessions, dan batch review.
+- **Poin 1 selesai:** Hardening LLM provider sudah diimplementasikan di commit sesi ini. Provider/API key divalidasi, error vendor dipetakan ke pesan aman, endpoint query/draft tetap punya fallback manual/lokal, dan external research mengembalikan HTTP 503 yang actionable.
 - **Request User (verbatim intent):** User mau generator proposal (Proposal Teknis / SoW / Solution Brief / MoM / PPT Pitch Deck) bisa dikasih **landasan template** — baik upload manual atau ambil dari Template Library hasil sync Drive (Priority 2) — lalu AI ikutin template itu **sampai ke sub-bab, jenis font, ukuran font, semua detail teknis Word/PPT**, dan ngisi konten pakai AI sepintar mungkin sehingga hasil akhirnya (dikasih TOR + template) langsung jadi dengan kesalahan minim.
 - **Gap Analisis (kondisi existing vs yang diminta):**
   1. `clone-template` (docx) — SUDAH preserve 100% formatting, tapi cuma isi placeholder token (`{{...}}`), bukan pemetaan per-sub-bab otomatis, dan cuma untuk 1 mode compiled response, belum ngerti bedanya SoW/MoM/Solution Brief.
@@ -186,6 +187,12 @@ knowledge-accelerator/
 - Tambahkan endpoint `GET /documents/{id}/chunks` untuk ambil preview chunk dokumen.
 - Di frontend UI: expand dokumen saat diklik untuk menampilkan cuplikan teks chunk-chunk yang tersimpan di pgvector.
 - **STATUS: SELESAI** (commit `6e1af4d`).
+
+### ✅ Enhancement Poin 1: LLM Provider Reliability
+- `backend/app/services/llm_provider.py`: validasi provider/API key, `LLMProviderError`, dan formatter error aman untuk billing, quota, auth, timeout, serta provider yang belum tersedia.
+- `backend/app/routers/query.py` dan `backend/app/routers/draft.py`: fallback jawaban/source/manual saat provider gagal.
+- `backend/app/routers/research.py`: kegagalan provider dikembalikan sebagai HTTP 503 dengan pesan aman.
+- Verifikasi: `backend/venv` compile check, provider error formatter, invalid provider check, dan diagnostics editor bersih.
 
 ### 🟡 PRIORITY 2: Folder Sync → Template Library (Google Drive Integration)
 **File:** `backend/app/routers/documents.py` & `frontend/components/draft/export-modal.tsx`

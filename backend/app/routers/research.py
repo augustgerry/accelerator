@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.config import settings
-from app.services.llm_provider import get_llm_provider
+from app.services.llm_provider import format_llm_error, get_llm_provider
 
 router = APIRouter(prefix="/research", tags=["research"])
 
@@ -32,6 +32,9 @@ def research_external(payload: ResearchRequest):
             status_code=403,
             detail="External research is disabled (set ENABLE_EXTERNAL_RESEARCH=true).",
         )
-    provider = get_llm_provider()
-    result = provider.research_external(payload.query)
+    try:
+        provider = get_llm_provider()
+        result = provider.research_external(payload.query)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=format_llm_error(exc)) from exc
     return ResearchResponse(**result)

@@ -11,7 +11,12 @@ from app.services.retrieval import (
     retrieve_relevant_chunks,
     retrieve_relevant_chunks_with_sources,
 )
-from app.services.llm_provider import get_llm_provider
+from app.services.llm_provider import (
+    _fallback_map_items_to_sections,
+    _fallback_segment_text,
+    format_llm_error,
+    get_llm_provider,
+)
 from app.db import get_session
 
 router = APIRouter(prefix="/draft", tags=["draft"])
@@ -73,8 +78,11 @@ def generate_draft(payload: DraftRequest, session: Session = Depends(get_session
     kb_chunks = retrieve_relevant_chunks(session, payload.workspace_id, payload.instruction)
     context = [payload.tor_text] + kb_chunks
 
-    provider = get_llm_provider()
-    draft = provider.answer(payload.instruction, context, mode="draft")
+    try:
+        provider = get_llm_provider()
+        draft = provider.answer(payload.instruction, context, mode="draft")
+    except Exception as exc:
+        draft = f"[LLM tidak tersedia: {format_llm_error(exc)}]\n\nSilakan tulis draf secara manual."
     return DraftResponse(draft_text=draft, sources_used=len(context))
 
 
@@ -84,8 +92,11 @@ def segment_tor(payload: SegmentRequest):
     if not payload.tor_text or not payload.tor_text.strip():
         return SegmentResponse(items=[])
 
-    provider = get_llm_provider()
-    raw_items = provider.segment_document(payload.tor_text)
+    try:
+        provider = get_llm_provider()
+        raw_items = provider.segment_document(payload.tor_text)
+    except Exception:
+        raw_items = _fallback_segment_text(payload.tor_text)
     items = [SegmentItem(**it) for it in raw_items]
     return SegmentResponse(items=items)
 
@@ -110,20 +121,15 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
     if payload.instruction:
         user_prompt += f"\n\nInstruksi Spesifik:\n{payload.instruction}"
 
-    provider = get_llm_provider()
     try:
+        provider = get_llm_provider()
         draft = provider.answer(user_prompt, context, mode="draft")
     except Exception as e:
-        # Gracefully handle API/billing errors (e.g. Anthropic credits) so UI remains smooth
-        err_msg = str(e)
-        if "credit balance" in err_msg.lower() or "billing" in err_msg.lower():
-            draft = (
-                f"[Catatan: Akun LLM belum memiliki kredit/kuota aktif. Detail: {err_msg}]\n\n"
-                f"Referensi klausul: {payload.requirement_text}\n\n"
-                f"Silakan tulis atau sesuaikan draf manual di sini."
-            )
-        else:
-            draft = f"[Gagal menghubungi LLM: {err_msg}]\n\nSilakan tulis atau perbaiki draf secara manual."
+        draft = (
+            f"[LLM tidak tersedia: {format_llm_error(e)}]\n\n"
+            f"Referensi klausul: {payload.requirement_text}\n\n"
+            "Silakan tulis atau sesuaikan draf manual di sini."
+        )
 
     source_models = [SourceMeta(**s) for s in sources]
     return DraftItemResponse(
@@ -819,7 +825,14 @@ def export_from_template(payload: ExportFromTemplateRequest):
         }
         for it in payload.items
     ]
-    item_to_heading_index = get_llm_provider().map_items_to_sections(headings, items_for_mapping)
+    try:
+        item_to_heading_index = get_llm_provider().map_items_to_sections(
+            headings, items_for_mapping
+        )
+    except Exception:
+        item_to_heading_index = _fallback_map_items_to_sections(
+            headings, items_for_mapping
+        )
     items_by_id = {it.id: it for it in payload.items}
     items_by_heading_index: dict[int, list[ExportFromTemplateItem]] = defaultdict(list)
     for item_id, heading_index in item_to_heading_index.items():

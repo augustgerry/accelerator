@@ -13,6 +13,14 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+class LLMProviderError(RuntimeError):
+    """User-safe error raised when an LLM provider is unavailable."""
+
+    def __init__(self, message: str, *, code: str = "provider_unavailable"):
+        super().__init__(message)
+        self.code = code
+
+
 class LLMProvider(ABC):
     @abstractmethod
     def answer(self, question: str, context_chunks: list[str], mode: str = "qa") -> str:
@@ -48,6 +56,10 @@ class ClaudeProvider(LLMProvider):
     def __init__(self):
         import anthropic
 
+        if not settings.anthropic_api_key:
+            raise LLMProviderError(
+                "ANTHROPIC_API_KEY belum dikonfigurasi.", code="missing_api_key"
+            )
         self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         self.model = settings.anthropic_model
 
@@ -240,8 +252,9 @@ class GeminiProvider(LLMProvider):
 
 class OpenAIProvider(LLMProvider):
     def __init__(self):
-        # TODO: wire up openai client with settings.openai_api_key
-        raise NotImplementedError("OpenAI provider not yet implemented")
+        raise LLMProviderError(
+            "Provider OpenAI belum tersedia di versi ini.", code="provider_unimplemented"
+        )
 
     def answer(self, question: str, context_chunks: list[str], mode: str = "qa") -> str:
         raise NotImplementedError
@@ -270,10 +283,40 @@ _PROVIDERS = {
 
 
 def get_llm_provider() -> LLMProvider:
-    provider_cls = _PROVIDERS.get(settings.llm_provider)
+    provider_name = settings.llm_provider.strip().lower()
+    provider_cls = _PROVIDERS.get(provider_name)
     if provider_cls is None:
-        raise ValueError(f"Unknown LLM_PROVIDER: {settings.llm_provider}")
-    return provider_cls()
+        raise LLMProviderError(
+            f"LLM_PROVIDER '{settings.llm_provider}' tidak dikenal. "
+            "Gunakan claude atau gemini.",
+            code="unknown_provider",
+        )
+    try:
+        return provider_cls()
+    except LLMProviderError:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to initialize LLM provider '%s'", provider_name)
+        raise LLMProviderError(
+            f"Provider {provider_name} gagal diinisialisasi.", code="provider_init_failed"
+        ) from exc
+
+
+def format_llm_error(exc: Exception) -> str:
+    """Turn vendor/configuration failures into a concise actionable message."""
+    if isinstance(exc, LLMProviderError):
+        return str(exc)
+
+    error_text = str(exc).lower()
+    if any(term in error_text for term in ("credit balance", "billing", "quota", "rate limit")):
+        return "Kuota atau kredit provider LLM sedang habis. Periksa billing atau ganti provider."
+    if any(term in error_text for term in ("api key", "api_key", "authentication", "unauthorized", "401")):
+        return "API key provider LLM tidak valid atau belum dikonfigurasi."
+    if any(term in error_text for term in ("timeout", "timed out", "connection")):
+        return "Provider LLM tidak merespons. Coba lagi beberapa saat lagi."
+
+    logger.exception("Unhandled LLM provider error")
+    return "Provider LLM gagal memproses permintaan. Periksa konfigurasi backend."
 
 
 _MAPPING_SYSTEM_PROMPT = (

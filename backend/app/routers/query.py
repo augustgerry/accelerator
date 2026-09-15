@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.services.retrieval import retrieve_chunks_with_full_metadata
-from app.services.llm_provider import get_llm_provider
+from app.services.llm_provider import format_llm_error, get_llm_provider
 from app.db import get_session
 
 router = APIRouter(prefix="/query", tags=["query"])
@@ -40,15 +40,14 @@ def query_knowledge_base(
     )
     chunks_text = [r["chunk_text"] for r in chunk_records]
 
-    provider = get_llm_provider()
     try:
+        provider = get_llm_provider()
         answer = provider.answer(payload.question, chunks_text, mode="qa")
     except Exception as e:
-        err_msg = str(e)
-        if "credit balance" in err_msg.lower() or "billing" in err_msg.lower():
-            answer = f"[LLM tidak aktif: {err_msg}] Berikut kutipan dokumen yang relevan."
-        else:
-            answer = f"[Gagal menghubungi LLM: {err_msg}]"
+        answer = (
+            f"[LLM tidak tersedia: {format_llm_error(e)}] "
+            "Berikut kutipan dokumen yang relevan."
+        )
 
     sources = [
         ChunkResult(
