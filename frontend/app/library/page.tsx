@@ -114,7 +114,7 @@ export default function LibraryPage() {
             className="flex w-fit items-center gap-1.5 border-surface-border"
           >
             {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            {syncing ? "Syncing..." : "Sync Drive"}
+            {syncing ? "Mengindeks Drive..." : "Refresh dari Drive"}
           </Button>
         </div>
 

@@ -175,6 +175,35 @@ export default function DraftPage() {
     setHydrated(true);
   }, []);
 
+  useEffect(() => {
+    const rawBrief = sessionStorage.getItem("synapse-search-brief");
+    if (!rawBrief) return;
+    try {
+      const brief = JSON.parse(rawBrief) as { question: string; answer: string };
+      const briefItem: RequirementItem = {
+        id: "search-brief-1",
+        title: brief.question,
+        requirement_text: brief.question,
+        category: "Brief dari Knowledge Search",
+        draft_text: "",
+        status: "todo",
+      };
+      setFileName("Brief-dari-Search.md");
+      setTorText(`${brief.question}\n\nJawaban knowledge base:\n${brief.answer}`);
+      setItems([briefItem]);
+      setSelectedItemId(briefItem.id);
+      sessionStorage.removeItem("synapse-search-brief");
+      setIsDraftingAll(true);
+      generateItemDraft(briefItem.id, brief.question, brief.answer, brief.answer)
+        .then((result) => {
+          setItems([{ ...briefItem, draft_text: result.draft_text, status: "draft", sources: result.sources }]);
+        })
+        .finally(() => setIsDraftingAll(false));
+    } catch {
+      sessionStorage.removeItem("synapse-search-brief");
+    }
+  }, []);
+
   // Restore the last server-backed project when a session id exists.
   useEffect(() => {
     let cancelled = false;

@@ -6,6 +6,7 @@ import { Topbar } from "@/components/topbar";
 import {
   Search,
   Sparkles,
+  FileEdit,
   FileText,
   Loader2,
   ArrowRight,
@@ -130,6 +131,15 @@ function SearchContent() {
   };
 
   const selectedChunk = result && selectedChunkIdx !== null ? result.sources[selectedChunkIdx] : null;
+
+  const createDocumentFromAnswer = () => {
+    if (!result) return;
+    sessionStorage.setItem("synapse-search-brief", JSON.stringify({
+      question: query,
+      answer: result.answer,
+    }));
+    router.push("/draft");
+  };
 
   return (
     <div className="flex h-screen flex-col bg-surface font-sans text-text-primary">
@@ -346,6 +356,13 @@ function SearchContent() {
                     {result.answer}
                   </p>
                 </div>
+                <button
+                  onClick={createDocumentFromAnswer}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-primary transition-colors hover:border-accent hover:bg-accent-soft"
+                >
+                  <FileEdit size={14} className="text-accent-ink" />
+                  Buat dokumen dari jawaban
+                </button>
               </div>
 
               {/* Selected chunk detail */}

@@ -309,6 +309,13 @@ knowledge-accelerator/
 - `frontend/app/library/page.tsx`, `frontend/components/sidebar.tsx`, dan dashboard: Library direframe menjadi Google Drive Workspace/Drive, karena dokumen dan template berasal dari hasil indexing Google Drive. Projects tetap merepresentasikan pekerjaan yang dibuat di Synapse.
 - Verifikasi: `npm run build` exit 0, backend compile bersih, dan diagnostics workflow bersih.
 
+### ✅ Final Workflow Connections
+- `frontend/app/search/page.tsx`: tombol `Buat dokumen dari jawaban` menyimpan brief percakapan dan membuka Draft.
+- `frontend/app/draft/page.tsx`: brief Search otomatis menjadi satu item grounded dan siap masuk Export Wizard.
+- `frontend/app/settings/page.tsx`: CTA `Connect & Sync Drive` menjelaskan dan menjalankan OAuth existing pada first sync.
+- `frontend/app/library/page.tsx` dan sidebar: sumber diberi nama Google Drive/Drive, bukan library manual.
+- Verifikasi: `npm run build` exit 0, backend compile bersih, dan diagnostics Search/Draft/Settings/Drive bersih.
+
 ### ✅ Enhancement Poin 3: Draft Quality Check
 - `backend/app/routers/draft.py`: endpoint `POST /draft/quality-check` mendeteksi jawaban kosong, jawaban terlalu singkat, placeholder, serta angka/target klausul yang belum terlihat di draft.
 - `frontend/lib/api.ts`, `frontend/app/draft/page.tsx`, dan `frontend/components/draft/progress-header.tsx`: tombol Cek Kualitas, skor keseluruhan, daftar isu teratas, dan navigasi langsung ke klausul bermasalah.

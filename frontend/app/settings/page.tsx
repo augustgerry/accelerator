@@ -256,13 +256,13 @@ export default function SettingsPage() {
         {/* ── Google Drive Sync ──────────────────────────────────────────────── */}
         <Card>
           <CardHeader
-            title="Google Drive Sync"
+            title="Connect Google Drive"
             eyebrow="Sumber Knowledge Base"
-            action={<Badge tone="neutral">Manual Sync</Badge>}
+            action={<Badge tone="neutral">Drive Source</Badge>}
           />
           <div className="p-5 space-y-3">
             <p className="text-sm text-text-secondary">
-              Sinkronisasi dokumen PDF/DOCX dari Google Drive ke knowledge base pgvector. Dokumen akan di-embed dan diindeks untuk pencarian.
+              Hubungkan Google Drive sebagai sumber utama Synapse. Saat pertama kali dijalankan, browser akan meminta izin Google; setelah itu dokumen dan template diindeks otomatis.
             </p>
             <div className="flex items-center gap-3">
               <Button
@@ -276,7 +276,7 @@ export default function SettingsPage() {
                 ) : (
                   <FolderSync size={14} className="text-accent-ink" />
                 )}
-                {syncing ? "Menyinkronkan..." : "Sync Sekarang"}
+                {syncing ? "Menghubungkan & indexing..." : "Connect & Sync Drive"}
               </Button>
               {syncResult && (
                 <span className="text-xs text-text-secondary">{syncResult}</span>
