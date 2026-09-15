@@ -70,6 +70,12 @@ export function ExportModal({
     "proposal" | "sow" | "solution_brief" | "mom"
   >("proposal");
 
+  // ── PPTX clone-template state (separate from docx flow — no structure parsing needed)
+  const pptxTemplateInputRef = useRef<HTMLInputElement>(null);
+  const [pptxTemplateFile, setPptxTemplateFile] = useState<File | null>(null);
+  const [generatingPptxClone, setGeneratingPptxClone] = useState(false);
+  const [pptxCloneError, setPptxCloneError] = useState<string | null>(null);
+
   // ── Template library (Google Drive templates, tagged doc_type = "template")
   const [templateLibrary, setTemplateLibrary] = useState<IndexedDocument[] | null>(null);
   const [libraryLoading, setLibraryLoading] = useState(false);
