@@ -865,14 +865,14 @@ def export_from_template(payload: ExportFromTemplateRequest):
                 if item.id in placed_item_ids:
                     continue
                 placed_item_ids.add(item.id)
-                _insert_item_block(doc, item, font_name, payload.template_default_font_size)
+                _insert_item_block(doc, item, font_name, payload.template_default_font_size, labels)
 
         elif re.search(PLACEHOLDER_RE, text, re.IGNORECASE):
             # This is a placeholder paragraph — replace with all compiled content
             unplaced = [it for it in payload.items if it.id not in placed_item_ids]
             for item in unplaced:
                 placed_item_ids.add(item.id)
-                _insert_item_block(doc, item, font_name, payload.template_default_font_size)
+                _insert_item_block(doc, item, font_name, payload.template_default_font_size, labels)
         else:
             # Regular body paragraph — reproduce verbatim
             body_para = doc.add_paragraph(text, style="Normal")
@@ -887,11 +887,11 @@ def export_from_template(payload: ExportFromTemplateRequest):
     # ── Fallback: append any items not yet placed ──────────────────────────────
     unplaced_remaining = [it for it in payload.items if it.id not in placed_item_ids]
     if unplaced_remaining:
-        fallback_heading = doc.add_heading("Tanggapan Teknis Tambahan", level=1)
+        fallback_heading = doc.add_heading(labels["fallback_heading"], level=1)
         for run in fallback_heading.runs:
             run.font.name = payload.template_default_font
         for item in unplaced_remaining:
-            _insert_item_block(doc, item, payload.template_default_font, payload.template_default_font_size)
+            _insert_item_block(doc, item, payload.template_default_font, payload.template_default_font_size, labels)
 
     bio = io.BytesIO()
     doc.save(bio)
