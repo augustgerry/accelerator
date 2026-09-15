@@ -48,7 +48,7 @@ User minta lanjutin kerjaan Copilot yang kepotong, lalu iteratif redesign besar 
 **4. Redesign Export Modal:**
 - `frontend/lib/document-types.ts` (baru): satu sumber kebenaran mapping **Jenis Dokumen → format yang diizinkan** (6 tipe: Proposal Teknis/SoW/Solution Brief/Minutes of Meetings/Klarifikasi Teknis/Pitch Deck × pdf/docx/pptx sesuai kombinasi masing-masing), dipakai bareng di `page.tsx` (upload screen) DAN `export-modal.tsx` (Standard tab + Template tab) biar konsisten.
 - **Bug nyata yang kefix:** endpoint `/draft/export-pdf` dulu HARDCODE `template_type: "narrative"` apa pun jenis dokumen yang dipilih (jadi PDF Solution Brief/SoW ikut gaya Proposal Teknis). Sekarang ngirim jenis dokumen asli.
-- Font dropdown diperluas dari 3 opsi → 25 font standar Microsoft Word.
+- Font dropdown diperluas dari 3 opsi → 26 font (Google Sans + 25 font standar Microsoft Word).
 - Field **Logo Customer** ditambah di step Format (khusus format PDF) — digambar di kanan-atas cover PDF, sejajar/mirror sama company logo (kiri-atas). Backend `ExportPdfRequest.customer_logo_data_url` baru, helper `_decode_logo_bytes()` dipakai bareng buat 2 logo.
 - Alur generate direstruktur: **Preview Dokumen → centang "saya setuju" → baru tombol Generate Document aktif**. Preview docx/pptx dikonversi ke PDF dulu (`convertOfficeToPdf`, udah ada sebelumnya) biar preview-nya nunjukkin font/bold/italic asli, bukan teks mentah. Ganti opsi apa pun (jenis dokumen/format/font/logo) otomatis reset gate ini, paksa preview ulang.
 - Step wizard di-rename: "Template" → "Ikuti Gaya File Lain", "Preview" → "Salin Teks" (karena isinya emang cuma salin markdown mentah, bukan preview beneran).

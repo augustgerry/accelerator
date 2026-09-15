@@ -65,9 +65,9 @@ const DEFAULT_BRANDING: CorporateBranding = {
   logoDataUrl: "",
 };
 
-// Standard fonts bundled with Microsoft Word / Microsoft 365.
+// Standard fonts bundled with Microsoft Word / Microsoft 365, plus Google Sans.
 const MS_WORD_FONTS = [
-  "Calibri", "Arial", "Times New Roman", "Cambria", "Georgia", "Garamond",
+  "Google Sans", "Calibri", "Arial", "Times New Roman", "Cambria", "Georgia", "Garamond",
   "Verdana", "Tahoma", "Trebuchet MS", "Segoe UI", "Book Antiqua",
   "Century Gothic", "Consolas", "Courier New", "Franklin Gothic Medium",
   "Lucida Sans", "Palatino Linotype", "Rockwell", "Corbel", "Constantia",
