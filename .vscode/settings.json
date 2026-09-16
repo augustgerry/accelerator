@@ -1,0 +1,14 @@
+{
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  "errorLens.enabled": true,
+  "errorLens.gutterIconsEnabled": true,
+  "errorLens.followCursor": "allLines",
+  "typescript.tsdk": "frontend/node_modules/typescript/lib"
+}

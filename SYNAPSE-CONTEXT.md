@@ -3,6 +3,21 @@
 
 ---
 
+## 🤝 PEMBAGIAN KERJA AGENT & SHARED BACKLOG (BARU DITETAPKAN)
+
+> **PENTING UNTUK KEDUA AGENT (Claude Code & Antigravity):**
+> 1. **Pembagian Peran Utama:**
+>    - **Claude Code:** Berfokus penuh pada **Frontend** (UI/UX, Next.js, komponen interaktif, state management, tampilan & feedback pengguna).
+>    - **Antigravity:** Berfokus penuh pada **Backend** (FastAPI, database pgvector, retrieval quality/reranking, document parsing, embeddings, business logic, export builders).
+> 2. **Shared Backlog (`synapse-gap-analysis.md`):**
+>    - File baru [`synapse-gap-analysis.md`](file:///d:/Downloads/Mini%20Project/Proposal%20Acceleator/knowledge-accelerator/synapse-gap-analysis.md) telah ditambahkan di root repositori.
+>    - File ini berisi Gap Analysis vs Sangfor Agent Builder Demo (Reranking pass, reflect-before-generate, chunking review, table parsing multi-page, OCR fallback, RBAC/scoping, MCP server) dan harus diperlakukan sebagai **shared backlog bersama**.
+> 3. **Protokol Sinkronisasi:**
+>    - Selalu update file markdown (`SYNAPSE-CONTEXT.md` & `synapse-gap-analysis.md`) setiap kali menyelesaikan suatu item atau memulai task baru.
+>    - Sebelum mulai bekerja, selalu `git pull origin feat/proposal-visual-engine` dan cek update terbaru di file handoff agar kolaborasi tetap mulus tanpa konflik.
+
+---
+
 ## 🔒 SESI CLAUDE CODE — SECURITY REVIEW + TOOLING SETUP (branch `feat/proposal-visual-engine`)
 
 Atas permintaan user, dijalanin `/security-review` (skill resmi, bukan review manual) atas seluruh diff `feat/proposal-visual-engine`. Ketemu 1 vulnerability nyata (verified via sub-task filtering terpisah, confidence 9/10), 1 kandidat lain di-drop (confidence 3/10 — data ke kroki.io/mermaid.ink itu HTTPS ke layanan legit, bukan vulnerability, cuma catatan data-governance kalau mau diformalkan nanti).
