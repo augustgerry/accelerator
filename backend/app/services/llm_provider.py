@@ -220,16 +220,26 @@ class ClaudeProvider(LLMProvider):
     ) -> list[dict]:
         truncated_text = (tor_text or "")[:35000]
         structure_rule = (
-            f"WAJIB ikuti kerangka baku Proposal Teknis berikut secara persis (boleh menambah "
-            f"sub-poin turunan sesuai isi TOR spesifik, misal 1.3, 3.2.2, dst — tapi urutan bab "
-            f"utama, judul, dan penomoran hierarkis di bawah ini tidak boleh diubah):\n{NARRATIVE_STRUCTURE_TEMPLATE}"
+            f"Gunakan kerangka referensi berikut sebagai PANDUAN gaya penomoran dan pengelompokan "
+            f"topik standar proposal teknis enterprise (BUKAN template kaku yang wajib disalin "
+            f"persis):\n{NARRATIVE_STRUCTURE_TEMPLATE}\n"
+            f"Sesuaikan jumlah, urutan, judul, dan isi sub-bab dengan HASIL ANALISIS NYATA terhadap "
+            f"dokumen acuan yang diberikan di bawah — kalau TOR tidak menyebut suatu topik, jangan "
+            f"paksakan section itu ada; kalau TOR punya kebutuhan spesifik yang tidak tercakup "
+            f"contoh di atas, tambahkan sub-bab baru. Yang WAJIB dipertahankan dari contoh hanyalah "
+            f"KONVENSINYA: penomoran hierarkis bertingkat (1, 1.1, 3.2.1, dst) dan pengelompokan "
+            f"topik yang berkaitan sebagai sub-bab dari satu bab induk (misal Timeline/Scope of "
+            f"Work/Out of Scope jadi sub-bab Implementation Plan, bukan bab terpisah-pisah; PM/CM/"
+            f"SLA jadi sub-bab Maintenance Plan)."
             if doc_type == "narrative"
-            else "Hasilkan antara 5 hingga 9 sub-bab yang logis dan berurutan dari awal hingga penutup."
+            else "Hasilkan antara 5 hingga 9 sub-bab yang logis dan berurutan dari awal hingga penutup, berdasarkan analisis nyata terhadap dokumen acuan."
         )
         prompt = (
             f"Anda adalah Senior Enterprise Solution Architect dan Presales Specialist berpengalaman.\n"
-            f"Tugas: Analisis dokumen acuan tender (TOR/RKS/KAK/RFP) dan rancang rekomendasi "
-            f"struktur sub-bab/bagian terbaik untuk menyusun dokumen tanggapan bertipe '{doc_type}'.\n\n"
+            f"Tugas: Analisis dokumen acuan tender (TOR/RKS/KAK/RFP) di bawah dan rancang rekomendasi "
+            f"struktur sub-bab/bagian yang PALING SESUAI dengan isi dokumen tersebut untuk menyusun "
+            f"dokumen tanggapan bertipe '{doc_type}'. Jangan mengarang kebutuhan yang tidak ada di "
+            f"dokumen acuan.\n\n"
             f"Judul Tender: {document_title or 'Tender Pengadaan IT'}\n"
             f"Instruksi Tambahan User: {instruction or 'Buat struktur sub-bab yang adaptif dan komprehensif.'}\n\n"
             f"Syarat output:\n"
@@ -350,16 +360,25 @@ class GeminiProvider(LLMProvider):
     ) -> list[dict]:
         truncated_text = (tor_text or "")[:35000]
         structure_rule = (
-            f"WAJIB ikuti kerangka baku Proposal Teknis berikut secara persis (boleh menambah "
-            f"sub-poin turunan sesuai isi TOR spesifik, misal 1.3, 3.2.2, dst — tapi urutan bab "
-            f"utama, judul, dan penomoran hierarkis di bawah ini tidak boleh diubah):\n{NARRATIVE_STRUCTURE_TEMPLATE}"
+            f"Gunakan kerangka referensi berikut sebagai PANDUAN gaya penomoran dan pengelompokan "
+            f"topik standar proposal teknis enterprise (BUKAN template kaku yang wajib disalin "
+            f"persis):\n{NARRATIVE_STRUCTURE_TEMPLATE}\n"
+            f"Sesuaikan jumlah, urutan, judul, dan isi sub-bab dengan HASIL ANALISIS NYATA terhadap "
+            f"dokumen acuan yang diberikan di bawah — kalau TOR tidak menyebut suatu topik, jangan "
+            f"paksakan section itu ada; kalau TOR punya kebutuhan spesifik yang tidak tercakup "
+            f"contoh di atas, tambahkan sub-bab baru. Yang WAJIB dipertahankan dari contoh hanyalah "
+            f"KONVENSINYA: penomoran hierarkis bertingkat (1, 1.1, 3.2.1, dst) dan pengelompokan "
+            f"topik yang berkaitan sebagai sub-bab dari satu bab induk (misal Timeline/Scope of "
+            f"Work/Out of Scope jadi sub-bab Implementation Plan, bukan bab terpisah-pisah; PM/CM/"
+            f"SLA jadi sub-bab Maintenance Plan)."
             if doc_type == "narrative"
-            else "Gunakan penomoran hierarkis standar proposal profesional dan hasilkan struktur bab/sub-bab yang adaptif sesuai isi dokumen acuan."
+            else "Gunakan penomoran hierarkis standar proposal profesional dan hasilkan struktur bab/sub-bab yang adaptif berdasarkan analisis nyata terhadap dokumen acuan."
         )
         prompt = (
             f"Anda adalah Senior Enterprise Solution Architect dan Presales Specialist di PT Smartnet Magna Global (SMG).\n"
             f"Tugas: Analisis dokumen acuan tender (TOR / RKS / KAK / RFP) berikut dan rancang rekomendasi "
-            f"struktur bab dan sub-bab terbaik untuk menyusun dokumen tanggapan resmi '{doc_type}'.\n\n"
+            f"struktur bab dan sub-bab yang PALING SESUAI dengan isi dokumen tersebut untuk menyusun "
+            f"dokumen tanggapan resmi '{doc_type}'. Jangan mengarang kebutuhan yang tidak ada di dokumen acuan.\n\n"
             f"Judul Dokumen Tender: {document_title or 'Tender Pengadaan IT'}\n"
             f"Instruksi Tambahan User: {instruction or 'Buat struktur bab dan sub-bab hierarkis standar proposal teknis enterprise.'}\n\n"
             f"Syarat output:\n"
