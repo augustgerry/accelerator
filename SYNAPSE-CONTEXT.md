@@ -134,29 +134,24 @@ User minta: cek seluruh codebase, benerin semua bug, efisienkan kode yang duplik
 
 ---
 
-## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Sesi terakhir (Antigravity):** PERBAIKAN 3 BUG UTAMA LAPORAN USER + FIX NEXT.JS DEVSERVER CACHE (`./682.js`) TELAH SELESAI, DIKOMPILASI, DAN DI-PUSH KE GITHUB.
-- **Branch Aktif:** `feat/proposal-visual-engine` (commit terbaru sudah di-push ke `origin/feat/proposal-visual-engine`).
-- **Rincian Perbaikan & Status Terakhir:**
-  1. **Bug 1 — Cari Dokumen Gagal / Blank (`/search` & `/draft`):**
-     - CORS middleware di `backend/main.py` diperluas dengan regex `allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?"` dan explicit origins untuk port 3000 & 3001.
-     - `_hybrid_ranked_chunks` di `backend/app/services/retrieval.py` case-insensitive (`ilike`) dengan whitespace trimming.
-     - Filter divisi di `/search` dinamis mengambil divisi nyata dari database (`listDocuments()`) dan membersihkan entri invalid di `localStorage`.
-  2. **Bug 2 — Gagal Pilih Format Dokumen Output (.docx, .pdf, .pptx):**
-     - Memperbaiki `useEffect` di `frontend/components/draft/export-modal.tsx` menggunakan `prevIsOpenRef` agar pilihan format & template tidak ter-reset saat autosave parent berjalan.
-     - Redesign tombol format di `/draft` dengan kartu visual interaktif (`📄 Word`, `📕 PDF`, `📊 PowerPoint`), badge pill aktif kontras, dan border highlight indigo.
-  3. **Bug 3 — Gagal Pilih Dokumen Sumber (TOR / RFP):**
-     - Tab switcher di kartu Dokumen Sumber: "Upload dari Laptop" vs "Pilih dari Library".
-     - Tab "Pilih dari Library" menyediakan live search instan, filter dokumen berdasarkan judul dan divisi dari seluruh 172 dokumen database, serta tombol 1-klik "Gunakan Dokumen Ini ➔".
-     - Memakai API `getDocumentChunks` untuk membaca teks langsung dari database pgvector tanpa unduh ulang Drive.
-     - Tombol "Ganti File" (`RotateCcw`) di progress header workspace aktif.
-  4. **Next.js Error Fix — Cannot find module `./682.js`:**
-     - Penyebab: dev server Next.js sebelumnya memegang cache memory lama saat production build (`next build`) dijalankan.
-     - Solusi: proses node lama dimatikan, direktori cache `frontend/.next` dibersihkan, dan dev server Next.js dijalankan ulang fresh. Semua halaman (`/search`, `/draft`, `/`, `/documents`, `/library`, `/settings`) terkompilasi sukses 200 OK.
-- **Status Build & Services:**
-  - Frontend Next.js dev server aktif di port 3000 (status 200 OK di semua rute).
-  - Backend FastAPI Uvicorn aktif di port 8000 (`/health` 200 OK, LLM: `gemini-3.6-flash`).
-  - Git working tree: clean & up-to-date dengan remote `origin/feat/proposal-visual-engine`.
+## 📍 STATUS AKTIF (SESI SELESAI / HANDOFF ISTIRAHAT)
+- **Status Sesi:** Seluruh background processes (FastAPI port 8000, Next.js dev server port 3000, dan `watchdog.ps1`) telah dihentikan secara aman untuk istirahat user.
+- **Branch Aktif:** `feat/proposal-visual-engine` (working tree clean, seluruh commit telah di-push ke `origin/feat/proposal-visual-engine`).
+- **Ringkasan Kemajuan Terakhir:**
+  1. **Backend Retrieval & Ingestion Quality (Selesai):**
+     - Cross-Encoder reranking (`TinyBERT`) aktif untuk top 20-25 hybrid candidates di `retrieval.py`.
+     - Reflect-before-generate & query expansion di `POST /draft/item` (`draft.py`) dengan sufficiency evaluation.
+     - Table-aware sequential parser di `drive_sync.py` & `draft.py` serta structure-aware chunker tabel Markdown di `embeddings.py`.
+  2. **Frontend Draft & Visual Polish (Selesai):**
+     - Grounding sufficiency badges, one-click regenerate per sub-bab, transisi skeleton loading halus di `/draft`.
+     - Citation drawer interaktif di `/search`, dokumen filter, dan fix export preview.
+  3. **Keamanan & Stabilitas (Selesai):**
+     - SSRF fix pada `POST /draft/download-image`.
+     - Clean compilation pada backend (`py_compile`) dan frontend (`npx tsc --noEmit` & production build 7/7 route).
+- **Panduan Menyalakan Kembali Saat Lanjut Kerja:**
+  - **Backend:** `cd backend; .\venv\Scripts\python.exe -m uvicorn main:app --port 8000`
+  - **Frontend:** `cd frontend; npm run dev`
+  - **Watchdog (Opsional):** `powershell -ExecutionPolicy Bypass -File .\watchdog.ps1 -IntervalSeconds 600`
 
 ---
 
