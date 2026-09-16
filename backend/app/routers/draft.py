@@ -1601,24 +1601,24 @@ def export_proposal_docx(payload: ExportDocxRequest):
                         r.font.size = Pt(8.5)
 
     elif payload.template_type == "klarifikasi_teknis":
-        # Format Klarifikasi Teknis Aanwijzing Standar CSUL Finance / CCBI SMG
+        # Format Dokumen Klarifikasi Teknis Standar CSUL Finance PT Smartnet Magna Global
         p_title = doc.add_paragraph()
-        p_title.paragraph_format.space_before = Pt(14)
+        p_title.paragraph_format.space_before = Pt(16)
         p_title.paragraph_format.space_after = Pt(4)
-        r_title = p_title.add_run("KLARIFIKASI TEKNIS & HASIL AANWIJZING")
+        r_title = p_title.add_run("KLARIFIKASI TEKNIS")
         r_title.bold = True
         r_title.font.size = Pt(22)
         r_title.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
 
         p_sub = doc.add_paragraph()
         p_sub.paragraph_format.space_after = Pt(14)
-        r_sub = p_sub.add_run(f"Tanggapan Resmi atas Dokumen Tender: {payload.document_title}")
+        r_sub = p_sub.add_run(f"{payload.document_title}\nPT Smartnet Magna Global")
         r_sub.bold = True
         r_sub.font.size = Pt(13)
         r_sub.font.color.rgb = RGBColor(0x4A, 0x86, 0xE8)
 
-        # Metadata Table
-        t_meta = doc.add_table(rows=3, cols=2)
+        # Metadata Table (Standar Dokumen Klarifikasi Teknis CSUL)
+        t_meta = doc.add_table(rows=4, cols=2)
         t_meta.alignment = WD_TABLE_ALIGNMENT.CENTER
         t_meta.autofit = False
         col_w = Inches(3.25)
@@ -1626,12 +1626,14 @@ def export_proposal_docx(payload: ExportDocxRequest):
             row.cells[0].width = col_w
             row.cells[1].width = col_w
 
-        t_meta.cell(0, 0).paragraphs[0].add_run("Penyusun Tanggapan:").bold = True
+        t_meta.cell(0, 0).paragraphs[0].add_run("Dokumen:").bold = True
         t_meta.cell(0, 1).paragraphs[0].add_run("Ditujukan Kepada:").bold = True
-        t_meta.cell(1, 0).paragraphs[0].add_run(f"{payload.company_name or 'PT Smartnet Magna Global'}\nPresales & Solution Architect Division").font.size = Pt(9.5)
-        t_meta.cell(1, 1).paragraphs[0].add_run(f"{payload.document_title}\nPanitia Pengadaan & Tim Evaluator").font.size = Pt(9.5)
-        t_meta.cell(2, 0).paragraphs[0].add_run("Status: Baseline Penawaran Teknis").font.size = Pt(8.5)
-        t_meta.cell(2, 1).paragraphs[0].add_run(f"Tanggal Sesi: {datetime.now().strftime('%d %B %Y')}").font.size = Pt(8.5)
+        t_meta.cell(1, 0).paragraphs[0].add_run(f"Klarifikasi Teknis Solusi Enterprise\nVersi: v1.0 (Final Response)").font.size = Pt(9.5)
+        t_meta.cell(1, 1).paragraphs[0].add_run(f"{payload.document_title}\nPanitia Pengadaan & Tim Evaluator Teknis").font.size = Pt(9.5)
+        t_meta.cell(2, 0).paragraphs[0].add_run("Diajukan Oleh:").bold = True
+        t_meta.cell(2, 1).paragraphs[0].add_run("Cakupan Garansi & SLA:").bold = True
+        t_meta.cell(3, 0).paragraphs[0].add_run(f"{payload.company_name or 'PT Smartnet Magna Global'}\nSolution Architect & Presales Division").font.size = Pt(9.5)
+        t_meta.cell(3, 1).paragraphs[0].add_run(f"60 Bulan (5 Tahun) Full Support & Maintenance\nRespons TAC 24x7 / Severity 1 (15 Menit) | {datetime.now().strftime('%d %B %Y')}").font.size = Pt(9.5)
 
         for row in t_meta.rows:
             for c in row.cells:

@@ -347,11 +347,12 @@ def _fallback_recommend_structure(doc_type: str, tor_text: str = "", document_ti
         ]
     elif doc_type == "klarifikasi_teknis":
         return [
-            {"id": "sec-1", "title": "1. Latar Belakang & Ringkasan Hasil Aanwijzing", "category": "Umum", "requirement_text": f"Latar belakang aanwijzing, dokumen acuan tender {clean_title}, dan rangkuman poin kesepakatan utama.", "rationale": "Memetakan konteks klarifikasi resmi dokumen tender."},
-            {"id": "sec-2", "title": "2. Matriks Pertanyaan, Klarifikasi & Tanggapan Solusi SMG", "category": "Teknis", "requirement_text": "Tabel klausul TOR vs Tanggapan/Klarifikasi Teknis SMG (Aspek, Ketentuan TOR, Hasil Klarifikasi SMG, Status).", "rationale": "Format resmi pembuktian kepatuhan aanwijzing CSUL/CCBI."},
-            {"id": "sec-3", "title": "3. Penyesuaian Arsitektur Solusi & Sizing Hardware", "category": "Teknis", "requirement_text": "Kalkulasi data growth 10%/tahun, sizing controller/storage efektif, dan redundansi konektivitas jaringan.", "rationale": "Justifikasi teknis sizing kapasitas perangkat yang diusulkan."},
-            {"id": "sec-4", "title": "4. Bill of Quantity (BOQ) & Lisensi Perangkat", "category": "Teknis", "requirement_text": "Tabel BOQ komponen hardware dan lisensi pendukung lengkap dengan Part Number, Deskripsi, dan Qty.", "rationale": "Kepastian spesifikasi perangkat dan lisensi komersial."},
-            {"id": "sec-5", "title": "5. Tim Tenaga Ahli, Timeline Pengerjaan & Komitmen SLA", "category": "SLA & Support", "requirement_text": "Struktur tim proyek bersertifikasi SMG, jadwal pengerjaan, dan komitmen SLA 24x7.", "rationale": "Jaminan kapabilitas implementasi dan dukungan berkelanjutan."},
+            {"id": "sec-1", "title": "1. Latar Belakang, Kondisi Existing & Hasil Klarifikasi", "category": "Umum", "requirement_text": f"Latar belakang proyek {clean_title}, profil existing storage/server, risiko EOL/EOS, dan adopsi hasil klarifikasi sebagai baseline penawaran resmi.", "rationale": "Standar Bagian 1 Klarifikasi Teknis CSUL."},
+            {"id": "sec-2", "title": "2. Solusi yang Diusulkan, Sizing & Arsitektur (HLD)", "category": "Teknis", "requirement_text": "Spesifikasi platform perangkat enterprise, teknologi reduksi data (DRR inline), kalkulasi data growth 10%/tahun (5 tahun), dan diagram arsitektur HLD.", "rationale": "Standar Bagian 2 Klarifikasi Teknis CSUL."},
+            {"id": "sec-3", "title": "3. Compliance Matrix & Bill of Quantity (BOQ)", "category": "Teknis", "requirement_text": "Matriks kepatuhan teknis (Comply) spesifikasi minimum klien dan tabel BOQ lengkap dengan Part Number, Deskripsi, dan Qty.", "rationale": "Standar Bagian 3 Klarifikasi Teknis CSUL."},
+            {"id": "sec-4", "title": "4. Rencana Implementasi, Scope of Work & Timeline", "category": "Manajemen Proyek", "requirement_text": "Ruang lingkup pekerjaan detail (assessment, konfigurasi, integrasi, UAT), batasan Out of Scope, dan jadwal pengerjaan bulanan.", "rationale": "Standar Bagian 4 Klarifikasi Teknis CSUL."},
+            {"id": "sec-5", "title": "5. Maintenance Plan & Service Level Agreement (SLA)", "category": "SLA & Support", "requirement_text": "Layanan purnajual 60 bulan (5 tahun), pemeliharaan berkala PM min 2x/th, penanganan gangguan CM, respons lokal 24x7 maks 4 jam, dan eskalasi Severity 1 15 menit.", "rationale": "Standar Bagian 5 Klarifikasi Teknis CSUL."},
+            {"id": "sec-6", "title": "6. Susunan Tim Proyek & Profil PT Smartnet Magna Global", "category": "Administrasi & Legal", "requirement_text": "Struktur tim proyek (PM bersertifikasi & engineer bersertifikasi), pengalaman puluhan tahun, dan keunggulan SMG (Member of CTI Group).", "rationale": "Standar Bagian 6 Klarifikasi Teknis CSUL."},
         ]
     elif doc_type == "pitch_deck":
         return [
@@ -388,7 +389,7 @@ def _build_system_prompt(mode: str) -> str:
             "   - Untuk MoM: Buat tabel matriks Action Item (| No | Aktivitas / Action Item | PIC (SMG/Klien) | Target Selesai | Status |).\n"
             "   - Untuk SoW: Buat tabel Scope Matrix (| No | Item Pekerjaan | Tanggung Jawab SMG | Kewajiban Klien |) dan SLA matrix (P1-P4).\n"
             "   - Untuk Solution Brief: Sertakan pemetaan OKRs dan tabel komponen arsitektur (| Komponen | Teknologi/Perangkat | Peran/Fungsi |).\n"
-            "   - Untuk Klarifikasi Teknis: Buat tabel klarifikasi aanwijzing (| Aspek | Ketentuan TOR | Tanggapan / Solusi SMG | Status |).\n"
+            "   - Untuk Klarifikasi Teknis: Susun tanggapan teknis komprehensif berstandar CSUL Finance mencakup: analisis risiko EOL/EOS existing, rekomendasi arsitektur HLD & sizing DRR, matriks compliance teknis, rincian BOQ perangkat/lisensi, rencana implementasi & timeline, komitmen SLA 60 bulan (5 tahun), serta struktur tim proyek tersertifikasi.\n"
             "4. Identitas Perusahaan: Selalu gunakan nama resmi perusahaan: 'PT Smartnet Magna Global' (SMG), dan jika relevan sebutkan sebagai 'Member of CTI Group'.\n"
             "5. Nilai Jual & Kepastian: Buat narasi yang meyakinkan, bernilai tambah (value proposition), dengan komitmen teknis spesifik tanpa kata tentatif (hindari kata 'akan diusahakan' atau 'sebisanya')."
         )
