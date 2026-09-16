@@ -190,7 +190,8 @@ export async function generateItemDraft(
   requirementText: string,
   instruction?: string,
   torContext?: string,
-  referenceDocIds?: string[]
+  referenceDocIds?: string[],
+  winThemes?: string[]
 ): Promise<DraftItemApiResponse> {
   const data = await postJson<DraftItemApiResponse>("/draft/item", {
     item_id: itemId,
@@ -198,8 +199,57 @@ export async function generateItemDraft(
     instruction: instruction || undefined,
     tor_context: torContext || undefined,
     reference_doc_ids: referenceDocIds && referenceDocIds.length > 0 ? referenceDocIds : undefined,
+    win_themes: winThemes && winThemes.length > 0 ? winThemes : undefined,
   });
   return data;
+}
+
+export type CriticalClauseItem = {
+  clause_snippet: string;
+  category: string;
+  severity: "High" | "Medium" | "Low";
+};
+
+export type CriticalClausesScanResponse = {
+  risk_level: "High" | "Medium" | "Low";
+  total_critical_found: number;
+  mandatory_requirements: CriticalClauseItem[];
+  penalties_and_risks: CriticalClauseItem[];
+  sla_and_maintenance: CriticalClauseItem[];
+  certifications_and_legal: CriticalClauseItem[];
+  executive_summary_alerts: string[];
+};
+
+export async function scanCriticalClauses(torText: string): Promise<CriticalClausesScanResponse> {
+  return postJson<CriticalClausesScanResponse>("/draft/scan-critical-clauses", { tor_text: torText });
+}
+
+export type RequirementCoverageResponse = {
+  overall_coverage_pct: number;
+  total_requirements: number;
+  covered_count: number;
+  uncovered_count: number;
+  covered_items: Array<{
+    requirement: string;
+    matched_tokens_count: number;
+    coverage_rate: string;
+  }>;
+  uncovered_items: Array<{
+    requirement: string;
+    missing_tokens: string[];
+    tip: string;
+  }>;
+  recommendations: string[];
+};
+
+export async function checkRequirementCoverage(
+  torText: string,
+  items: Array<{ id: string; title: string; requirement_text: string; draft_text?: string }>
+): Promise<RequirementCoverageResponse> {
+  return postJson<RequirementCoverageResponse>("/draft/check-coverage", {
+    tor_text: torText,
+    items,
+  });
 }
 
 export type QualityCheckResult = {

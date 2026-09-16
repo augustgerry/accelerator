@@ -13,7 +13,6 @@ import {
   Sparkles,
   Check,
   Copy,
-  Clock,
   CheckCircle2,
   AlertCircle,
   Search,
@@ -60,6 +59,14 @@ import { VisualAssetStudio } from "@/components/draft/visual-asset-studio";
 function pickRelevantTorExcerpt(torText: string, _sectionTitle?: string, maxLen = 35000): string {
   if (!torText) return "";
   return torText.slice(0, maxLen);
+}
+
+// Section titles carry their own hierarchical numbering ("1.1 Kondisi Existing" /
+// "3.2.1 Dasar Perhitungan") per the canonical structure convention — split it out
+// so the sidebar can render the number and title as distinct, less cluttered elements.
+function splitHierarchicalTitle(title: string): { number: string; text: string } {
+  const m = title.match(/^(\d+(?:\.\d+)*)\.?\s+(.+)$/);
+  return m ? { number: m[1], text: m[2] } : { number: "", text: title };
 }
 
 function filterDocsByQuery(docs: IndexedDocument[], query: string): IndexedDocument[] {
@@ -155,7 +162,18 @@ export default function DraftPage() {
   const [referenceSearch, setReferenceSearch] = useState("");
   const [sourceInputMode, setSourceInputMode] = useState<"upload" | "library">("upload");
   const [librarySourceSearch, setLibrarySourceSearch] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingLibraryDoc, setPendingLibraryDoc] = useState<IndexedDocument | null>(null);
   const autoSavedSignature = useRef<string | null>(null);
+
+  // Draft textarea: local state + 200ms debounce so fast typing doesn't push a
+  // setItems (and re-render the whole 20+ item sidebar) on every keystroke.
+  const [localDraftText, setLocalDraftText] = useState("");
+  const draftDebounceRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; itemId: string | null; text: string }>({
+    timer: null,
+    itemId: null,
+    text: "",
+  });
 
   // Structure Curation & Discussion Gate
   const [curatingStructure, setCuratingStructure] = useState(false);
@@ -341,6 +359,21 @@ export default function DraftPage() {
     return items.find((i) => i.id === selectedItemId) ?? items[0] ?? null;
   }, [items, selectedItemId]);
 
+  // Keep the textarea's local copy in sync when switching sub-bab or when a draft
+  // arrives from generation — flushing any pending debounced edit first so fast
+  // switching never silently drops the last few keystrokes.
+  useEffect(() => {
+    const pending = draftDebounceRef.current;
+    if (pending.timer) {
+      clearTimeout(pending.timer);
+      if (pending.itemId) handleTextChange(pending.itemId, pending.text);
+      pending.timer = null;
+      pending.itemId = null;
+    }
+    setLocalDraftText(selectedItem?.draft_text ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItem?.id, selectedItem?.draft_text]);
+
   // Filtered requirements list
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -484,6 +517,22 @@ export default function DraftPage() {
     }
   };
 
+  // Step 1: user only picks a library doc here — actual processing is deferred
+  // to the explicit Step 3 CTA (handleStartDrafting), not fired on click.
+  const handlePickLibrarySource = (doc: IndexedDocument) => {
+    setPendingLibraryDoc(doc);
+    setPendingFile(null);
+    setErrorMessage(null);
+  };
+
+  const handleStartDrafting = () => {
+    if (pendingFile) {
+      processSourceFile(pendingFile);
+    } else if (pendingLibraryDoc) {
+      handleSelectDriveSource(pendingLibraryDoc);
+    }
+  };
+
   const handleRefineStructure = async () => {
     if (!structureInstruction.trim() || isRevisingStructure) return;
     setIsRevisingStructure(true);
@@ -570,10 +619,14 @@ export default function DraftPage() {
     setCurationItems((prev) => prev.filter((it) => it.id !== itemId));
   };
 
-  // Handle local file upload & auto-generation
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Step 1: pick a local file — deferred to Step 3 CTA (handleStartDrafting), not auto-processed.
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) await processSourceFile(file);
+    if (file) {
+      setPendingFile(file);
+      setPendingLibraryDoc(null);
+      setErrorMessage(null);
+    }
     e.target.value = "";
   };
 
@@ -591,6 +644,8 @@ export default function DraftPage() {
     setCurationItems([]);
     setStructureSummary("");
     setQualityReport(null);
+    setPendingFile(null);
+    setPendingLibraryDoc(null);
     try {
       localStorage.removeItem(LS_KEY);
       localStorage.removeItem(LS_SESSION_ID_KEY);
@@ -740,11 +795,10 @@ export default function DraftPage() {
   };
 
   // Update draft text directly (user edits)
-  const handleTextChange = (text: string) => {
-    if (!selectedItem) return;
+  const handleTextChange = (itemId: string, text: string) => {
     setItems((prev) =>
       prev.map((it) => {
-        if (it.id !== selectedItem.id) return it;
+        if (it.id !== itemId) return it;
         return {
           ...it,
           draft_text: text,
@@ -764,9 +818,9 @@ export default function DraftPage() {
 
   // Copy active item draft text
   const handleCopyCurrentDraft = async () => {
-    if (!selectedItem || !selectedItem.draft_text) return;
+    if (!selectedItem || !localDraftText) return;
     try {
-      await navigator.clipboard.writeText(selectedItem.draft_text);
+      await navigator.clipboard.writeText(localDraftText);
       setCopiedItem(true);
       setTimeout(() => setCopiedItem(false), 1800);
     } catch (e) {
@@ -902,10 +956,19 @@ export default function DraftPage() {
                   {uploading ? "Mengekstrak teks dokumen..." : "Buat Dokumen dari TOR / RFP"}
                 </h3>
                 <p className="mt-1 text-sm text-text-muted max-w-md">
-                  Pilih jenis dokumen, upload TOR/RFP, lalu Synapse menyusun isi berdasarkan knowledge base internal.
+                  3 langkah singkat: upload dokumen acuan, pilih referensi internal, lalu mulai.
                 </p>
 
-                <div className="mt-5 w-full max-w-md text-left">
+                <div className="mt-6 w-full max-w-md flex items-center gap-2 text-left">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-900 text-[10px] font-bold text-white">
+                    1
+                  </span>
+                  <span className="text-xs font-semibold text-text-primary">
+                    Upload Dokumen Acuan (TOR / RFP / RKS)
+                  </span>
+                </div>
+
+                <div className="mt-3 w-full max-w-md text-left">
                   <label className="mb-1.5 block text-xs font-semibold text-text-primary">Dokumen yang ingin dibuat</label>
                   <select
                     value={docTypeId}
@@ -1004,20 +1067,39 @@ export default function DraftPage() {
                         className="hidden"
                         onChange={handleFileChange}
                       />
-                      <div
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-surface-border hover:border-accent rounded-xl bg-surface/40 hover:bg-surface-raised cursor-pointer transition-all group text-center"
-                      >
-                        <div className="h-11 w-11 rounded-xl bg-accent-soft text-accent-ink flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                          {uploading ? <Loader2 size={22} className="animate-spin" /> : <UploadCloud size={22} />}
+                      {pendingFile ? (
+                        <div className="flex items-center justify-between gap-2 rounded-xl border border-accent bg-accent-soft p-3.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <FileText size={18} className="text-accent-ink shrink-0" />
+                            <span className="truncate text-xs font-semibold text-accent-ink">
+                              {pendingFile.name}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPendingFile(null)}
+                            className="shrink-0 rounded p-1 text-accent-ink hover:bg-accent/30 transition-colors active:scale-[0.98]"
+                            title="Ganti file"
+                          >
+                            <X size={14} />
+                          </button>
                         </div>
-                        <p className="text-xs font-semibold text-text-primary">
-                          {uploading ? "Sedang mengekstrak teks..." : "Klik untuk Pilih File TOR / RFP"}
-                        </p>
-                        <p className="text-[11px] text-text-muted mt-0.5">
-                          Mendukung format PDF (.pdf), Word (.docx), atau Teks (.txt)
-                        </p>
-                      </div>
+                      ) : (
+                        <div
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-surface-border hover:border-accent rounded-xl bg-surface/40 hover:bg-surface-raised cursor-pointer transition-all group text-center"
+                        >
+                          <div className="h-11 w-11 rounded-xl bg-accent-soft text-accent-ink flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+                            {uploading ? <Loader2 size={22} className="animate-spin" /> : <UploadCloud size={22} />}
+                          </div>
+                          <p className="text-xs font-semibold text-text-primary">
+                            {uploading ? "Sedang mengekstrak teks..." : "Klik untuk Pilih File TOR / RFP"}
+                          </p>
+                          <p className="text-[11px] text-text-muted mt-0.5">
+                            Mendukung format PDF (.pdf), Word (.docx), atau Teks (.txt)
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -1051,30 +1133,41 @@ export default function DraftPage() {
                             {referenceDocs.length === 0 ? "Library belum terhubung atau kosong." : "Tidak ada dokumen yang cocok."}
                           </div>
                         ) : (
-                          filteredLibrarySourceDocs.map((doc) => (
-                            <button
-                              key={doc.id}
-                              type="button"
-                              onClick={() => handleSelectDriveSource(doc)}
-                              disabled={uploading}
-                              className="w-full flex items-center justify-between p-2.5 text-left hover:bg-surface-raised transition-colors group"
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                                <FileText size={16} className="text-accent shrink-0" />
-                                <div className="truncate">
-                                  <p className="text-xs font-medium text-text-primary truncate group-hover:text-accent-ink">
-                                    {doc.title}
-                                  </p>
-                                  <div className="flex items-center gap-2 text-[10px] text-text-muted mt-0.5">
-                                    <span>{doc.chunkCount || 0} chunks</span>
+                          filteredLibrarySourceDocs.map((doc) => {
+                            const isPicked = pendingLibraryDoc?.id === doc.id;
+                            return (
+                              <button
+                                key={doc.id}
+                                type="button"
+                                onClick={() => handlePickLibrarySource(doc)}
+                                disabled={uploading}
+                                className={`w-full flex items-center justify-between p-2.5 text-left transition-colors group ${
+                                  isPicked ? "bg-accent-soft" : "hover:bg-surface-raised"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                  <FileText size={16} className="text-accent shrink-0" />
+                                  <div className="truncate">
+                                    <p className="text-xs font-medium text-text-primary truncate group-hover:text-accent-ink">
+                                      {doc.title}
+                                    </p>
+                                    <div className="flex items-center gap-2 text-[10px] text-text-muted mt-0.5">
+                                      <span>{doc.chunkCount || 0} chunks</span>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                              <span className="shrink-0 text-[11px] font-bold text-accent-ink opacity-80 group-hover:opacity-100 transition-opacity bg-accent-soft px-2.5 py-1 rounded border border-accent/40 flex items-center gap-1">
-                                Gunakan ➔
-                              </span>
-                            </button>
-                          ))
+                                <span
+                                  className={`shrink-0 text-[11px] font-bold px-2.5 py-1 rounded border flex items-center gap-1 transition-opacity ${
+                                    isPicked
+                                      ? "text-accent-ink bg-accent border-accent/50 opacity-100"
+                                      : "text-accent-ink bg-accent-soft border-accent/40 opacity-80 group-hover:opacity-100"
+                                  }`}
+                                >
+                                  {isPicked ? "Dipilih ✓" : "Pilih"}
+                                </span>
+                              </button>
+                            );
+                          })
                         )}
                       </div>
                     </div>
@@ -1089,10 +1182,18 @@ export default function DraftPage() {
                 )}
 
                 {/* Additional Reference Sources (Optional Grounding) */}
-                <div className="mt-6 w-full max-w-md text-left">
+                <div className="mt-7 w-full max-w-md flex items-center gap-2 text-left">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-900 text-[10px] font-bold text-white">
+                    2
+                  </span>
+                  <span className="text-xs font-semibold text-text-primary">
+                    Pilih Dokumen Referensi Internal (opsional)
+                  </span>
+                </div>
+                <div className="mt-3 w-full max-w-md text-left">
                   <div className="mb-1.5 flex items-center justify-between">
-                    <label className="text-xs font-semibold text-text-primary">
-                      Sumber Referensi Tambahan (opsional)
+                    <label className="text-[11px] text-text-muted">
+                      Dipakai sebagai acuan grounding AI (gaya NotebookLM)
                     </label>
                     <div className="flex items-center gap-2">
                       {selectedReferenceIds.size > 0 && (
@@ -1126,10 +1227,6 @@ export default function DraftPage() {
                       </button>
                     </div>
                   </div>
-                  <p className="mb-2 text-[11px] text-text-muted leading-relaxed">
-                    Pilih beberapa dokumen internal sebagai acuan jawaban grounding AI (gaya NotebookLM).
-                  </p>
-
                   <div className="relative mb-2">
                     <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
                     <input
@@ -1150,65 +1247,63 @@ export default function DraftPage() {
                     )}
                   </div>
 
-                  <div className="max-h-44 overflow-y-auto rounded-md border border-surface-border bg-surface p-1.5 space-y-0.5">
+                  <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-0.5">
                     {loadingReferenceDocs ? (
-                      <div className="flex items-center justify-center p-4 text-xs text-text-muted gap-1.5">
+                      <div className="flex items-center gap-1.5 text-xs text-text-muted p-2">
                         <Loader2 size={13} className="animate-spin text-accent" /> Memuat dokumen...
                       </div>
                     ) : filteredReferenceDocs.length === 0 ? (
-                      <p className="px-2 py-2 text-xs text-text-muted text-center">
+                      <p className="px-1 py-2 text-xs text-text-muted">
                         {referenceDocs.length === 0 ? "Drive belum tersinkron atau kosong." : "Tidak ada dokumen yang cocok."}
                       </p>
                     ) : (
-                      filteredReferenceDocs.map((doc) => (
-                        <label
-                          key={doc.id}
-                          className={`flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-xs transition-colors ${
-                            selectedReferenceIds.has(doc.id) ? "bg-accent-soft/50 font-medium text-accent-ink" : "text-text-primary hover:bg-surface-raised"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0 pr-2">
-                            <input
-                              type="checkbox"
-                              checked={selectedReferenceIds.has(doc.id)}
-                              onChange={() => toggleReferenceDoc(doc.id)}
-                              className="shrink-0 rounded border-surface-border text-accent focus:ring-accent"
-                            />
-                            <span className="truncate">{doc.title}</span>
-                          </div>
-                        </label>
-                      ))
+                      filteredReferenceDocs.map((doc) => {
+                        const selected = selectedReferenceIds.has(doc.id);
+                        return (
+                          <button
+                            key={doc.id}
+                            type="button"
+                            onClick={() => toggleReferenceDoc(doc.id)}
+                            title={doc.title}
+                            className={`max-w-[220px] truncate rounded-full border px-3 py-1.5 text-xs transition-all active:scale-[0.98] ${
+                              selected
+                                ? "border-accent bg-accent-soft text-accent-ink font-medium"
+                                : "border-surface-border/70 bg-surface text-text-secondary hover:border-accent/50 hover:text-text-primary"
+                            }`}
+                          >
+                            {doc.title}
+                          </button>
+                        );
+                      })
                     )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Loopio value prop banner */}
-            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="rounded-lg border border-surface-border bg-surface-raised p-4">
-                <div className="flex items-center gap-2 font-medium text-xs text-text-primary mb-1">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-soft text-accent-ink text-[10px] font-bold">
-                    1
-                  </span>
-                  Jawaban dari Arsip
-                </div>
-                <p className="text-xs text-text-muted">
-                  AI mencocokkan jawaban resmi dari 4.500+ arsip proposal & checklist internal.
+            {/* Step 3: explicit CTA — nothing fires until the user confirms here */}
+            <div className="mt-8 w-full">
+              <button
+                type="button"
+                onClick={handleStartDrafting}
+                disabled={(!pendingFile && !pendingLibraryDoc) || uploading}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink-900 py-3.5 text-sm font-semibold text-white shadow-panel transition-all duration-150 hover:bg-ink-800 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" /> Memproses Dokumen...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={16} /> Mulai Susun Proposal
+                  </>
+                )}
+              </button>
+              {!pendingFile && !pendingLibraryDoc && (
+                <p className="mt-2 text-center text-[11px] text-text-muted">
+                  Selesaikan Langkah 1 (pilih dokumen acuan) dulu.
                 </p>
-              </div>
-
-              <div className="rounded-lg border border-surface-border bg-surface-raised p-4">
-                <div className="flex items-center gap-2 font-medium text-xs text-text-primary mb-1">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-soft text-accent-ink text-[10px] font-bold">
-                    2
-                  </span>
-                  Ekspor Siap Copas
-                </div>
-                <p className="text-xs text-text-muted">
-                  Edit per butir, pantau progres, lalu salin seluruh jawaban ke proposal Word.
-                </p>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -1631,6 +1726,32 @@ export default function DraftPage() {
                 </div>
               </div>
 
+              {/* Proposal Progress Bar */}
+              {items.length > 0 && (
+                <div className="border-b border-surface-border px-3.5 py-2.5">
+                  <div className="flex items-center justify-between text-[11px] mb-1.5">
+                    <span className="font-semibold text-text-primary">
+                      {items.filter((i) => i.status === "final").length} dari {items.length} Bagian Selesai
+                    </span>
+                    <span className="font-mono text-text-muted">
+                      {Math.round(
+                        (items.filter((i) => i.status === "final").length / items.length) * 100
+                      )}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface border border-surface-border">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all duration-500 ease-out"
+                      style={{
+                        width: `${Math.round(
+                          (items.filter((i) => i.status === "final").length / items.length) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {qualityReport && (
                 <div
                   onClick={() => setIsQualityModalOpen(true)}
@@ -1675,108 +1796,110 @@ export default function DraftPage() {
                 ) : (
                   filteredItems.map((item, idx) => {
                     const isSelected = selectedItem?.id === item.id;
+                    const { number: hierNum, text: hierText } = splitHierarchicalTitle(item.title);
+                    const statusDot =
+                      item.status === "final"
+                        ? "bg-emerald-500"
+                        : item.status === "draft"
+                        ? "bg-amber-500"
+                        : "bg-surface-border";
+                    const statusLabel =
+                      item.status === "final" ? "Final" : item.status === "draft" ? "Draf" : "Belum dikerjakan";
                     return (
                       <div
                         key={item.id}
                         onClick={() => setSelectedItemId(item.id)}
-                        className={`group cursor-pointer p-4 transition-all relative ${
+                        className={`group cursor-pointer p-3.5 transition-colors relative ${
                           isSelected
                             ? "bg-surface border-l-4 border-l-accent"
                             : "hover:bg-surface/50 border-l-4 border-l-transparent"
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.has(item.id)}
-                              onChange={() => toggleItemSelection(item.id)}
-                              onClick={(event) => event.stopPropagation()}
-                              aria-label={`Pilih ${item.title}`}
-                              className="rounded border-surface-border text-accent focus:ring-accent"
-                            />
-                            <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                              <button
-                                type="button"
-                                disabled={idx === 0}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const realIdx = items.findIndex((it) => it.id === item.id);
-                                  if (realIdx > 0) moveWorkspaceItem(realIdx, "up");
-                                }}
-                                className="rounded p-0.5 text-text-muted hover:bg-surface hover:text-text-primary disabled:opacity-20"
-                                title="Pindah ke atas"
-                              >
-                                <ArrowUp size={11} />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={idx === filteredItems.length - 1}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const realIdx = items.findIndex((it) => it.id === item.id);
-                                  if (realIdx >= 0 && realIdx < items.length - 1) moveWorkspaceItem(realIdx, "down");
-                                }}
-                                className="rounded p-0.5 text-text-muted hover:bg-surface hover:text-text-primary disabled:opacity-20"
-                                title="Pindah ke bawah"
-                              >
-                                <ArrowDown size={11} />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={item.isGenerating}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleGenerateItemDraft(item.id);
-                                }}
-                                className="rounded p-0.5 text-text-muted hover:bg-surface hover:text-accent-ink disabled:opacity-40"
-                                title="Regenerate Bagian Ini"
-                              >
-                                <RefreshCw size={11} className={item.isGenerating ? "animate-spin" : ""} />
-                              </button>
-                            </div>
-                            <span className="text-[11px] font-mono font-medium text-text-muted">
-                              #{idx + 1}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(item.id)}
+                            onChange={() => toggleItemSelection(item.id)}
+                            onClick={(event) => event.stopPropagation()}
+                            aria-label={`Pilih ${item.title}`}
+                            className="shrink-0 rounded border-surface-border text-accent focus:ring-accent"
+                          />
+                          {hierNum && (
+                            <span className="shrink-0 font-mono text-[11px] font-bold text-accent-ink">
+                              {hierNum}
                             </span>
-                            <span className="rounded bg-surface border border-surface-border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
-                              {item.category}
-                            </span>
-                            {item.image_data_url && (
-                              <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 text-[9.5px] font-medium text-blue-700">
-                                🖼️ Aset
-                              </span>
-                            )}
+                          )}
+                          <h4 className="flex-1 min-w-0 truncate text-xs font-semibold text-text-primary">
+                            {hierText}
+                          </h4>
+
+                          {/* Reorder & regenerate — hidden until row hover */}
+                          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const realIdx = items.findIndex((it) => it.id === item.id);
+                                if (realIdx > 0) moveWorkspaceItem(realIdx, "up");
+                              }}
+                              className="rounded p-0.5 text-text-muted hover:bg-surface hover:text-text-primary disabled:opacity-20"
+                              title="Pindah ke atas"
+                            >
+                              <ArrowUp size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === filteredItems.length - 1}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const realIdx = items.findIndex((it) => it.id === item.id);
+                                if (realIdx >= 0 && realIdx < items.length - 1) moveWorkspaceItem(realIdx, "down");
+                              }}
+                              className="rounded p-0.5 text-text-muted hover:bg-surface hover:text-text-primary disabled:opacity-20"
+                              title="Pindah ke bawah"
+                            >
+                              <ArrowDown size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={item.isGenerating}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleGenerateItemDraft(item.id);
+                              }}
+                              className="rounded p-0.5 text-text-muted hover:bg-surface hover:text-accent-ink disabled:opacity-40"
+                              title="Regenerate Bagian Ini"
+                            >
+                              <RefreshCw size={11} className={item.isGenerating ? "animate-spin" : ""} />
+                            </button>
                           </div>
 
-                          {/* Status Pill */}
-                          <div>
-                            {item.status === "final" ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                                <CheckCircle2 size={10} /> Final
-                              </span>
-                            ) : item.status === "draft" ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft border border-accent/40 px-2 py-0.5 text-[10px] font-medium text-accent-ink">
-                                <Clock size={10} /> Draf
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-surface border border-surface-border px-2 py-0.5 text-[10px] font-medium text-text-muted">
-                                Belum
-                              </span>
-                            )}
-                          </div>
+                          {/* Minimal status indicator */}
+                          <span
+                            className={`h-2 w-2 shrink-0 rounded-full ${statusDot}`}
+                            title={statusLabel}
+                          />
                         </div>
 
-                        <h4 className="mt-1.5 text-xs font-semibold text-text-primary line-clamp-1">
-                          {item.title}
-                        </h4>
+                        <div className="mt-1.5 flex items-center gap-1.5 pl-6">
+                          <span className="rounded bg-surface border border-surface-border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                            {item.category}
+                          </span>
+                          {item.image_data_url && (
+                            <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 text-[9.5px] font-medium text-blue-700">
+                              🖼️ Aset
+                            </span>
+                          )}
+                        </div>
 
-                        <p className="mt-1 text-[11px] leading-relaxed text-text-muted line-clamp-2">
+                        <p className="mt-1 pl-6 text-[11px] leading-relaxed text-text-muted line-clamp-2">
                           {item.requirement_text}
                         </p>
 
                         {/* Generation spinner indicator */}
                         {item.isGenerating ? (
-                          <div className="animate-in fade-in duration-200 mt-2 flex items-center gap-1.5 text-[11px] font-medium text-accent-ink">
+                          <div className="animate-in fade-in duration-200 mt-2 pl-6 flex items-center gap-1.5 text-[11px] font-medium text-accent-ink">
                             <Loader2 size={12} className="animate-spin" />
                             <span>Menyusun draf AI...</span>
                           </div>
@@ -1786,7 +1909,7 @@ export default function DraftPage() {
                             return badge ? (
                               <div
                                 key={item.sources?.length ?? 0}
-                                className="animate-in fade-in duration-300 mt-2"
+                                className="animate-in fade-in duration-300 mt-2 pl-6"
                               >
                                 <span
                                   className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}
@@ -1820,7 +1943,10 @@ export default function DraftPage() {
             {/* RIGHT COLUMN: ACTIVE REQUIREMENT STUDIO & DRAFT WORKSPACE */}
             <div className="flex flex-1 flex-col overflow-y-auto bg-surface p-6 lg:p-8">
               {selectedItem ? (
-                <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
+                <div
+                  key={selectedItem.id}
+                  className="flex flex-col gap-6 max-w-4xl mx-auto w-full animate-in fade-in slide-in-from-bottom-1 duration-150"
+                >
                   {/* Item Header & Status Bar */}
                   <div className="flex flex-col gap-4 rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -1915,7 +2041,8 @@ export default function DraftPage() {
 
                   {/* AI Draft Response Editor */}
                   <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle space-y-4">
-                    <div className="flex items-center justify-between">
+                    {/* Sticky action bar — Generate/Regenerate/Salin stay reachable without scrolling back up */}
+                    <div className="sticky top-0 z-10 -mx-5 -mt-5 flex items-center justify-between bg-surface-raised/95 px-5 py-3 backdrop-blur-sm border-b border-surface-border rounded-t-xl">
                       <div className="flex items-center gap-2">
                         <Sparkles size={16} className="text-accent-ink" />
                         <span className="text-sm font-semibold text-text-primary">
@@ -1975,8 +2102,27 @@ export default function DraftPage() {
                     {/* Textarea Editor */}
                     <div className="relative">
                       <textarea
-                        value={selectedItem.draft_text}
-                        onChange={(e) => handleTextChange(e.target.value)}
+                        value={localDraftText}
+                        onChange={(e) => {
+                          const text = e.target.value;
+                          setLocalDraftText(text);
+                          draftDebounceRef.current.itemId = selectedItem.id;
+                          draftDebounceRef.current.text = text;
+                          if (draftDebounceRef.current.timer) clearTimeout(draftDebounceRef.current.timer);
+                          draftDebounceRef.current.timer = setTimeout(() => {
+                            handleTextChange(selectedItem.id, text);
+                            draftDebounceRef.current.timer = null;
+                            draftDebounceRef.current.itemId = null;
+                          }, 200);
+                        }}
+                        onBlur={() => {
+                          if (draftDebounceRef.current.timer) {
+                            clearTimeout(draftDebounceRef.current.timer);
+                            draftDebounceRef.current.timer = null;
+                            draftDebounceRef.current.itemId = null;
+                            handleTextChange(selectedItem.id, localDraftText);
+                          }
+                        }}
                         placeholder="Klik 'Buat Draf AI' atau ketik langsung konten bagian proposal di sini..."
                         rows={8}
                         className={`w-full rounded-lg border p-4 text-xs leading-relaxed text-text-primary outline-none focus:border-accent font-sans transition-colors duration-700 resize-y ${
@@ -1985,10 +2131,10 @@ export default function DraftPage() {
                             : "border-surface-border bg-surface"
                         }`}
                       />
-                      {selectedItem.draft_text && (
+                      {localDraftText && (
                         <div className="mt-1 flex justify-end text-[11px] text-text-muted">
-                          {selectedItem.draft_text.split(/\s+/).filter(Boolean).length} kata ·{" "}
-                          {selectedItem.draft_text.length} karakter
+                          {localDraftText.split(/\s+/).filter(Boolean).length} kata ·{" "}
+                          {localDraftText.length} karakter
                         </div>
                       )}
                     </div>

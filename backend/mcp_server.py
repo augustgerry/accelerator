@@ -69,6 +69,47 @@ TOOLS = [
             "required": ["requirement_text"],
         },
     },
+    {
+        "name": "scan_critical_clauses",
+        "description": "Pindai dokumen TOR/RFP untuk mendeteksi klausul mandatori (wajib/harus), sanksi/denda penalti, target SLA ketat, dan syarat sertifikasi.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tor_text": {
+                    "type": "string",
+                    "description": "Teks lengkap dokumen TOR/RFP/KAK yang akan diaudit",
+                },
+            },
+            "required": ["tor_text"],
+        },
+    },
+    {
+        "name": "check_requirement_coverage",
+        "description": "Audit persentase kelengkapan draf proposal terhadap seluruh spesifikasi teknis dalam dokumen acuan TOR/RFP.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tor_text": {
+                    "type": "string",
+                    "description": "Teks acuan TOR/RFP",
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "title": {"type": "string"},
+                            "requirement_text": {"type": "string"},
+                            "draft_text": {"type": "string"},
+                        },
+                    },
+                    "description": "Daftar sub-bab dan draf teks proposal",
+                },
+            },
+            "required": ["tor_text", "items"],
+        },
+    },
 ]
 
 
@@ -191,6 +232,17 @@ def run_mcp_stdio_server():
                     out_text = handle_evaluate(
                         requirement_text=tool_args.get("requirement_text", "")
                     )
+                elif tool_name == "scan_critical_clauses":
+                    from app.services.proposal_intelligence import scan_critical_clauses
+                    res_dict = scan_critical_clauses(tor_text=tool_args.get("tor_text", ""))
+                    out_text = json.dumps(res_dict, indent=2, ensure_ascii=False)
+                elif tool_name == "check_requirement_coverage":
+                    from app.services.proposal_intelligence import audit_requirement_coverage
+                    res_dict = audit_requirement_coverage(
+                        tor_text=tool_args.get("tor_text", ""),
+                        items=tool_args.get("items", []),
+                    )
+                    out_text = json.dumps(res_dict, indent=2, ensure_ascii=False)
                 else:
                     out_text = f"Tool '{tool_name}' tidak dikenal."
 

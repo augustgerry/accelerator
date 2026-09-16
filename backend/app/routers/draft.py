@@ -62,7 +62,24 @@ class DraftItemRequest(BaseModel):
     instruction: Optional[str] = None
     tor_context: Optional[str] = None
     reference_doc_ids: list[str] = []
+    win_themes: list[str] = []
     workspace_id: str = settings.default_workspace_id
+
+
+class ScanCriticalClausesRequest(BaseModel):
+    tor_text: str
+
+
+class CheckCoverageItem(BaseModel):
+    id: str
+    title: str
+    requirement_text: str
+    draft_text: Optional[str] = ""
+
+
+class CheckCoverageRequest(BaseModel):
+    tor_text: str
+    items: list[CheckCoverageItem]
 
 
 class SourceMeta(BaseModel):
@@ -354,6 +371,9 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
     user_prompt = f"Brief/Tujuan Bagian Dokumen:\n{payload.requirement_text}"
     if payload.instruction:
         user_prompt += f"\n\nInstruksi Spesifik:\n{payload.instruction}"
+    if payload.win_themes:
+        themes_formatted = "\n- ".join(payload.win_themes)
+        user_prompt += f"\n\nTema Keunggulan Penawaran (Win Themes - tonjolkan nilai strategis ini):\n- {themes_formatted}"
 
     try:
         provider = get_llm_provider()
@@ -577,6 +597,21 @@ async def extract_template_images(file: UploadFile):
     # CPU-bound (zip read + PIL thumbnailing) — offload so it doesn't block the event loop.
     images = await run_in_threadpool(extract_images_from_office_bytes, content)
     return {"images": images}
+
+
+@router.post("/scan-critical-clauses")
+def scan_critical_clauses_endpoint(payload: ScanCriticalClausesRequest):
+    """Scan TOR/RFP for mandatory requirements, financial penalties, strict SLAs, and certifications."""
+    from app.services.proposal_intelligence import scan_critical_clauses
+    return scan_critical_clauses(payload.tor_text)
+
+
+@router.post("/check-coverage")
+def check_coverage_endpoint(payload: CheckCoverageRequest):
+    """Audit requirement coverage between TOR and drafted sections."""
+    from app.services.proposal_intelligence import audit_requirement_coverage
+    items_dicts = [it.model_dump() for it in payload.items]
+    return audit_requirement_coverage(payload.tor_text, items_dicts)
 
 
 class ExportPreflightRequest(BaseModel):

@@ -6,6 +6,7 @@ Add those later only if query quality genuinely needs it.
 
 import logging
 import re
+import time
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -13,6 +14,16 @@ from app.models import Document, DocumentChunk
 from app.services.embeddings import embed_text
 
 logger = logging.getLogger(__name__)
+
+_RETRIEVAL_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
+_CACHE_TTL_SECONDS = 300  # 5 minutes cache for fast sub-section browsing
+_MAX_CACHE_SIZE = 256
+
+
+def clear_retrieval_cache() -> None:
+    """Clear in-memory retrieval cache."""
+    global _RETRIEVAL_CACHE
+    _RETRIEVAL_CACHE.clear()
 
 
 def _query_tokens(query: str) -> list[str]:
@@ -27,14 +38,26 @@ def _hybrid_ranked_chunks(
     doc_type: str | None = None,
     division: str | None = None,
     doc_ids: list[str] | None = None,
-) -> list[DocumentChunk]:
-    """Blend vector candidates with exact-term candidates before returning top-k."""
+) -> list[dict]:
+    """Blend vector candidates with exact-term candidates and Cross-Encoder reranking.
+    Caches results in-memory for instant 0ms response on repeated/sub-section queries."""
+    cache_key = (
+        workspace_id,
+        query.strip().lower(),
+        top_k,
+        (doc_type or "").strip().lower(),
+        tuple(sorted(doc_ids or [])),
+    )
+    now = time.time()
+    if cache_key in _RETRIEVAL_CACHE:
+        cached_time, cached_results = _RETRIEVAL_CACHE[cache_key]
+        if now - cached_time < _CACHE_TTL_SECONDS:
+            return cached_results
+
     candidate_limit = max(top_k * 4, 20)
     filters = [DocumentChunk.workspace_id == workspace_id]
     if doc_type and doc_type.strip():
         filters.append(DocumentChunk.document.has(func.lower(Document.doc_type) == doc_type.strip().lower()))
-    if division and division.strip():
-        filters.append(DocumentChunk.document.has(func.lower(Document.division) == division.strip().lower()))
     if doc_ids:
         filters.append(DocumentChunk.document_id.in_(doc_ids))
 
@@ -96,7 +119,12 @@ def _hybrid_ranked_chunks(
         key=lambda candidate: (candidate["score"], -candidate["vector_rank"]),
         reverse=True,
     )
-    return _rerank_candidates(query, ranked, top_k)
+    reranked = _rerank_candidates(query, ranked, top_k)
+    if len(_RETRIEVAL_CACHE) >= _MAX_CACHE_SIZE:
+        oldest_k = min(_RETRIEVAL_CACHE, key=lambda k: _RETRIEVAL_CACHE[k][0])
+        _RETRIEVAL_CACHE.pop(oldest_k, None)
+    _RETRIEVAL_CACHE[cache_key] = (now, reranked)
+    return reranked
 
 
 from functools import lru_cache
