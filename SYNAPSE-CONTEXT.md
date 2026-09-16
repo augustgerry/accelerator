@@ -523,8 +523,19 @@ npm run dev
     - **Modal Lightbox Resolusi Penuh**: Klik pada thumbnail membuka modal pratinjau full-screen dengan resolusi asli dan tombol unduh aset.
   - Penambahan prop `initialTab` pada `VisualAssetStudio` untuk integrasi mulus dengan tombol aksi inline.
 
+### 9. Standardisasi Tabel Enterprise & Deteksi Hierarki Sub-Sub Bab di DOCX
+- Di `backend/app/routers/draft.py` (`render_markdown_to_docx`):
+  - **Tabel Standar CSUL**: Border atas `#D1D5DB`, border bawah aksen biru `#4A86E8`, garis dalam halus `#E5E7EB`, tanpa garis vertikal kaku (gaya modern executive Word). Dilengkapi `tblHeader` agar header berulang otomatis jika tabel terpotong ke halaman baru, serta distribusi lebar kolom otomatis berjarak total 6.5 inci.
+  - **Sub-Sub Bab Otomatis**: Mendeteksi pola nomor bertingkat seperti `2.1.1` atau `3.2.1` dan otomatis mengubahnya menjadi Heading 3/4 Word native warna `#1F497D` dengan `keep_with_next = True`.
+
+### 10. Modernisasi Kosmetik Slide Deck PPTX Executive
+- Di `backend/app/routers/draft.py` (`export_proposal_pptx`):
+  - **Slide Cover & Penutup Dark Executive**: Background Slate 900 (`#0F172A`) dengan garis aksen atas `#4A86E8`, tipografi kontras tinggi (judul putih 36pt/44pt, badge amber `#F59E0B`, subtitle biru muda `#60A5FA`).
+  - **Slide Konten**: Dilengkapi top corporate stripe (`#2F5FE0`), running footer di bawah (`PT Smartnet Magna Global · Dokumen Proposal Teknis & Arsitektur Solusi`), serta nomor slide `Slide X / Y`.
+
 ---
 
 *Branch aktif: `feat/proposal-visual-engine`*
 *Branch Claude (`feat/search-citation-drawer`) tetap terisolasi dan tidak tersentuh (Claude menggunakan git worktree terpisah).*
+
 

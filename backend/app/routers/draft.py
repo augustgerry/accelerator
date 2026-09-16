@@ -634,17 +634,43 @@ def render_markdown_to_docx(doc, markdown_text: str, heading_offset: int = 2):
                     data_rows.append(cells)
 
                 if data_rows:
+                    from docx.enum.table import WD_TABLE_ALIGNMENT
                     num_cols = max(len(r) for r in data_rows)
                     tbl = doc.add_table(rows=len(data_rows), cols=num_cols)
+                    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
                     tbl.autofit = False
+
+                    # CSUL Enterprise Table Styling: clean horizontal borders, zero heavy vertical lines
+                    tbl_borders = parse_xml(
+                        f'<w:tblBorders {nsdecls("w")}>'
+                        f'<w:top w:val="single" w:sz="6" w:space="0" w:color="D1D5DB"/>'
+                        f'<w:left w:val="none"/>'
+                        f'<w:bottom w:val="single" w:sz="12" w:space="0" w:color="4A86E8"/>'
+                        f'<w:right w:val="none"/>'
+                        f'<w:insideH w:val="single" w:sz="4" w:space="0" w:color="E5E7EB"/>'
+                        f'<w:insideV w:val="none"/>'
+                        f'</w:tblBorders>'
+                    )
+                    tbl._tbl.tblPr.append(tbl_borders)
+
+                    # Distribute column widths across 6.5 inches
+                    col_width_in = Inches(6.5 / max(num_cols, 1))
+
+                    # Mark row 0 as tblHeader so Word repeats the header if table breaks across pages
+                    try:
+                        tbl.rows[0]._tr.get_or_add_trPr().append(parse_xml(r'<w:tblHeader %s/>' % nsdecls('w')))
+                    except Exception:
+                        pass
+
                     for r_idx, row in enumerate(data_rows):
                         for c_idx in range(num_cols):
                             cell_val = row[c_idx] if c_idx < len(row) else ""
                             cell = tbl.cell(r_idx, c_idx)
+                            cell.width = col_width_in
                             cell.text = ""
                             p = cell.paragraphs[0]
-                            p.paragraph_format.space_before = Pt(3)
-                            p.paragraph_format.space_after = Pt(3)
+                            p.paragraph_format.space_before = Pt(3.5)
+                            p.paragraph_format.space_after = Pt(3.5)
                             if r_idx == 0:
                                 add_formatted_text(p, cell_val)
                                 for r in p.runs:
@@ -666,13 +692,31 @@ def render_markdown_to_docx(doc, markdown_text: str, heading_offset: int = 2):
             table_lines = []
             continue
 
-        # 2. Check for Headings: ### or ## or #
+        # 2a. Check for Hierarchical Sub-section Headings like "2.1.1 Judul" or "3.2.1 Sizing"
+        hierarchical_match = re.match(r'^(?:#{1,4}\s*)?(\d+\.\d+(?:\.\d+)+)\s+(.+)$', stripped)
+        if hierarchical_match:
+            sec_num, sec_title = hierarchical_match.groups()
+            depth = len(sec_num.split('.'))
+            level = min(max(depth, 2), 4)
+            h = doc.add_heading(level=level)
+            h.paragraph_format.keep_with_next = True
+            h.paragraph_format.space_before = Pt(8)
+            h.paragraph_format.space_after = Pt(2)
+            base_color = RGBColor(0x1F, 0x49, 0x7D)
+            add_formatted_text(h, f"{sec_num} {sec_title}", base_color=base_color)
+            i += 1
+            continue
+
+        # 2b. Check for Standard Markdown Headings: ### or ## or #
         heading_match = re.match(r'^(#{1,4})\s+(.*)$', stripped)
         if heading_match:
             hashes, h_text = heading_match.groups()
             level = len(hashes) + (heading_offset - 1)
             level = min(max(level, 1), 4)
             h = doc.add_heading(level=level)
+            h.paragraph_format.keep_with_next = True
+            h.paragraph_format.space_before = Pt(6)
+            h.paragraph_format.space_after = Pt(2)
             base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
             add_formatted_text(h, h_text, base_color=base_color)
             i += 1
@@ -1616,44 +1660,87 @@ def export_proposal_pptx(payload: ExportPptxRequest):
         except Exception as exc:
             logger.warning(f"Failed to add PPTX slide transition: {exc}")
 
-    # Slide 1: Executive Title & Cover Slide
+    def _add_top_stripe(slide):
+        try:
+            stripe = slide.shapes.add_shape(1, Inches(0), Inches(0), Inches(13.333), Inches(0.08))
+            stripe.fill.solid()
+            stripe.fill.fore_color.rgb = RGBColor(0x2F, 0x5F, 0xE0)
+            stripe.line.fill.background()
+        except Exception:
+            pass
+
+    total_content_slides = min(len(payload.items), 14)
+    total_slides = total_content_slides + 3  # Cover + Agenda + Content + Close
+
+    def _add_slide_footer(slide, current_idx: int):
+        try:
+            footer_box = slide.shapes.add_textbox(Inches(1.0), Inches(6.95), Inches(11.333), Inches(0.4))
+            tf_f = footer_box.text_frame
+            p_f = tf_f.paragraphs[0]
+            p_f.text = f"{payload.company_name}  ·  Dokumen Proposal Teknis & Arsitektur Solusi"
+            p_f.font.size = Pt(8.5)
+            p_f.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
+
+            p_page = tf_f.add_paragraph()
+            p_page.text = f"Slide {current_idx} / {total_slides}"
+            p_page.font.size = Pt(8.5)
+            p_page.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
+            p_page.alignment = PP_ALIGN.RIGHT
+        except Exception:
+            pass
+
+    # Slide 1: Executive Title & Cover Slide (Dark Theme for Executive Wow Factor)
     cover_slide = prs.slides.add_slide(blank_slide_layout)
     _add_transition(cover_slide, "fade")
 
-    cover_box = cover_slide.shapes.add_textbox(Inches(1.2), Inches(1.6), Inches(10.9), Inches(4.5))
+    # Dark executive background
+    cover_bg = cover_slide.shapes.add_shape(1, Inches(0), Inches(0), Inches(13.333), Inches(7.5))
+    cover_bg.fill.solid()
+    cover_bg.fill.fore_color.rgb = RGBColor(0x0F, 0x17, 0x2A)  # Slate 900
+    cover_bg.line.fill.background()
+
+    # Top accent line
+    cover_stripe = cover_slide.shapes.add_shape(1, Inches(0), Inches(0), Inches(13.333), Inches(0.1))
+    cover_stripe.fill.solid()
+    cover_stripe.fill.fore_color.rgb = RGBColor(0x4A, 0x86, 0xE8)
+    cover_stripe.line.fill.background()
+
+    cover_box = cover_slide.shapes.add_textbox(Inches(1.2), Inches(1.8), Inches(10.9), Inches(4.5))
     tf = cover_box.text_frame
     tf.word_wrap = True
 
     p_badge = tf.paragraphs[0]
     p_badge.text = "SOLUTION ARCHITECTURE & TECHNICAL PROPOSAL"
-    p_badge.font.size = Pt(13)
+    p_badge.font.size = Pt(12)
     p_badge.font.bold = True
-    p_badge.font.color.rgb = RGBColor(0xD9, 0x77, 0x06)  # Warm amber
+    p_badge.font.color.rgb = RGBColor(0xF5, 0x9E, 0x0B)  # Vibrant Amber
 
     p_title = tf.add_paragraph()
     p_title.text = payload.document_title
     p_title.font.size = Pt(36)
     p_title.font.bold = True
-    p_title.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
+    p_title.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)  # Crisp White
     p_title.space_before = Pt(16)
 
     p_sub = tf.add_paragraph()
     p_sub.text = f"Dipersiapkan secara eksklusif oleh: {payload.company_name}"
     p_sub.font.size = Pt(16)
-    p_sub.font.color.rgb = RGBColor(0x2F, 0x5F, 0xE0)  # Primary secondary blue
-    p_sub.space_before = Pt(12)
+    p_sub.font.color.rgb = RGBColor(0x60, 0xA5, 0xFA)  # Light Blue accent
+    p_sub.space_before = Pt(14)
 
     p_meta = tf.add_paragraph()
-    p_meta.text = f"Tanggal: {datetime.now().strftime('%d %B %Y')}  ·  {len(payload.items)} Bagian Solusi Teknis"
-    p_meta.font.size = Pt(12)
-    p_meta.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
-    p_meta.space_before = Pt(8)
+    p_meta.text = f"Tanggal: {datetime.now().strftime('%d %B %Y')}  ·  {len(payload.items)} Bagian Solusi Teknis Terverifikasi"
+    p_meta.font.size = Pt(11.5)
+    p_meta.font.color.rgb = RGBColor(0x94, 0xA3, 0xB8)  # Slate 400
+    p_meta.space_before = Pt(10)
 
     # Slide 2: Executive Summary & Presentation Blueprint
     agenda_slide = prs.slides.add_slide(blank_slide_layout)
     _add_transition(agenda_slide, "fade")
+    _add_top_stripe(agenda_slide)
+    _add_slide_footer(agenda_slide, 2)
 
-    ag_box = agenda_slide.shapes.add_textbox(Inches(1.0), Inches(0.8), Inches(11.333), Inches(1.2))
+    ag_box = agenda_slide.shapes.add_textbox(Inches(1.0), Inches(0.7), Inches(11.333), Inches(1.2))
     tf_ag = ag_box.text_frame
     p_h = tf_ag.paragraphs[0]
     p_h.text = "Ringkasan Eksekutif & Agenda Solusi"
@@ -1661,7 +1748,7 @@ def export_proposal_pptx(payload: ExportPptxRequest):
     p_h.font.bold = True
     p_h.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
 
-    ag_body = agenda_slide.shapes.add_textbox(Inches(1.0), Inches(2.0), Inches(11.333), Inches(4.8))
+    ag_body = agenda_slide.shapes.add_textbox(Inches(1.0), Inches(1.9), Inches(11.333), Inches(4.8))
     tf_body = ag_body.text_frame
     tf_body.word_wrap = True
 
@@ -1691,6 +1778,8 @@ def export_proposal_pptx(payload: ExportPptxRequest):
     for idx, item in enumerate(payload.items[:14], start=1):
         slide = prs.slides.add_slide(blank_slide_layout)
         _add_transition(slide, "fade")
+        _add_top_stripe(slide)
+        _add_slide_footer(slide, idx + 2)
 
         # Header Title
         hdr_box = slide.shapes.add_textbox(Inches(1.0), Inches(0.5), Inches(11.333), Inches(1.1))
@@ -1712,12 +1801,12 @@ def export_proposal_pptx(payload: ExportPptxRequest):
 
         if img_bytes:
             # Layout 2 Kolom: Kolom Kiri Teks (Ringkas & Padat), Kolom Kanan Visual Aset / Diagram
-            left_box = slide.shapes.add_textbox(Inches(1.0), Inches(1.7), Inches(5.6), Inches(5.2))
+            left_box = slide.shapes.add_textbox(Inches(1.0), Inches(1.7), Inches(5.6), Inches(5.0))
             tf_l = left_box.text_frame
             tf_l.word_wrap = True
 
             p_lh = tf_l.paragraphs[0]
-            p_lh.text = "📋 Kebutuhan Dokumen Tender"
+            p_lh.text = "📋 Kebutuhan Dokumen Acuan"
             p_lh.font.size = Pt(13)
             p_lh.font.bold = True
             p_lh.font.color.rgb = RGBColor(0x25, 0x63, 0xEB)
@@ -1730,7 +1819,7 @@ def export_proposal_pptx(payload: ExportPptxRequest):
             p_lb.space_before = Pt(6)
 
             p_rh = tf_l.add_paragraph()
-            p_rh.text = f"⚡ Tanggapan & Solusi {payload.company_name}"
+            p_rh.text = f"⚡ Tanggapan Solusi {payload.company_name}"
             p_rh.font.size = Pt(13)
             p_rh.font.bold = True
             p_rh.font.color.rgb = RGBColor(0x05, 0x96, 0x69)
@@ -1783,7 +1872,7 @@ def export_proposal_pptx(payload: ExportPptxRequest):
             tf_l = left_box.text_frame
             tf_l.word_wrap = True
             p_lh = tf_l.paragraphs[0]
-            p_lh.text = "📋 Kebutuhan Dokumen Tender"
+            p_lh.text = "📋 Kebutuhan Dokumen Acuan"
             p_lh.font.size = Pt(14)
             p_lh.font.bold = True
             p_lh.font.color.rgb = RGBColor(0x25, 0x63, 0xEB)
@@ -1809,27 +1898,44 @@ def export_proposal_pptx(payload: ExportPptxRequest):
             p_rb.font.color.rgb = RGBColor(0x1F, 0x29, 0x37)
             p_rb.space_before = Pt(8)
 
-    # Slide Penutup: Q&A / Terima Kasih
+    # Slide Penutup: Q&A / Terima Kasih (Dark Theme Matching Cover)
     close_slide = prs.slides.add_slide(blank_slide_layout)
     _add_transition(close_slide, "fade")
 
-    close_box = close_slide.shapes.add_textbox(Inches(1.0), Inches(2.2), Inches(11.333), Inches(3.5))
+    close_bg = close_slide.shapes.add_shape(1, Inches(0), Inches(0), Inches(13.333), Inches(7.5))
+    close_bg.fill.solid()
+    close_bg.fill.fore_color.rgb = RGBColor(0x0F, 0x17, 0x2A)  # Slate 900
+    close_bg.line.fill.background()
+
+    close_stripe = close_slide.shapes.add_shape(1, Inches(0), Inches(0), Inches(13.333), Inches(0.1))
+    close_stripe.fill.solid()
+    close_stripe.fill.fore_color.rgb = RGBColor(0x4A, 0x86, 0xE8)
+    close_stripe.line.fill.background()
+
+    close_box = close_slide.shapes.add_textbox(Inches(1.0), Inches(2.3), Inches(11.333), Inches(3.5))
     tf_c = close_box.text_frame
     tf_c.word_wrap = True
 
     p_c1 = tf_c.paragraphs[0]
     p_c1.text = "Terima Kasih"
-    p_c1.font.size = Pt(40)
+    p_c1.font.size = Pt(44)
     p_c1.font.bold = True
-    p_c1.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
+    p_c1.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
     p_c1.alignment = PP_ALIGN.CENTER
 
     p_c2 = tf_c.add_paragraph()
-    p_c2.text = f"Diskusi Solusi Teknis & Tanya Jawab · {payload.company_name}"
-    p_c2.font.size = Pt(16)
-    p_c2.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
-    p_c2.space_before = Pt(12)
+    p_c2.text = f"Sesi Diskusi Arsitektur Solusi & Tanya Jawab"
+    p_c2.font.size = Pt(18)
+    p_c2.font.color.rgb = RGBColor(0x60, 0xA5, 0xFA)
+    p_c2.space_before = Pt(14)
     p_c2.alignment = PP_ALIGN.CENTER
+
+    p_c3 = tf_c.add_paragraph()
+    p_c3.text = f"{payload.company_name}  ·  Enterprise IT Infrastructure & System Integrator"
+    p_c3.font.size = Pt(13)
+    p_c3.font.color.rgb = RGBColor(0x94, 0xA3, 0xB8)
+    p_c3.space_before = Pt(10)
+    p_c3.alignment = PP_ALIGN.CENTER
 
     bio_ppt = io.BytesIO()
     prs.save(bio_ppt)
