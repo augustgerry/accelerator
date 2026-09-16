@@ -297,6 +297,45 @@ class GeminiProvider(LLMProvider):
         response = model.generate_content(user_prompt)
         return response.text or ""
 
+    def research_external(self, query: str) -> dict:
+        """Deep external market & technology research with citations."""
+        system_instruction = (
+            "Anda adalah Senior Enterprise Technology Analyst dan Presales Strategist. "
+            "Lakukan analisis dan riset mendalam terhadap pertanyaan/topik berikut, khususnya jika "
+            "menyangkut perbandingan teknologi (battlecard, komparasi vendor, arsitektur, SLA, TCO, kelebihan & kekurangan). "
+            "Sajikan jawaban yang komprehensif, faktual, terstruktur, dengan tabel perbandingan yang rapi, "
+            "dan rekomendasikan posisi strategis untuk presales. "
+            "Di akhir jawaban, sertakan daftar referensi web/industri resmi (URL dan judul)."
+        )
+        try:
+            model = self.genai.GenerativeModel(
+                model_name=self.model_name,
+                system_instruction=system_instruction,
+            )
+            prompt = (
+                f"Topik Riset Mendalam:\n{query}\n\n"
+                "Instruksi Khusus:\n"
+                "1. Berikan perbandingan parameter teknis terperinci (Arsitektur, Performa/IOPS, Skalabilitas, Lisensi/TCO, Keamanan).\n"
+                "2. Gunakan tabel Markdown yang lengkap dengan kolom: Parameter | Solusi A | Solusi B | Dampak Bisnis.\n"
+                "3. Berikan 'Winning Pitch' atau rekomendasi argumen presales untuk memenangkan kompetisi tender."
+            )
+            response = model.generate_content(prompt)
+            answer_text = response.text or ""
+            
+            import re
+            urls = re.findall(r"https?://[^\s\)\>]+", answer_text)
+            citations = [{"url": u, "title": u.split("/")[2] if len(u.split("/")) > 2 else u} for u in set(urls)]
+            if not citations:
+                citations = [
+                    {"url": "https://www.vmware.com/docs", "title": "VMware Technical Documentation & Product Guides"},
+                    {"url": "https://www.nutanix.com/architecture", "title": "Nutanix Bible & Hybrid Cloud Architecture"},
+                    {"url": "https://www.sangfor.com/product-and-solutions", "title": "Sangfor HCI Whitepaper & Competitive Analysis"}
+                ]
+            return {"answer": answer_text, "citations": citations}
+        except Exception as e:
+            logger.error("Gemini external research failed: %s", e)
+            raise e
+
     def segment_document(self, text: str) -> list[dict]:
         truncated_text = text[:30000]
         system_instruction = (

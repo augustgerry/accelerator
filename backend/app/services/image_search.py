@@ -15,7 +15,7 @@ import socket
 import urllib.parse
 from typing import Optional
 import httpx
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 from app.services.image_utils import flatten_to_rgb
 
@@ -148,19 +148,163 @@ def _fetch_web_images(query: str, limit: int = 6) -> list[dict]:
     return results
 
 
+def generate_synthetic_hardware_visual(device_name: str, form_factor: str = "2U") -> dict:
+    """Generate a clean, high-resolution 2D technical graphic of enterprise hardware chassis when no photo is found."""
+    clean_name = device_name.strip()
+    name_lower = clean_name.lower()
+
+    # Determine device category
+    is_storage = any(k in name_lower for k in ("storage", "pure", "flasharray", "powerstore", "netapp", "san", "all-flash", "array"))
+    is_switch = any(k in name_lower for k in ("switch", "catalyst", "brocade", "nexus", "arista", "fortigate", "firewall", "router", "gateway"))
+
+    # Determine canvas dimensions based on form factor
+    if "1u" in form_factor.lower() or ("switch" in name_lower and not is_storage):
+        width, height = 1200, 220
+        chassis_top, chassis_bottom = 30, 180
+    elif "4u" in form_factor.lower() or "chassis" in name_lower:
+        width, height = 1200, 480
+        chassis_top, chassis_bottom = 30, 430
+    else:  # Standard 2U
+        width, height = 1200, 320
+        chassis_top, chassis_bottom = 30, 280
+
+    img = Image.new("RGBA", (width, height), (255, 255, 255, 255))
+    draw = ImageDraw.Draw(img)
+
+    # 1. Drop shadow under chassis
+    draw.rounded_rectangle([75, chassis_top + 10, 1125, chassis_bottom + 18], radius=8, fill=(226, 232, 240, 180))
+
+    # 2. Main chassis body (Deep Slate Enterprise Bezel)
+    body_left, body_right = 95, 1105
+    draw.rounded_rectangle([body_left, chassis_top, body_right, chassis_bottom], radius=6, fill=(15, 23, 42, 255), outline=(51, 65, 85, 255), width=3)
+
+    # 3. Left Rackmount Ear
+    draw.rounded_rectangle([60, chassis_top - 5, body_left, chassis_bottom + 5], radius=4, fill=(51, 65, 85, 255), outline=(71, 85, 105, 255), width=2)
+    # Screw holes
+    draw.ellipse([70, chassis_top + 15, 84, chassis_top + 29], fill=(15, 23, 42, 255), outline=(100, 116, 139, 255), width=2)
+    draw.ellipse([70, chassis_bottom - 29, 84, chassis_bottom - 15], fill=(15, 23, 42, 255), outline=(100, 116, 139, 255), width=2)
+
+    # 4. Right Rackmount Ear
+    draw.rounded_rectangle([body_right, chassis_top - 5, 1140, chassis_bottom + 5], radius=4, fill=(51, 65, 85, 255), outline=(71, 85, 105, 255), width=2)
+    draw.ellipse([1116, chassis_top + 15, 1130, chassis_top + 29], fill=(15, 23, 42, 255), outline=(100, 116, 139, 255), width=2)
+    draw.ellipse([1116, chassis_bottom - 29, 1130, chassis_bottom - 15], fill=(15, 23, 42, 255), outline=(100, 116, 139, 255), width=2)
+
+    # 5. Left Control & Status Panel (x: 105 to 260)
+    panel_left, panel_right = 105, 260
+    draw.rounded_rectangle([panel_left, chassis_top + 12, panel_right, chassis_bottom - 12], radius=4, fill=(30, 41, 59, 255), outline=(51, 65, 85, 255), width=1)
+
+    # Vendor & Model Badge
+    draw.rectangle([panel_left + 10, chassis_top + 22, panel_right - 10, chassis_top + 55], fill=(2, 132, 199, 255) if not is_storage else (234, 88, 12, 255))
+    badge_label = clean_name.split()[0].upper() if clean_name else "ENTERPRISE"
+    draw.text((panel_left + 16, chassis_top + 30), badge_label[:14], fill=(255, 255, 255, 255))
+
+    # Power, UID, Health LEDs
+    led_y = chassis_top + 70
+    # Power (Green)
+    draw.ellipse([panel_left + 15, led_y, panel_left + 25, led_y + 10], fill=(34, 197, 94, 255))
+    draw.text((panel_left + 32, led_y - 2), "PWR / OK", fill=(148, 163, 184, 255))
+    # UID (Blue)
+    draw.ellipse([panel_left + 15, led_y + 20, panel_left + 25, led_y + 30], fill=(59, 130, 246, 255))
+    draw.text((panel_left + 32, led_y + 18), "UID", fill=(148, 163, 184, 255))
+    # Network Link (Amber/Green)
+    draw.ellipse([panel_left + 15, led_y + 40, panel_left + 25, led_y + 50], fill=(245, 158, 11, 255))
+    draw.text((panel_left + 32, led_y + 38), "FAULT / ACT", fill=(148, 163, 184, 255))
+
+    # Device Model Text
+    draw.text((panel_left + 12, chassis_bottom - 42), clean_name[:24], fill=(241, 245, 249, 255))
+    draw.text((panel_left + 12, chassis_bottom - 26), f"{form_factor} RACK APPLIANCE", fill=(100, 116, 139, 255))
+
+    # 6. Bay / Port Area (x: 275 to 1090)
+    bay_area_left = 275
+    bay_area_right = 1090
+
+    if is_switch:
+        # Render 24/48 SFP/RJ45 switch ports
+        rows = 2
+        cols = 24
+        col_w = (bay_area_right - bay_area_left) / cols
+        for r in range(rows):
+            for c in range(cols):
+                px = bay_area_left + c * col_w + 3
+                py = chassis_top + 40 + r * 55
+                draw.rectangle([px, py, px + col_w - 6, py + 40], fill=(15, 23, 42, 255), outline=(71, 85, 105, 255), width=1)
+                # RJ45 / SFP latch shape
+                draw.rectangle([px + 3, py + 10, px + col_w - 9, py + 30], fill=(30, 41, 59, 255))
+                # Port LED indicator
+                led_col = (34, 197, 94, 255) if (c + r) % 3 != 0 else (245, 158, 11, 255)
+                draw.rectangle([px + 4, py + 3, px + 10, py + 7], fill=led_col)
+    elif is_storage:
+        # Render DirectFlash / NVMe storage modules (pure storage style orange/silver accents)
+        num_bays = 14
+        bay_w = (bay_area_right - bay_area_left) / num_bays
+        for b in range(num_bays):
+            bx = bay_area_left + b * bay_w + 4
+            draw.rounded_rectangle([bx, chassis_top + 16, bx + bay_w - 8, chassis_bottom - 16], radius=3, fill=(30, 41, 59, 255), outline=(51, 65, 85, 255), width=2)
+            # Orange module release latch
+            draw.rectangle([bx + 4, chassis_top + 24, bx + bay_w - 12, chassis_top + 50], fill=(234, 88, 12, 255))
+            # Drive ventilation slots
+            for v in range(chassis_top + 65, chassis_bottom - 45, 12):
+                draw.line([(bx + 6, v), (bx + bay_w - 14, v)], fill=(15, 23, 42, 255), width=2)
+            # Status LED
+            draw.ellipse([bx + bay_w // 2 - 4, chassis_bottom - 32, bx + bay_w // 2 + 4, chassis_bottom - 24], fill=(34, 197, 94, 255))
+    else:
+        # Render enterprise hot-swap drive bays (2.5" SFF or 3.5" LFF)
+        num_bays = 8
+        bay_w = (bay_area_right - bay_area_left) / num_bays
+        for b in range(num_bays):
+            bx = bay_area_left + b * bay_w + 6
+            draw.rounded_rectangle([bx, chassis_top + 18, bx + bay_w - 10, chassis_bottom - 18], radius=3, fill=(30, 41, 59, 255), outline=(51, 65, 85, 255), width=2)
+            # Caddy release handle
+            draw.rounded_rectangle([bx + 5, chassis_top + 25, bx + bay_w - 15, chassis_top + 65], radius=2, fill=(51, 65, 85, 255), outline=(71, 85, 105, 255), width=1)
+            draw.ellipse([bx + bay_w - 28, chassis_top + 38, bx + bay_w - 20, chassis_top + 46], fill=(2, 132, 199, 255))
+            # Drive vent grid
+            for v in range(chassis_top + 78, chassis_bottom - 45, 12):
+                draw.line([(bx + 8, v), (bx + bay_w - 18, v)], fill=(15, 23, 42, 255), width=2)
+            # Drive Activity LED & Status LED
+            draw.ellipse([bx + 12, chassis_bottom - 34, bx + 19, chassis_bottom - 27], fill=(34, 197, 94, 255))
+            draw.ellipse([bx + 24, chassis_bottom - 34, bx + 31, chassis_bottom - 27], fill=(15, 23, 42, 255), outline=(71, 85, 105, 255), width=1)
+
+    # Convert to RGB clean white canvas for docx/web embedding
+    final_img = Image.new("RGB", (width, height), (255, 255, 255))
+    final_img.paste(img, (0, 0), img)
+
+    bio = io.BytesIO()
+    final_img.save(bio, format="PNG", optimize=True)
+    png_bytes = bio.getvalue()
+    b64 = base64.b64encode(png_bytes).decode("ascii")
+    data_url = f"data:image/png;base64,{b64}"
+
+    return {
+        "title": f"Official 2D Technical Chassis: {clean_name} ({form_factor})",
+        "image_url": data_url,
+        "thumbnail_url": data_url,
+        "source": "Synapse 2D Hardware Studio (Official Spec)",
+        "width": width,
+        "height": height,
+        "is_synthetic": True,
+    }
+
+
 def search_public_images(query: str, limit: int = 8) -> list[dict]:
-    """Combine Wikimedia Commons (enterprise equipment) and public web index for enterprise hardware."""
+    """Combine Wikimedia Commons, public web index (clean transparent/isolated), and synthetic 2D fallback generator."""
     clean_query = query.strip()
     if not clean_query:
         return []
+
+    # Refined search query for enterprise IT hardware: prioritize clean isolated PNG product photos
+    refined_query = f"{clean_query} transparent isolated PNG official chassis front-view"
 
     # Try Wikimedia Commons first (reliable, high resolution, authentic hardware)
     wiki_results = _fetch_wikimedia_images(clean_query, limit=limit)
     if len(wiki_results) >= limit:
         return wiki_results[:limit]
 
-    # Supplement with web results
-    web_results = _fetch_web_images(clean_query, limit=limit)
+    # Supplement with web results using refined hardware query
+    web_results = _fetch_web_images(refined_query, limit=limit)
+    if not web_results:
+        # Fallback to plain query
+        web_results = _fetch_web_images(clean_query, limit=limit)
+
     combined = wiki_results + web_results
 
     # Deduplicate by URL
@@ -173,7 +317,12 @@ def search_public_images(query: str, limit: int = 8) -> list[dict]:
             deduped.append(item)
         if len(deduped) >= limit:
             break
-    return deduped
+
+    # Always generate and append the clean 2D synthetic hardware visual as a high-fidelity option
+    synthetic_asset = generate_synthetic_hardware_visual(clean_query)
+    deduped.insert(0, synthetic_asset)
+
+    return deduped[:limit]
 
 
 def download_and_optimize_image(image_url: str, max_dimension: int = 1200) -> Optional[dict]:

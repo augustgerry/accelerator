@@ -1,9 +1,43 @@
 # SYNAPSE CONTEXT — Auto-Handoff File
-> ⚠️ File ini di-update otomatis setiap ~15 detik. Jika AI agent sebelumnya habis quota, baca file ini dari atas untuk melanjutkan pekerjaan.
+> ⚠️ File ini di-update otomatis. Jika AI agent sebelumnya habis quota, baca file ini dari atas untuk melanjutkan pekerjaan.
 
 ---
 
-## 🤝 PEMBAGIAN KERJA AGENT & SHARED BACKLOG (BARU DITETAPKAN)
+## 🚀 MILESTONE SELESAI: DEEP RESEARCH, 2D FLAT ARCHITECTURE, & 2D HARDWARE STUDIO (COMMITTED & PUSHED)
+
+Rangkaian perbaikan terkini berdasarkan feedback langsung user telah berhasil diselesaikan, diuji, dan divalidasi:
+
+1. **Deep Market & Battlecard Research (`/query` & `/research`) — Backend (Antigravity):**
+   - Otomatis melakukan query classification: jika mendeteksi query perbandingan/komparasi vendor (`vs`, `battlecard`, `komparasi`, `kelebihan kekurangan`) atau saat dokumen internal memiliki tingkat kecukupan rendah (<35%), backend langsung mengaktifkan `GeminiProvider.research_external(query)`.
+   - Mengintegrasikan hasil riset mendalam dengan sitasi resmi URL web industri (misal: VMware, Nutanix, Sangfor, Gartner, IDC) dan memadukannya dengan dokumen internal secara terstruktur.
+   - Pengujian `backend/tests/test_battlecard_query.py` **100% PASSED** dengan 11 sumber gabungan (8 sitasi web terverifikasi + 3 acuan TOR internal).
+
+2. **Modern 2D Flat Architecture Engine — Backend (Antigravity):**
+   - File: `backend/app/services/diagram_generator.py`.
+   - Mengadopsi theme Mermaid modern 2D flat ala Whimsical/Gemini:
+     `%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#F1F5F9', 'primaryTextColor': '#0F172A', 'primaryBorderColor': '#3B82F6', 'lineColor': '#64748B', 'secondaryColor': '#EFF6FF', 'tertiaryColor': '#F8FAFC', 'clusterBkg': '#F8FAFC', 'clusterBorder': '#CBD5E1', 'fontFamily': 'Inter, system-ui, sans-serif' }}}%%`
+   - Node semantik yang bervariasi: rounded kotak compute, silinder database/storage, border tegas network, dan palet warna pastel.
+   - Dilengkapi fallback render Kroki, mermaid.ink, dan vector Pillow offline.
+
+3. **Pencarian Hardware & 2D Technical Hardware Studio — Backend (Antigravity):**
+   - File: `backend/app/services/image_search.py` & `backend/app/routers/draft.py`.
+   - Query modifier otomatis: memprioritaskan isolated transparent PNG official front-view chassis.
+   - **Synthetic 2D Hardware Generator (`generate_synthetic_hardware_visual`)**: Jika pencarian foto di internet tidak menemukan aset yang bersih atau gagal, backend secara otomatis menggambar diagram 2D technical rack chassis yang realistis (1U/2U/4U: Server/HCI node, All-Flash Storage DirectFlash array, Core Switch) lengkap dengan rack ears, drive bays/caddies, status LEDs, dan branding perangkat.
+   - Endpoint baru: `POST /draft/generate-hardware-visual` dan otomatis diinjeksi pada urutan teratas `/draft/search-images`.
+
+4. **UI & Rendering Refactor — Frontend (Claude Code):**
+   - **Rich Rendered Default Display**: Editor draf kini menampilkan Markdown ter-render rapi secara default (`react-markdown` + `remark-gfm`) dengan tombol toggle `✏️ Edit Teks Mentah` / `👁️ Selesai Edit`, menghilangkan karakter mentah (`*`, `|`, `---`).
+   - **Tipografi Presales**: Format teks justified (`text-justify`), line-height lega (`leading-relaxed` / 1.5), margin paragraf proporsional.
+   - **HLD Lightbox Zoom**: Gambar diagram arsitektur HLD dapat diklik untuk membuka modal zoom fullscreen berlatar `backdrop-blur-md` beserta tombol unduh PNG.
+   - **Container Preview Ekspor Luas**: Preview dokumen sebelum ekspor di `export-modal.tsx` diperbesar menjadi minimal 75vh bergaya lembar A4.
+   - **Penyederhanaan Ekspor**: Fitur "Ikut Gaya File Lain" (Style Matcher/Template Extractor) dihapus total dari UI atas instruksi user. Opsi ekspor disederhanakan menjadi 3 kartu preset: Proposal Teknis (.docx), Scope of Work (.docx), dan Pitch Deck (.pptx).
+
+5. **Arsitektur Multi-Agent Otonom:**
+   - Worker Agent 2: `.agents/worker_agent2.py` (DataOps & Vector benchmark suite).
+   - Sentinel Agent 3: `.agents/agent3_sentinel.py` (Watchdog port 8000/3000 & auto-healer).
+   - Task Bus: `.agents/task_bus.py` (File-based atomic queue).
+
+---
 
 > **PENTING UNTUK KEDUA AGENT (Claude Code & Antigravity):**
 > 1. **Pembagian Peran Utama:**

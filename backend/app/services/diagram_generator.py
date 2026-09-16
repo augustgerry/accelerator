@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 def generate_hld_mermaid(tor_text: str, solution_text: str, section_title: str = "High Level Design") -> dict:
-    """Generate a Mermaid.js architecture diagram script and explanation using LLM."""
+    """Generate a Mermaid.js architecture diagram script and explanation using LLM with modern 2D flat styling."""
     prompt = f"""
 Anda adalah Senior Enterprise Solution Architect dan Lead Infrastructure Designer.
-Tugas Anda adalah merumuskan arsitektur High Level Design (HLD) dalam format diagram Mermaid.js
+Tugas Anda adalah merumuskan arsitektur High Level Design (HLD) dalam format diagram Mermaid.js modern 2D flat
 berdasarkan kondisi eksisting dari dokumen acuan (TOR) dan solusi yang diusulkan.
 
 KONTEKS DOKUMEN ACUAN (TOR / KAK):
@@ -35,19 +35,28 @@ SOLUSI YANG DIUSULKAN (PROPOSAL DRAFT):
 FOKUS SUB-BAB / TOPIK:
 {section_title}
 
-INSTRUKSI PENYUSUNAN DIAGRAM HLD:
-1. Analisis arsitektur eksisting vs arsitektur target/solusi.
-2. Buat diagram Mermaid menggunakan sintaks `graph TD` atau `graph LR`.
-3. Gunakan `subgraph` untuk memisahkan domain/lokasi secara logis dan fisik (contoh: Data Center Utama, Disaster Recovery Site, Edge / Branch, Cloud / Third-Party Services).
-4. Tuliskan nama komponen spesifik (tipe server, storage, kapasitas, bandwidth koneksi, protokol, RPO/RTO).
-5. Berikan label informatif pada setiap garis koneksi (misal: "10 Gbps Synchronous Replication", "LACP Trunk 40G", "Heartbeat").
-6. Berikan styling visual pada node (classDef atau style).
-7. Berikan caption formal untuk gambar (contoh: "Gambar: Arsitektur High Level Design (HLD) Topologi Solusi Disaster Recovery").
+INSTRUKSI DESAIN DIAGRAM HLD (MODERN 2D FLAT WHIMSICAL/GEMINI AESTHETIC):
+1. Buat diagram Mermaid menggunakan `graph TD` atau `graph LR`.
+2. Wajib sertakan inisialisasi theme modern flat di awal kode Mermaid:
+   %%{{init: {{'theme': 'base', 'themeVariables': {{ 'primaryColor': '#F1F5F9', 'primaryTextColor': '#0F172A', 'primaryBorderColor': '#3B82F6', 'lineColor': '#64748B', 'secondaryColor': '#EFF6FF', 'tertiaryColor': '#F8FAFC', 'clusterBkg': '#F8FAFC', 'clusterBorder': '#CBD5E1', 'fontFamily': 'Inter, system-ui, sans-serif' }}}}%%
+3. Gunakan `subgraph` dengan judul yang elegan dan terstruktur (contoh: "Data Center Utama (Production)", "Disaster Recovery Site", "Inter-Site Connectivity").
+4. Gunakan bentuk node yang bervariasi secara semantik:
+   - Node Compute / Server: bentuk kotak rounded `ID("2x Server App Clustered")`
+   - Node Storage / Database: bentuk silinder `ID[("All-Flash Storage SAN 50TB")]`
+   - Node Switching / Network: bentuk kotak tegas `ID["Core Switch HA 40G"]`
+5. Terapkan `classDef` modern 2D pastel:
+   classDef compute fill:#EFF6FF,stroke:#3B82F6,stroke-width:2px,color:#1E3A8A;
+   classDef storage fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#92400E;
+   classDef network fill:#F1F5F9,stroke:#64748B,stroke-width:2px,color:#0F172A;
+   classDef dr fill:#ECFDF5,stroke:#059669,stroke-width:2px,color:#065F46;
+   classDef cloud fill:#FDF4FF,stroke:#A855F7,stroke-width:2px,color:#6B21A8;
+6. Berikan label informatif pada koneksi relasi (misal: "10G Sync Replication (RPO=0)", "Trunk LACP 40G", "Heartbeat").
+7. Berikan caption formal untuk gambar (contoh: "Gambar: Arsitektur High Level Design (HLD) Topologi Solusi Modern").
 8. Berikan ringkasan narasi arsitektur 2-3 paragraf.
 
 KEMBALIKAN HANYA JSON MURNI dengan format:
 {{
-  "mermaid_code": "graph TD\\n  subgraph DC[Data Center]...\\n",
+  "mermaid_code": "%%{{init: ...}}%%\\ngraph TD\\n  subgraph DC[Data Center Utama]...\\n",
   "caption": "Gambar: Arsitektur High Level Design Solusi...",
   "architecture_narrative": "Penjelasan narasi HLD..."
 }}
@@ -77,48 +86,56 @@ KEMBALIKAN HANYA JSON MURNI dengan format:
 
 
 def _fallback_hld_diagram(section_title: str) -> dict:
-    """Fallback architecture diagram template for enterprise infrastructure."""
-    code = """graph TD
-  subgraph DC_Prod ["Data Center Utama (Production)"]
+    """Fallback modern 2D flat architecture diagram template for enterprise infrastructure."""
+    code = """%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#F1F5F9', 'primaryTextColor': '#0F172A', 'primaryBorderColor': '#3B82F6', 'lineColor': '#64748B', 'secondaryColor': '#EFF6FF', 'tertiaryColor': '#F8FAFC', 'clusterBkg': '#F8FAFC', 'clusterBorder': '#CBD5E1', 'fontFamily': 'Inter, system-ui, sans-serif' }}}%%
+graph TD
+  subgraph DC_Prod ["🏢 Data Center Utama (Production Site)"]
     direction TB
-    SW_Core1["Core Switch 10/40G (HA Pair)"]
-    SW_SAN1["SAN Switch Brocade 32G"]
-    Srv_App1["App Cluster (2x HPE DL360 Gen10)"]
-    Srv_DB1["DB Cluster (2x HPE DL380 Gen10)"]
-    Storage_Prod[("Primary All-Flash Storage 50TB")]
-    SW_Core1 --- Srv_App1
-    Srv_App1 --- Srv_DB1
-    Srv_DB1 --- SW_SAN1
-    SW_SAN1 --- Storage_Prod
+    SW_Core1["Core Switch HA Pair (2x 40G Cisco Nexus)"]:::network
+    SW_SAN1["Brocade 32G SAN Switch Fabric"]:::network
+    Srv_App1("Compute Cluster (2x HPE DL360 Gen10)"):::compute
+    Srv_DB1("DB Cluster (2x HPE DL380 Gen10)"):::compute
+    Storage_Prod[("Primary All-Flash Storage 50TB")]:::storage
+
+    SW_Core1 ---|"10G LACP"| Srv_App1
+    Srv_App1 ---|"Inter-Tier"| Srv_DB1
+    Srv_DB1 ---|"32G Fibre Channel"| SW_SAN1
+    SW_SAN1 ---|"Dual Path"| Storage_Prod
   end
 
-  subgraph DC_DR ["Disaster Recovery Site (On-Premise)"]
+  subgraph DC_DR ["🏢 Disaster Recovery Site (DR Site)"]
     direction TB
-    SW_Core2["DR Core Switch 10G"]
-    SW_SAN2["DR SAN Switch 32G"]
-    Srv_DR["DR Compute Nodes (Active Standby)"]
-    Storage_DR[("DR Storage SAN 50TB")]
+    SW_Core2["DR Core Switch 10G"]:::network
+    SW_SAN2["DR SAN Switch 32G Fabric"]:::network
+    Srv_DR("DR Compute Nodes (Active Standby)"):::dr
+    Storage_DR[("DR Storage SAN 50TB")]:::dr
+
     SW_Core2 --- Srv_DR
     Srv_DR --- SW_SAN2
     SW_SAN2 --- Storage_DR
   end
 
-  subgraph Management ["Management & Backup Tier"]
-    Backup_Srv["Veeam Backup & Replication Repository"]
-    Monitoring["SMG 24x7 NOC / Zabbix Monitoring"]
+  subgraph Management ["🛡️ Management & Security Tier"]
+    Backup_Srv["Veeam Immutable Backup Repository"]:::network
+    Monitoring["SMG 24x7 NOC & Zabbix Proactive Monitoring"]:::network
   end
 
   Storage_Prod ==="Replikasi Sinkron (10 Gbps Dark Fiber, RPO=0)"===> Storage_DR
-  DC_Prod -.- Management
-  DC_DR -.- Management
+  DC_Prod -.->|"Telemetry & Syslog"| Management
+  DC_DR -.->|"DR Heartbeat"| Management
+
+  classDef compute fill:#EFF6FF,stroke:#3B82F6,stroke-width:2px,color:#1E3A8A;
+  classDef storage fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#92400E;
+  classDef network fill:#F1F5F9,stroke:#64748B,stroke-width:2px,color:#0F172A;
+  classDef dr fill:#ECFDF5,stroke:#059669,stroke-width:2px,color:#065F46;
 """
     return {
         "mermaid_code": code,
         "caption": f"Gambar: Arsitektur High Level Design (HLD) Solusi {section_title}",
         "architecture_narrative": (
-            "Arsitektur High Level Design (HLD) dirancang dengan redundansi penuh (High Availability) "
-            "pada tier compute, switching network, dan enterprise storage. Replikasi data antar-site "
-            "berjalan secara sinkron melalui dedicated dark fiber link 10 Gbps untuk memastikan RPO nol."
+            "Arsitektur High Level Design (HLD) dirancang dengan desain modern 2D flat berprinsip High Availability (HA) "
+            "tanpa single point of failure (SPOF) pada tier compute, network switching, dan storage tier. "
+            "Replikasi data lintas data center berjalan sinkron melalui link 10 Gbps dedicated dark fiber dengan RPO=0."
         ),
     }
 

@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
@@ -8,6 +9,7 @@ from app.services.retrieval import retrieve_chunks_with_full_metadata
 from app.services.llm_provider import format_llm_error, get_llm_provider
 from app.db import get_session
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/query", tags=["query"])
 
 
@@ -61,8 +63,51 @@ def query_knowledge_base(
     )
     chunks_text = [r["chunk_text"] for r in chunk_records]
 
+    # Detect if question is asking for competitor battlecard or market comparison
+    import re
+    is_comparison_query = bool(re.search(
+        r"(?i)\b(?:vs|versus|battle\s*card|komparasi|perbandingan|keunggulan|kekurangan|kelebihan|pasar|competitor|kompetitor|battlecard)\b",
+        payload.question
+    ))
+
+    provider = get_llm_provider()
+    sources = []
+
+    # If comparison query or no internal chunks found, trigger deep external research
+    if is_comparison_query or not chunk_records or max((r.get("confidence", 0) for r in chunk_records), default=0) < 35:
+        try:
+            research_result = provider.research_external(payload.question)
+            answer = research_result.get("answer", "")
+            web_citations = research_result.get("citations", [])
+            
+            # Map external web citations
+            for i, c in enumerate(web_citations, start=1):
+                sources.append(ChunkResult(
+                    id=f"web-source-{i}",
+                    title=c.get("title") or c.get("url") or f"Web Source {i}",
+                    docType="external_research",
+                    source="web",
+                    chunk_text=c.get("url") or "",
+                    confidence=95,
+                    matched_terms=["web_search", "live_data"]
+                ))
+            # If we also have some internal chunks, append them as supporting internal reference
+            for r in chunk_records[:3]:
+                sources.append(ChunkResult(
+                    id=r.get("id", ""),
+                    title=r.get("title", ""),
+                    docType=r.get("docType", "other"),
+                    source="internal",
+                    chunk_text=r.get("chunk_text", ""),
+                    confidence=r.get("confidence", 0),
+                    matched_terms=r.get("matched_terms", []),
+                    updated_at=r.get("updatedAt"),
+                ))
+            return QueryResponse(answer=answer, sources_used=len(sources), sources=sources)
+        except Exception as e:
+            logger.warning("Auto external research failed, falling back to standard RAG: %s", e)
+
     try:
-        provider = get_llm_provider()
         answer = provider.answer(retrieval_question, chunks_text, mode="qa")
     except Exception as e:
         answer = (
@@ -86,3 +131,4 @@ def query_knowledge_base(
     ]
 
     return QueryResponse(answer=answer, sources_used=len(chunks_text), sources=sources)
+

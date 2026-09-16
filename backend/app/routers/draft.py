@@ -19,7 +19,11 @@ from app.services.llm_provider import (
     format_llm_error,
     get_llm_provider,
 )
-from app.services.image_search import search_public_images, download_and_optimize_image
+from app.services.image_search import (
+    search_public_images,
+    download_and_optimize_image,
+    generate_synthetic_hardware_visual,
+)
 from app.services.diagram_generator import generate_hld_mermaid, render_mermaid_to_image
 from app.services.template_extractor import extract_images_from_office_bytes
 from app.db import get_session
@@ -546,6 +550,17 @@ class RenderMermaidRequest(BaseModel):
 class RenderMermaidResponse(BaseModel):
     data_url: Optional[str] = None
     engine: str = ""
+
+
+class GenerateHardwareVisualRequest(BaseModel):
+    device_name: str
+    form_factor: str = "2U"
+
+
+@router.post("/generate-hardware-visual")
+def generate_hardware_visual_endpoint(payload: GenerateHardwareVisualRequest):
+    """Generate high-resolution authentic 2D technical rack hardware visual on demand."""
+    return generate_synthetic_hardware_visual(payload.device_name, payload.form_factor)
 
 
 @router.post("/search-images", response_model=SearchImagesResponse)

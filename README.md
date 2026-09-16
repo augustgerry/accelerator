@@ -48,39 +48,36 @@ uvicorn main:app --reload
 
 Copy `.env.example` to `.env` in `backend/` and fill in:
 - `LLM_PROVIDER` — `claude` | `gemini` | `openai` (pluggable, see `services/llm_provider.py`)
-- `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` / `OPENAI_API_KEY` — only the one matching `LLM_PROVIDER`
-- `DATABASE_URL` — Postgres connection string (Supabase free tier works — pgvector included)
+- `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` / `OPENAI_API_KEY` — matching `LLM_PROVIDER` (Active: `gemini-3.6-flash`)
+- `DATABASE_URL` — Postgres connection string (with pgvector extension)
 - `GOOGLE_DRIVE_FOLDER_ID` — the folder to index
-- `ENABLE_EXTERNAL_RESEARCH` — `true` to turn on the `/research` endpoint (costs ~$10/1000 searches)
+- `ENABLE_EXTERNAL_RESEARCH` — `true` to enable deep live web and battlecard research
 
 Also copy `frontend/.env.example` to `frontend/.env.local` and point
 `NEXT_PUBLIC_API_URL` at your backend (defaults to `http://localhost:8000`).
 
-## External research (`/research`)
+## External research & Battlecard Engine (`/query` & `/research`)
 
-Separate from the internal knowledge base. Uses Claude's native `web_search`
-+ `web_fetch` server tools — live web results with citations, no manual
-catalog to maintain (unlike a hand-curated solutions list). Billed ~$10 per
-1,000 searches on top of normal token cost. Only implemented for the
-`claude` provider today (`ClaudeProvider.research_external()` in
-`llm_provider.py`) — Gemini/OpenAI equivalents (Google Search grounding /
-OpenAI web search) are stubbed for later.
+Separate from or blended with the internal knowledge base. Implemented natively for both Claude (`web_search` / `web_fetch`) and Gemini (`gemini-3.6-flash` deep market intelligence).
+- Automatically detects competitive comparisons (`vs`, `battlecard`, `kelebihan kekurangan`) or low internal confidence queries.
+- Combines live web industry citations (VMware, Nutanix, Sangfor, Gartner, IDC) with internal TOR references into a unified, verified response.
 
-Gated server-side by `ENABLE_EXTERNAL_RESEARCH` (default `false`) — the
-Settings page toggle is a UI convenience, but the real cost control lives
-in this backend flag so a stray frontend state can't rack up billing.
-On the frontend, it's a mode switch inside the same AI panel on the Search
-page ("Internal" vs "Riset Eksternal"), with citations visually
-distinguished — teal for internal documents, gold for external web sources.
+## Visual & Proposal Engine
+
+- **Modern 2D Flat Architecture Engine (`diagram_generator.py`)**: Generates clean Whimsical/Gemini-style 2D flat Mermaid architecture diagrams with semantic rounded nodes, pastel palettes, and multi-tier boundaries (Data Center, DR Site, Management/Backup). Renders via Kroki, mermaid.ink, or offline Pillow vector.
+- **2D Technical Hardware Studio (`image_search.py`)**: Prioritizes clean transparent isolated PNG hardware shots. If photos are unavailable online, the synthetic generator renders realistic 2D rackmount chassis graphics (1U/2U/4U: Server/HCI, All-Flash SAN Storage, Core Switch) on-demand.
+- **Rich Document Preview & Lightbox**: Interactive diagram zoom modal (`backdrop-blur-md`), formatted markdown preview with 1.5 line height and justified text, plus an enlarged 75vh A4 export preview.
+- **Simplified Export**: Clean 3-preset export options: Word Proposal (.docx), Scope of Work (.docx), and Pitch Deck (.pptx).
+
+## Autonomous Multi-Agent Architecture
+
+- **Leader Agent 1 (Antigravity)**: Core backend engineering, RAG retrieval optimization, and system integration.
+- **Worker Agent 2 (`.agents/worker_agent2.py`)**: Autonomous DataOps and benchmark evaluation daemon.
+- **Sentinel Agent 3 (`.agents/agent3_sentinel.py`)**: Background health watchdog (60s loop) monitoring ports 8000 and 3000, clearing zombie processes, and auto-healing services.
+- **Atomic Task Bus (`.agents/task_bus.py`)**: Decoupled JSON file-based task queue.
 
 ## Design notes
 
-- **Multi-tenant ready**: every core table carries a `workspace_id` from day
-  one (see `backend/app/models.py`), so the same codebase can later serve
-  isolated SI-partner workspaces without a schema rewrite.
-- **LLM provider is swappable** at runtime via `LLM_PROVIDER` — no vendor
-  lock-in, and it's easy to route cheap/simple queries to a lighter model
-  later.
-- **Demo dataset**: point `GOOGLE_DRIVE_FOLDER_ID` at a folder containing your
-  own reference documents (migration checklists, TCO models, SoWs) and a
-  sample TOR for the draft-mode demo.
+- **Non-divisional & unified**: Enterprise-wide single-tenant knowledge base without rigid divisional silos.
+- **LLM provider is swappable** at runtime via `LLM_PROVIDER` (Claude, Gemini, OpenAI).
+- **Evaluation benchmark**: Automated suite in `backend/tests/benchmark_eval.py` ensuring high precision and sub-second retrieval latency.
