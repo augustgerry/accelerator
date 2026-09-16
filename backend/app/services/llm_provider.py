@@ -308,19 +308,89 @@ class OpenAIProvider(LLMProvider):
         raise NotImplementedError
 
 
+def _fallback_recommend_structure(doc_type: str, tor_text: str = "", document_title: str = "") -> list[dict]:
+    """Fallback generator based on authentic PT Smartnet Magna Global library documents:
+    CSUL Finance (Proposal), SMBC & Hitachi (SoW), [CUSTOMER NAME] Solution Brief, and MoM templates."""
+    clean_title = document_title or "Tender Solusi Enterprise"
+    
+    if doc_type == "sow":
+        return [
+            {"id": "sec-1", "title": "1. Latar Belakang & Deskripsi Pekerjaan", "category": "Umum", "requirement_text": f"Latar belakang proyek {clean_title}, tujuan pengadaan, dan dasar penugasan PT Smartnet Magna Global.", "rationale": "Standar pembuka SoW enterprise SMBC/Hitachi."},
+            {"id": "sec-2", "title": "2. Ruang Lingkup Pengerjaan & Layanan Teknis", "category": "Teknis", "requirement_text": "Detail ruang lingkup pengerjaan teknis: pengadaan, instalasi, konfigurasi, migrasi data, dan pengujian menyeluruh.", "rationale": "Memetakan cakupan eksekusi engineering di lapangan."},
+            {"id": "sec-3", "title": "3. Matriks Pembagian Peran & Tanggung Jawab (RACI)", "category": "Manajemen Proyek", "requirement_text": "Tabel matriks pembagian tanggung jawab antara PT Smartnet Magna Global (SMG) dan pihak Klien.", "rationale": "Mencegah dispute operasional melalui kejelasan batasan peran."},
+            {"id": "sec-4", "title": "4. Batasan & Pengecualian Pekerjaan (Out of Scope)", "category": "Administrasi & Legal", "requirement_text": "Daftar pekerjaan yang secara tegas berada di luar lingkup penawaran SMG.", "rationale": "Melindungi batas tanggung jawab garansi dan komersial."},
+            {"id": "sec-5", "title": "5. Deliverables Proyek, Milestones & Timeline Pengerjaan", "category": "Manajemen Proyek", "requirement_text": "Daftar keluaran resmi proyek, tahapan pengerjaan (milestone), dan estimasi mandays.", "rationale": "Kriteria pengukuran progres pencapaian proyek."},
+            {"id": "sec-6", "title": "6. Service Level Agreement (SLA), Dukungan 24x7 & Prosedur Eskalasi", "category": "SLA & Support", "requirement_text": "Matriks prioritas penanganan insiden (P1 30 mnt / 4 jam onsite, P2 60 mnt, P3, P4) dan alur eskalasi TAC.", "rationale": "Standar komitmen SLA corrective maintenance SMG."},
+            {"id": "sec-7", "title": "7. Kriteria Penerimaan Pekerjaan (UAT & BAST)", "category": "Manajemen Proyek", "requirement_text": "Tata cara pengujian User Acceptance Testing dan syarat penandatanganan BAST.", "rationale": "Dasar legal penyelesaian pekerjaan dan serah terima."},
+            {"id": "sec-8", "title": "8. Syarat & Ketentuan Umum serta Change Request (CR)", "category": "Administrasi & Legal", "requirement_text": "Ketentuan operasional, prosedur Change Request, kerahasiaan data (NDA), dan garansi.", "rationale": "Tata kelola administrasi perubahan ruang lingkup."},
+        ]
+    elif doc_type == "solution_brief":
+        return [
+            {"id": "sec-1", "title": "1. Executive Summary & Value Proposition", "category": "Umum", "requirement_text": f"Ringkasan eksekutif dan nilai strategis solusi SMG dalam menjawab kebutuhan {clean_title}.", "rationale": "Ikhtisar bernilai jual tinggi untuk pembuat keputusan eksekutif."},
+            {"id": "sec-2", "title": "2. Business Understanding & Customer Pain Points", "category": "Umum", "requirement_text": "Profil bisnis klien, tantangan infrastruktur existing (bottleneck/kapasitas), dan pemetaan OKRs.", "rationale": "Menghubungkan solusi teknis langsung dengan dampak bisnis klien."},
+            {"id": "sec-3", "title": "3. Scope of Work & High-Level Timeline", "category": "Manajemen Proyek", "requirement_text": "Batasan ruang lingkup in-scope dan out-of-scope serta fase implementasi bertahap.", "rationale": "Kejelasan ekspektasi delivery dan durasi pengerjaan."},
+            {"id": "sec-4", "title": "4. Proposed Solution & Architecture Overview", "category": "Teknis", "requirement_text": "Narasi solusi, diagram topologi High-Level Design (HLD), tabel komponen kunci, dan analisis deployment.", "rationale": "Inti arsitektur teknis pembuktian kapabilitas solusi SMG."},
+            {"id": "sec-5", "title": "5. Integration Points, Dependencies & Regulatory Compliance", "category": "Teknis", "requirement_text": "Titik integrasi dengan environment klien, dependensi jaringan, serta kepatuhan regulasi data (OJK/BI).", "rationale": "Mitigasi risiko teknis dan pemenuhan regulasi perbankan/finansial."},
+            {"id": "sec-6", "title": "6. Security, Governance & High Availability", "category": "Teknis", "requirement_text": "Arsitektur proteksi keamanan: IAM, enkripsi data at-rest & in-transit, isolasi jaringan, dan Disaster Recovery.", "rationale": "Jaminan keamanan kelas enterprise tanpa celah kerentanan."},
+            {"id": "sec-7", "title": "7. Measurable Success Criteria & KPIs", "category": "Manajemen Proyek", "requirement_text": "Kriteria terukur keberhasilan implementasi (ketersediaan 99.99%, performa respons, zero-data-loss).", "rationale": "Metrik akuntabilitas keberhasilan proyek."},
+            {"id": "sec-8", "title": "8. Why Smartnet Magna Global?", "category": "Administrasi & Legal", "requirement_text": "Kredensial SMG sebagai bagian dari CTI Group, keahlian multi-vendor teruji, dan engineer tersertifikasi.", "rationale": "Membangun kepercayaan dan diferensiasi terhadap kompetitor."},
+            {"id": "sec-9", "title": "9. Next Steps & Engagement Model", "category": "Manajemen Proyek", "requirement_text": "Rekomendasi langkah tindak lanjut: sesi deep-dive teknis, penawaran komersial resmi, dan finalisasi SoW.", "rationale": "Call to action yang menggerakkan peluang ke tahap penutupan proyek."},
+        ]
+    elif doc_type == "mom":
+        return [
+            {"id": "sec-1", "title": "1. Informasi & Metadata Pertemuan", "category": "Umum", "requirement_text": f"Metadata lengkap rapat: Hari/Tanggal, Waktu, Lokasi/Platform, Agenda ({clean_title}), Pemimpin Rapat, dan Notulen SMG.", "rationale": "Header resmi berita acara rapat standar perusahaan."},
+            {"id": "sec-2", "title": "2. Daftar Hadir Peserta Rapat (Attendees)", "category": "Umum", "requirement_text": "Tabel daftar hadir peserta rapat dari pihak Klien dan pihak PT Smartnet Magna Global.", "rationale": "Dokumentasi kehadiran stakeholder pengambil keputusan."},
+            {"id": "sec-3", "title": "3. Poin-Poin Utama Pembahasan & Klarifikasi Teknis", "category": "Teknis", "requirement_text": "Rincian diskusi: klarifikasi teknis arsitektur, kebutuhan fungsional, dan tantangan yang dibahas.", "rationale": "Perekaman substansi teknis dan diskusi mendalam."},
+            {"id": "sec-4", "title": "4. Kesepakatan & Keputusan Bersama (Key Decisions)", "category": "Umum", "requirement_text": "Poin-poin kesepakatan final yang telah disetujui bersama oleh seluruh pihak dalam rapat.", "rationale": "Baseline legal kesepakatan untuk langkah berikutnya."},
+            {"id": "sec-5", "title": "5. Matriks Tindak Lanjut (Action Items Plan)", "category": "Manajemen Proyek", "requirement_text": "Tabel tindak lanjut: No, Aktivitas/Task, Penanggung Jawab (Owner PIC), Target Tanggal Selesai, dan Status.", "rationale": "Matriks akuntabilitas eksekusi pasca rapat."},
+            {"id": "sec-6", "title": "6. Lembar Pengesahan & Tanda Tangan (Sign-off)", "category": "Administrasi & Legal", "requirement_text": "Kolom tanda tangan resmi: Disiapkan oleh Notulen, Diketahui oleh PM SMG, dan Disetujui oleh Klien.", "rationale": "Validasi otentik Berita Acara Rapat."},
+        ]
+    elif doc_type == "klarifikasi_teknis":
+        return [
+            {"id": "sec-1", "title": "1. Latar Belakang & Ringkasan Hasil Aanwijzing", "category": "Umum", "requirement_text": f"Latar belakang aanwijzing, dokumen acuan tender {clean_title}, dan rangkuman poin kesepakatan utama.", "rationale": "Memetakan konteks klarifikasi resmi dokumen tender."},
+            {"id": "sec-2", "title": "2. Matriks Pertanyaan, Klarifikasi & Tanggapan Solusi SMG", "category": "Teknis", "requirement_text": "Tabel klausul TOR vs Tanggapan/Klarifikasi Teknis SMG (Aspek, Ketentuan TOR, Hasil Klarifikasi SMG, Status).", "rationale": "Format resmi pembuktian kepatuhan aanwijzing CSUL/CCBI."},
+            {"id": "sec-3", "title": "3. Penyesuaian Arsitektur Solusi & Sizing Hardware", "category": "Teknis", "requirement_text": "Kalkulasi data growth 10%/tahun, sizing controller/storage efektif, dan redundansi konektivitas jaringan.", "rationale": "Justifikasi teknis sizing kapasitas perangkat yang diusulkan."},
+            {"id": "sec-4", "title": "4. Bill of Quantity (BOQ) & Lisensi Perangkat", "category": "Teknis", "requirement_text": "Tabel BOQ komponen hardware dan lisensi pendukung lengkap dengan Part Number, Deskripsi, dan Qty.", "rationale": "Kepastian spesifikasi perangkat dan lisensi komersial."},
+            {"id": "sec-5", "title": "5. Tim Tenaga Ahli, Timeline Pengerjaan & Komitmen SLA", "category": "SLA & Support", "requirement_text": "Struktur tim proyek bersertifikasi SMG, jadwal pengerjaan, dan komitmen SLA 24x7.", "rationale": "Jaminan kapabilitas implementasi dan dukungan berkelanjutan."},
+        ]
+    elif doc_type == "pitch_deck":
+        return [
+            {"id": "sec-1", "title": "Slide 1: Executive Title & Introduction", "category": "Umum", "requirement_text": f"Cover presentasi eksekutif: Judul Solusi {clean_title}, Nama Klien, Logo SMG, Tanggal, dan pembuka nilai strategis.", "rationale": "Cover eksekutif 16:9."},
+            {"id": "sec-2", "title": "Slide 2: Client Business Challenge & Current Landscape", "category": "Umum", "requirement_text": "Tantangan bisnis utama klien, bottleneck operasional infrastruktur existing, dan urgensi transformasi.", "rationale": "Membangun urgensi dan empati terhadap masalah klien."},
+            {"id": "sec-3", "title": "Slide 3: Proposed Architecture & Solution Overview", "category": "Teknis", "requirement_text": "Gambaran topologi arsitektur sistem modern (HLD) dan keunggulan integrasi perangkat enterprise.", "rationale": "Visualisasi solusi ringkas dan mudah dipahami."},
+            {"id": "sec-4", "title": "Slide 4: Key Advantages & Value Proposition", "category": "Umum", "requirement_text": "Nilai manfaat terukur: efisiensi TCO, ketersediaan tinggi (99.9999%), skalabilitas masa depan, dan keamanan.", "rationale": "Pesan kunci pembeda solusi SMG dibanding alternatif lain."},
+            {"id": "sec-5", "title": "Slide 5: Enterprise Credentials & Relevant Track Record", "category": "Umum", "requirement_text": "Kredibilitas PT Smartnet Magna Global (Member of CTI Group), sertifikasi engineer, dan portofolio sukses.", "rationale": "Membuktikan rekam jejak dan kapabilitas nyata."},
+            {"id": "sec-6", "title": "Slide 6: Implementation Roadmap & Next Steps", "category": "Manajemen Proyek", "requirement_text": "Tahapan implementasi bertahap, alokasi tim ahli, dan ajakan tindak lanjut konkret.", "rationale": "Closing yang jelas dan terarah."},
+        ]
+    else:
+        # Default: Proposal Teknis CSUL Enterprise Standard
+        return [
+            {"id": "sec-1", "title": "1. Latar Belakang & Analisis Kebutuhan", "category": "Umum", "requirement_text": f"Latar belakang proyek {clean_title}, kondisi existing infrastruktur klien, serta urgensi modernisasi perangkat.", "rationale": "Format Bab 1 standar proposal teknis CSUL."},
+            {"id": "sec-2", "title": "2. Tujuan & Sasaran Implementasi", "category": "Umum", "requirement_text": "Tujuan strategis dan sasaran teknis yang ingin dicapai melalui implementasi solusi yang diusulkan.", "rationale": "Format Bab 2 standar proposal teknis CSUL."},
+            {"id": "sec-3", "title": "3. Proposed Solution & Arsitektur Solusi", "category": "Teknis", "requirement_text": "Gambaran umum solusi yang ditawarkan oleh PT Smartnet Magna Global, arsitektur High Level Design (HLD), sizing kapasitas, dan spesifikasi hardware.", "rationale": "Format Bab 3 standar proposal teknis CSUL."},
+            {"id": "sec-4", "title": "4. Compliance Matrix Spesifikasi Teknis", "category": "Teknis", "requirement_text": "Tabel matriks kepatuhan spesifikasi teknis terhadap butir kebutuhan TOR (Comply / Not Comply / Exceed) beserta rincian komitmen pemenuhan teknis SMG.", "rationale": "Format Bab 4 standar proposal teknis CSUL."},
+            {"id": "sec-5", "title": "5. Implementation Plan, Scope of Work & Deliverables", "category": "Manajemen Proyek", "requirement_text": "Rencana implementasi, tahapan pelaksanaan, batasan ruang lingkup (in-scope / out-of-scope), deliverables, dan prosedur UAT.", "rationale": "Format Bab 5 standar proposal teknis CSUL."},
+            {"id": "sec-6", "title": "6. Maintenance Plan (PM/CM) & Service Level Agreement (SLA)", "category": "SLA & Support", "requirement_text": "Layanan pemeliharaan berkala Preventive Maintenance (PM), penanganan gangguan Corrective Maintenance (CM), komitmen SLA response time 24x7, dan dukungan prinsipal.", "rationale": "Format Bab 6 standar proposal teknis CSUL."},
+            {"id": "sec-7", "title": "7. Penutup, Tim Tenaga Ahli & Profil PT Smartnet Magna Global", "category": "Administrasi & Legal", "requirement_text": "Kesimpulan proposal, struktur tim tenaga ahli bersertifikasi, rekam jejak pengalaman PT Smartnet Magna Global, dan surat dukungan prinsipal resmi.", "rationale": "Format Bab 7 standar proposal teknis CSUL."},
+        ]
+
+
 def _build_system_prompt(mode: str) -> str:
     if mode == "draft":
         return (
-            "Anda adalah Senior Enterprise Solution Architect di PT Smartnet Magna Global (SMG). "
-            "Tugas Anda adalah menyusun tanggapan teknis dan proposal solusi resmi dalam Bahasa Indonesia formal "
-            "berdasarkan konteks dokumen tender (TOR) dan knowledge base internal SMG.\n\n"
-            "Aturan Penulisan Proposal Standar Enterprise:\n"
-            "1. Format penomoran sub-bab terstruktur (misal: 1.1, 2.1, 2.1.1, 3.1.2) sesuai hirarki topik.\n"
-            "2. Jangan gunakan simbol markdown liar yang mengotori dokumen; jika menggunakan sub-judul, sertakan nomor sub-bab bertingkat (misal: '3.1.1 Spesifikasi Server DL360').\n"
-            "3. Untuk rincian spesifikasi, komparasi fitur, konfigurasi hardware, atau SLA, WAJIB gunakan format tabel markdown (| Parameter | Spesifikasi | Komitmen SMG |) agar otomatis diekspor menjadi tabel Word resmi bergaris rapi.\n"
-            "4. Gunakan poin peluru bertanda '- ' untuk rincian fitur atau deliverables.\n"
-            "5. Selalu gunakan nama resmi perusahaan: 'PT Smartnet Magna Global' atau 'SMG'.\n"
-            "6. Jawab secara lugas, meyakinkan, bernilai jual tinggi (value proposition), dengan komitmen teknis spesifik tanpa kata tentatif (hindari kata 'akan diusahakan')."
+            "Anda adalah Senior Enterprise Solution Architect dan Presales Specialist di PT Smartnet Magna Global (SMG), bagian dari CTI Group. "
+            "Tugas Anda adalah menyusun tanggapan teknis, proposal resmi, MoM, Solution Brief, atau Scope of Work (SoW) dalam Bahasa Indonesia formal "
+            "berdasarkan konteks dokumen acuan dan seluruh knowledge base internal SMG.\n\n"
+            "Pedoman Penulisan Berdasarkan Standar Dokumen Otentik SMG:\n"
+            "1. Penomoran Hierarkis Terstruktur: Gunakan penomoran bertingkat yang rapi (misal: 1.1, 2.1, 2.1.1, 3.1.2) sesuai hirarki bab.\n"
+            "2. Zero Markdown Leakage: Jangan gunakan penanda markdown liar (seperti rentetan ### tanpa penomoran) yang mengotori dokumen. Selalu gunakan penomoran sub-bab bertingkat.\n"
+            "3. Format Tabel Terstruktur: Untuk spesifikasi hardware, BOQ, pembagian tanggung jawab (RACI), SLA matrix, dan Action Items, WAJIB gunakan format tabel markdown (| Kolom 1 | Kolom 2 |) agar otomatis diekspor menjadi tabel Word resmi bergaris rapi.\n"
+            "   - Untuk MoM: Buat tabel matriks Action Item (| No | Aktivitas / Action Item | PIC (SMG/Klien) | Target Selesai | Status |).\n"
+            "   - Untuk SoW: Buat tabel Scope Matrix (| No | Item Pekerjaan | Tanggung Jawab SMG | Kewajiban Klien |) dan SLA matrix (P1-P4).\n"
+            "   - Untuk Solution Brief: Sertakan pemetaan OKRs dan tabel komponen arsitektur (| Komponen | Teknologi/Perangkat | Peran/Fungsi |).\n"
+            "   - Untuk Klarifikasi Teknis: Buat tabel klarifikasi aanwijzing (| Aspek | Ketentuan TOR | Tanggapan / Solusi SMG | Status |).\n"
+            "4. Identitas Perusahaan: Selalu gunakan nama resmi perusahaan: 'PT Smartnet Magna Global' (SMG), dan jika relevan sebutkan sebagai 'Member of CTI Group'.\n"
+            "5. Nilai Jual & Kepastian: Buat narasi yang meyakinkan, bernilai tambah (value proposition), dengan komitmen teknis spesifik tanpa kata tentatif (hindari kata 'akan diusahakan' atau 'sebisanya')."
         )
     return (
         "Anda adalah asisten knowledge base internal PT Smartnet Magna Global (SMG). Jawab pertanyaan hanya "

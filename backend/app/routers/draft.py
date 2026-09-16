@@ -850,14 +850,25 @@ def export_proposal_docx(payload: ExportDocxRequest):
     font.name = payload.font_name
     font.size = Pt(10)
 
-    # Configure running header & footer for narrative mode (CSUL Layout)
-    if payload.template_type == "narrative" and doc.sections:
+    # Configure running header & footer across all enterprise document templates
+    if doc.sections:
         main_sec = doc.sections[0]
         main_sec.different_first_page_header_footer = True
 
+        doc_type_names = {
+            "narrative": "Proposal Teknis",
+            "sow": "Scope of Work (SoW)",
+            "solution_brief": "Solution Brief",
+            "mom": "Minutes of Meeting (MoM)",
+            "klarifikasi_teknis": "Klarifikasi Teknis",
+            "pitch_deck": "Executive Presentation",
+            "matrix": "Compliance Matrix",
+        }
+        doc_type_label = doc_type_names.get(payload.template_type, "Proposal Teknis")
+
         p_head = main_sec.header.paragraphs[0]
         p_head.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        r_head = p_head.add_run(f"{payload.company_name or 'PT. Smartnet Magna Global'} · Proposal Teknis")
+        r_head = p_head.add_run(f"{payload.company_name or 'PT. Smartnet Magna Global'} · {doc_type_label}")
         r_head.font.size = Pt(8.5)
         r_head.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
 
@@ -1196,89 +1207,479 @@ def export_proposal_docx(payload: ExportDocxRequest):
                         r.font.size = Pt(9)
 
     elif payload.template_type == "sow":
-        # Format Dokumen Statement of Work (SoW)
-        doc.add_heading("1. Latar Belakang & Tujuan Pekerjaan", level=1)
-        doc.add_paragraph(
-            f"Dokumen Statement of Work (SoW) ini merinci ruang lingkup implementasi, deliverables, "
-            f"serta tanggung jawab operasional {payload.company_name} dalam pelaksanaan proyek {payload.document_title}."
-        )
+        # Format Dokumen Statement of Work (SoW) Standar SMBC / Hitachi SMG
+        p_title = doc.add_paragraph()
+        p_title.paragraph_format.space_before = Pt(16)
+        p_title.paragraph_format.space_after = Pt(4)
+        r_title = p_title.add_run("STATEMENT OF WORK (SoW)")
+        r_title.bold = True
+        r_title.font.size = Pt(22)
+        r_title.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
 
-        doc.add_heading("2. Ruang Lingkup Pekerjaan (Scope of Work)", level=1)
-        doc.add_paragraph(
-            "Ruang lingkup pekerjaan mencakup implementasi dan pemenuhan seluruh bagian berikut:"
-        )
+        p_sub = doc.add_paragraph()
+        p_sub.paragraph_format.space_after = Pt(16)
+        r_sub = p_sub.add_run(f"Ruang Lingkup Implementasi & Layanan Dukungan: {payload.document_title}")
+        r_sub.bold = True
+        r_sub.font.size = Pt(13)
+        r_sub.font.color.rgb = RGBColor(0x4A, 0x86, 0xE8)
+
+        # Document Control / Release Table
+        t_rel = doc.add_table(rows=3, cols=2)
+        t_rel.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t_rel.autofit = False
+        col_w = Inches(3.25)
+        for row in t_rel.rows:
+            row.cells[0].width = col_w
+            row.cells[1].width = col_w
+
+        t_rel.cell(0, 0).paragraphs[0].add_run("Penyedia Layanan (Service Provider):").bold = True
+        t_rel.cell(0, 1).paragraphs[0].add_run("Penerima Layanan (Client):").bold = True
+        t_rel.cell(1, 0).paragraphs[0].add_run(f"{payload.company_name or 'PT Smartnet Magna Global'}\nPresales & Technical Support Division").font.size = Pt(9.5)
+        t_rel.cell(1, 1).paragraphs[0].add_run(f"{payload.document_title}\nPanitia Pengadaan & Tim Teknis").font.size = Pt(9.5)
+        t_rel.cell(2, 0).paragraphs[0].add_run(f"Versi Dokumen: v1.0 | Status: Final SOW").font.size = Pt(8.5)
+        t_rel.cell(2, 1).paragraphs[0].add_run(f"Tanggal Efektif: {datetime.now().strftime('%d %B %Y')}").font.size = Pt(8.5)
+
+        for row in t_rel.rows:
+            for c in row.cells:
+                shd = parse_xml(r'<w:shd {} w:fill="F8FAFC"/>'.format(nsdecls('w')))
+                c._tc.get_or_add_tcPr().append(shd)
+
+        doc.add_paragraph().paragraph_format.space_after = Pt(14)
+
+        # Render sections
         for idx, item in enumerate(payload.items, start=1):
-            doc.add_heading(f"2.{idx} Scope: {item.title} [{item.category}]", level=2)
-            req_p = doc.add_paragraph()
-            req_p.add_run(f"Cakupan Bagian: {item.requirement_text}\n").italic = True
-            req_p.add_run("Rincian Lingkup Eksekusi:\n").bold = True
-            req_p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Rincian belum ditentukan]")
-            req_p.paragraph_format.space_after = Pt(10)
-            _insert_item_image_docx(doc, item, prefix=f"Gambar 2.{idx}")
+            title_clean = (item.title or f"Scope {idx}").strip()
+            num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
+            if num_match:
+                num_str = num_match.group(1)
+                parts = [p for p in num_str.split('.') if p]
+                level = min(max(len(parts), 1), 4)
+                h = doc.add_heading(level=level)
+                base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
+                add_formatted_text(h, title_clean, base_color=base_color)
+            else:
+                h = doc.add_heading(level=2)
+                add_formatted_text(h, f"{idx}. {title_clean}", base_color=RGBColor(0x4A, 0x86, 0xE8))
 
-        doc.add_heading("3. Deliverables & Serah Terima", level=1)
-        doc.add_paragraph(
-            "Deliverables proyek mencakup dokumen arsitektur solusi, konfigurasi sistem, laporan pengujian "
-            "(UAT), materi pelatihan (transfer of knowledge), dan Berita Acara Serah Terima (BAST)."
-        )
+            if item.requirement_text and item.requirement_text.strip():
+                req_p = doc.add_paragraph()
+                req_p.paragraph_format.left_indent = Inches(0.2)
+                req_p.paragraph_format.space_after = Pt(4)
+                req_run = req_p.add_run(f"Cakupan Bagian: {item.requirement_text.strip()}")
+                req_run.italic = True
+                req_run.font.size = Pt(9)
+                req_run.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
 
-        doc.add_heading("4. Tanggung Jawab & Asumsi", level=1)
-        doc.add_paragraph(
-            "1. Pihak Klien menyediakan akses lingkungan teknis, data uji, dan narahubung teknis yang berwenang.\n"
-            f"2. {payload.company_name} menyediakan tenaga ahli bersertifikasi dan metodologi implementasi standar.\n"
-            "3. Perubahan ruang lingkup di luar butir di atas akan disepakati melalui prosedur Change Request (CR)."
-        )
-
-    elif payload.template_type == "solution_brief":
-        # Format Solution Brief Ringkas & Tajam
-        doc.add_heading("1. Ringkasan Eksekutif & Value Proposition", level=1)
-        doc.add_paragraph(
-            f"Solution Brief ini menyajikan gambaran arsitektur dan keunggulan teknis penawaran {payload.company_name} "
-            f"dalam menjawab kebutuhan {payload.document_title} secara efektif, skalabel, dan efisien."
-        )
-
-        doc.add_heading("2. Tantangan Klien & Pendekatan Solusi", level=1)
-        for idx, item in enumerate(payload.items, start=1):
-            doc.add_heading(f"{idx}. {item.title}", level=2)
-            p = doc.add_paragraph()
-            p.add_run("Tantangan Kebutuhan: ").bold = True
-            p.add_run(f"{item.requirement_text}\n")
-            p.add_run("Solusi & Keunggulan SMG: ").bold = True
-            p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Solusi belum diisi]")
-            p.paragraph_format.space_after = Pt(10)
+            resp_text = item.draft_text if item.draft_text.strip() else "[Rincian lingkup belum ditentukan]"
+            render_markdown_to_docx(doc, resp_text, heading_offset=3)
             _insert_item_image_docx(doc, item, prefix=f"Gambar {idx}")
 
-        doc.add_heading("3. Keunggulan Kompetitif & Mengapa SMG", level=1)
+        # SLA Priority Matrix Table (Authentic SMBC/Hitachi SOW Standard)
+        doc.add_heading("Lampiran: Matriks Tingkat Layanan (SLA) & Respons Insiden", level=2)
+        t_sla = doc.add_table(rows=5, cols=4)
+        t_sla.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t_sla.autofit = False
+
+        sla_headers = ["Tingkat Prioritas", "Definisi Gangguan", "Target Respons (TAC)", "Onsite / Part Replacement"]
+        sla_widths = [Inches(1.2), Inches(2.5), Inches(1.4), Inches(1.4)]
+        for idx, h_text in enumerate(sla_headers):
+            cell = t_sla.rows[0].cells[idx]
+            cell.width = sla_widths[idx]
+            p = cell.paragraphs[0]
+            r = p.add_run(h_text)
+            r.bold = True
+            r.font.size = Pt(9)
+            r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            shd = parse_xml(r'<w:shd {} w:fill="1F497D"/>'.format(nsdecls('w')))
+            cell._tc.get_or_add_tcPr().append(shd)
+
+        sla_rows = [
+            ("P1 (Critical)", "Dampak kritikal terhadap operasional bisnis (down total / data loss).", "30 Menit (24x7)", "4 Jam Onsite (24x7)"),
+            ("P2 (Major)", "Operasional berjalan namun performa terdegradasi secara signifikan.", "60 Menit (24x7)", "4 Jam Onsite (24x7)"),
+            ("P3 (Minor)", "Dampak terbatas, sebagian besar operasional normal, non-kritis.", "2 Jam (24x7)", "Next Business Day (NBD)"),
+            ("P4 (Info)", "Dampak minimal, konsultasi teknis, pertanyaan konfigurasi.", "Next Business Day", "Next Business Day (NBD)"),
+        ]
+        for r_idx, (prio, desc, resp, repl) in enumerate(sla_rows, start=1):
+            row = t_sla.rows[r_idx]
+            row.cells[0].paragraphs[0].add_run(prio).bold = True
+            row.cells[1].paragraphs[0].add_run(desc)
+            row.cells[2].paragraphs[0].add_run(resp)
+            row.cells[3].paragraphs[0].add_run(repl)
+            for c_idx, c in enumerate(row.cells):
+                c.width = sla_widths[c_idx]
+                for p in c.paragraphs:
+                    for r in p.runs:
+                        r.font.size = Pt(8.5)
+                if r_idx % 2 == 1:
+                    shd = parse_xml(r'<w:shd {} w:fill="F8FAFC"/>'.format(nsdecls('w')))
+                    c._tc.get_or_add_tcPr().append(shd)
+
+        # Sign-off Approval Block
+        doc.add_paragraph().paragraph_format.space_after = Pt(12)
+        doc.add_heading("Lembar Pengesahan Statement of Work (Sign-off)", level=2)
+        t_sign = doc.add_table(rows=2, cols=2)
+        t_sign.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t_sign.autofit = False
+        w_sign = Inches(3.25)
+
+        t_sign.rows[0].cells[0].paragraphs[0].add_run("Disetujui Oleh Penyedia Layanan:\nPT Smartnet Magna Global").bold = True
+        t_sign.rows[0].cells[1].paragraphs[0].add_run("Disetujui Oleh Pihak Klien:\n" + (payload.document_title or "Pemberi Kerja")).bold = True
+
+        t_sign.rows[1].cells[0].paragraphs[0].add_run("\n\n\n___________________________________\nNama: Muhammad Fawwaz Azmi\nJabatan: Project Manager / Lead Engineer\nTanggal: " + datetime.now().strftime('%d %B %Y'))
+        t_sign.rows[1].cells[1].paragraphs[0].add_run("\n\n\n___________________________________\nNama: _____________________________\nJabatan: ___________________________\nTanggal: ___________________________")
+
+        for row in t_sign.rows:
+            for c in row.cells:
+                c.width = w_sign
+                for p in c.paragraphs:
+                    for r in p.runs:
+                        r.font.size = Pt(8.5)
+
+    elif payload.template_type == "solution_brief":
+        # Format Solution Brief Resmi PT Smartnet Magna Global (Member of CTI Group)
+        p_title = doc.add_paragraph()
+        p_title.paragraph_format.space_before = Pt(14)
+        p_title.paragraph_format.space_after = Pt(4)
+        r_title = p_title.add_run("SOLUTION BRIEF")
+        r_title.bold = True
+        r_title.font.size = Pt(22)
+        r_title.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
+
+        p_sub = doc.add_paragraph()
+        p_sub.paragraph_format.space_after = Pt(16)
+        r_sub = p_sub.add_run(f"{payload.document_title}\nPT Smartnet Magna Global · Member of CTI Group")
+        r_sub.bold = True
+        r_sub.font.size = Pt(13)
+        r_sub.font.color.rgb = RGBColor(0x4A, 0x86, 0xE8)
+
+        # Executive Callout Banner
+        t_callout = doc.add_table(rows=1, cols=1)
+        t_callout.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t_callout.autofit = False
+        t_callout.rows[0].cells[0].width = Inches(6.5)
+        borders_callout = parse_xml(
+            f'<w:tblBorders {nsdecls("w")}>'
+            f'<w:top w:val="none"/><w:left w:val="single" w:sz="24" w:space="0" w:color="1F497D"/>'
+            f'<w:bottom w:val="none"/><w:right w:val="none"/><w:insideH w:val="none"/><w:insideV w:val="none"/>'
+            f'</w:tblBorders>'
+        )
+        t_callout._tbl.tblPr.append(borders_callout)
+        shd_callout = parse_xml(r'<w:shd {} w:fill="F0F4F8"/>'.format(nsdecls('w')))
+        t_callout.rows[0].cells[0]._tc.get_or_add_tcPr().append(shd_callout)
+
+        p_co = t_callout.rows[0].cells[0].paragraphs[0]
+        p_co.paragraph_format.space_before = Pt(6)
+        p_co.paragraph_format.space_after = Pt(6)
+        r_co_head = p_co.add_run("Executive Value Proposition:\n")
+        r_co_head.bold = True
+        r_co_head.font.size = Pt(10.5)
+        r_co_head.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
+        r_co_body = p_co.add_run(
+            f"Dokumen Solution Brief ini menguraikan usulan solusi enterprise terpadu yang dirancang oleh "
+            f"PT Smartnet Magna Global untuk menjawab kebutuhan strategis dan tantangan operasional "
+            f"{payload.document_title}. Arsitektur yang diusulkan mengedepankan performa tinggi, efisiensi TCO, "
+            f"skalabilitas tanpa batas, serta jaminan ketersediaan layanan berstandar perbankan."
+        )
+        r_co_body.font.size = Pt(9.5)
+        r_co_body.italic = True
+
+        doc.add_paragraph().paragraph_format.space_after = Pt(12)
+
+        # Render sections
+        for idx, item in enumerate(payload.items, start=1):
+            title_clean = (item.title or f"Bagian {idx}").strip()
+            num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
+            if num_match:
+                num_str = num_match.group(1)
+                parts = [p for p in num_str.split('.') if p]
+                level = min(max(len(parts), 1), 4)
+                h = doc.add_heading(level=level)
+                base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
+                add_formatted_text(h, title_clean, base_color=base_color)
+            else:
+                h = doc.add_heading(level=2)
+                add_formatted_text(h, f"{idx}. {title_clean}", base_color=RGBColor(0x4A, 0x86, 0xE8))
+
+            if item.requirement_text and item.requirement_text.strip():
+                req_p = doc.add_paragraph()
+                req_p.paragraph_format.left_indent = Inches(0.2)
+                req_p.paragraph_format.space_after = Pt(4)
+                req_run = req_p.add_run(f"Konteks Kebutuhan: {item.requirement_text.strip()}")
+                req_run.italic = True
+                req_run.font.size = Pt(9)
+                req_run.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+
+            resp_text = item.draft_text if item.draft_text.strip() else "[Rincian solusi belum disusun]"
+            render_markdown_to_docx(doc, resp_text, heading_offset=3)
+            _insert_item_image_docx(doc, item, prefix=f"Gambar {idx}")
+
+        # Why PT Smartnet Magna Global Credentials
+        doc.add_heading("Mengapa PT Smartnet Magna Global?", level=2)
         doc.add_paragraph(
-            f"1. Tim Solution Architect berpengalaman dan bersertifikasi prinsipal terkemuka.\n"
-            f"2. Rekam jejak keberhasilan implementasi serupa dengan SLA tinggi.\n"
-            f"3. Dukungan purnajual lokal 24/7 dan asistensi kepatuhan regulasi."
+            "Sebagai bagian dari CTI Group, PT Smartnet Magna Global (SMG) menghadirkan kombinasi keahlian lokal "
+            "dan rekayasa teknis kelas dunia untuk memastikan kesuksesan transformasi digital organisasi Anda:\n\n"
+            "• End-to-End Solutions: Pendampingan siklus hidup penuh mulai dari assessment, arsitektur, implementasi, migrasi data, hingga pemeliharaan 24x7.\n"
+            "• Multi-Vendor & Certified Engineers: Tim solution architect dan engineer bersertifikasi prinsipal terkemuka (Pure Storage, Cisco, VMware/Nutanix, GCP, RedHat).\n"
+            "• Proven Track Record: Rekam jejak keberhasilan implementasi solusi misi kritis pada sektor perbankan, finansial, dan BUMN dengan kepatuhan regulasi OJK & BI penuh."
         )
 
     elif payload.template_type == "mom":
-        # Format Minutes of Meeting (MoM) / Berita Acara
-        doc.add_heading("1. Informasi Pertemuan & Agenda", level=1)
-        doc.add_paragraph(
-            f"Agenda Pertemuan: Klarifikasi Teknis & Pembahasan {payload.document_title}\n"
-            f"Waktu Pelaksanaan: {datetime.now().strftime('%d %B %Y')}\n"
-            f"Penyelenggara: Tim Solution Architect {payload.company_name}"
-        )
+        # Format Minutes of Meeting (MoM) Berita Acara Rapat Standar Otentik SMG
+        p_title = doc.add_paragraph()
+        p_title.paragraph_format.space_before = Pt(14)
+        p_title.paragraph_format.space_after = Pt(4)
+        r_title = p_title.add_run("MINUTES OF MEETING (MoM)")
+        r_title.bold = True
+        r_title.font.size = Pt(22)
+        r_title.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
 
-        doc.add_heading("2. Poin Pembahasan & Klarifikasi", level=1)
+        p_sub = doc.add_paragraph()
+        p_sub.paragraph_format.space_after = Pt(14)
+        r_sub = p_sub.add_run(f"Pembahasan & Klarifikasi Teknis: {payload.document_title}")
+        r_sub.bold = True
+        r_sub.font.size = Pt(13)
+        r_sub.font.color.rgb = RGBColor(0x4A, 0x86, 0xE8)
+
+        # Table 1: Meeting Metadata Table
+        t_meta = doc.add_table(rows=5, cols=2)
+        t_meta.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t_meta.autofit = False
+
+        borders_xml = parse_xml(
+            f'<w:tblBorders {nsdecls("w")}>'
+            f'<w:top w:val="single" w:sz="6" w:space="0" w:color="D1D5DB"/>'
+            f'<w:left w:val="single" w:sz="18" w:space="0" w:color="4A86E8"/>'
+            f'<w:bottom w:val="single" w:sz="6" w:space="0" w:color="D1D5DB"/>'
+            f'<w:right w:val="single" w:sz="4" w:space="0" w:color="E5E7EB"/>'
+            f'<w:insideH w:val="single" w:sz="4" w:space="0" w:color="E5E7EB"/>'
+            f'<w:insideV w:val="none"/>'
+            f'</w:tblBorders>'
+        )
+        t_meta._tbl.tblPr.append(borders_xml)
+
+        meta_entries = [
+            ("Hari & Tanggal", datetime.now().strftime('%A, %d %B %Y')),
+            ("Waktu / Durasi", "10:00 - 12:00 WIB"),
+            ("Tempat / Media", "Ruang Rapat Klien / Google Meet / MS Teams (Hybrid)"),
+            ("Agenda Utama", payload.document_title or "Klarifikasi Teknis & Pembahasan Solusi"),
+            ("Notulen / Penyelenggara", "Solution Architect & Presales - PT Smartnet Magna Global"),
+        ]
+
+        col_w1, col_w2 = Inches(1.8), Inches(4.7)
+        for r_idx, (label, val) in enumerate(meta_entries):
+            row = t_meta.rows[r_idx]
+            c0, c1 = row.cells[0], row.cells[1]
+            c0.width, c1.width = col_w1, col_w2
+
+            p0 = c0.paragraphs[0]
+            p0.paragraph_format.space_before = Pt(3)
+            p0.paragraph_format.space_after = Pt(3)
+            r0 = p0.add_run(label)
+            r0.bold = True
+            r0.font.size = Pt(9.5)
+            r0.font.color.rgb = RGBColor(0x37, 0x41, 0x51)
+            shd0 = parse_xml(r'<w:shd {} w:fill="F8FAFC"/>'.format(nsdecls('w')))
+            c0._tc.get_or_add_tcPr().append(shd0)
+
+            p1 = c1.paragraphs[0]
+            p1.paragraph_format.space_before = Pt(3)
+            p1.paragraph_format.space_after = Pt(3)
+            r1 = p1.add_run(val)
+            r1.font.size = Pt(9.5)
+            r1.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
+
+        doc.add_paragraph().paragraph_format.space_after = Pt(10)
+
+        # Table 2: Attendees Table
+        doc.add_heading("1. Daftar Hadir Peserta Rapat (Attendees)", level=2)
+        t_att = doc.add_table(rows=2, cols=2)
+        t_att.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t_att.autofit = False
+
+        for c_idx, title in enumerate([f"Pihak Klien ({payload.document_title[:25]})", "PT Smartnet Magna Global (SMG)"]):
+            cell = t_att.rows[0].cells[c_idx]
+            cell.width = Inches(3.25)
+            p = cell.paragraphs[0]
+            r = p.add_run(title)
+            r.bold = True
+            r.font.size = Pt(9.5)
+            r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            shd = parse_xml(r'<w:shd {} w:fill="1F497D"/>'.format(nsdecls('w')))
+            cell._tc.get_or_add_tcPr().append(shd)
+
+        t_att.rows[1].cells[0].paragraphs[0].add_run("1. Lead Project Sponsor\n2. IT Infrastructure Specialist\n3. Database & System Administrator").font.size = Pt(9)
+        t_att.rows[1].cells[1].paragraphs[0].add_run("1. Gerry August (Solution Architect)\n2. Account Manager SMG\n3. Presales Technical Specialist").font.size = Pt(9)
+
+        doc.add_paragraph().paragraph_format.space_after = Pt(10)
+
+        # Discussion Sections
         for idx, item in enumerate(payload.items, start=1):
-            doc.add_heading(f"Topik {idx}: {item.title}", level=2)
-            p = doc.add_paragraph()
-            p.add_run("Poin Diskusi / Pertanyaan Klien:\n").bold = True
-            p.add_run(f"\"{item.requirement_text}\"\n")
-            p.add_run("Tanggapan & Klarifikasi SMG:\n").bold = True
-            p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Belum ada catatan]")
-            p.paragraph_format.space_after = Pt(10)
+            title_clean = (item.title or f"Topik {idx}").strip()
+            num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
+            if num_match:
+                num_str = num_match.group(1)
+                parts = [p for p in num_str.split('.') if p]
+                level = min(max(len(parts), 1), 4)
+                h = doc.add_heading(level=level)
+                base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
+                add_formatted_text(h, title_clean, base_color=base_color)
+            else:
+                h = doc.add_heading(level=2)
+                add_formatted_text(h, f"{idx}. {title_clean}", base_color=RGBColor(0x4A, 0x86, 0xE8))
 
-        doc.add_heading("3. Tindak Lanjut (Action Items)", level=1)
-        doc.add_paragraph(
-            "1. SMG melengkapi dokumen teknis dan penawaran harga sesuai hasil klarifikasi.\n"
-            "2. Klien melakukan review internal atas alternatif solusi yang telah disepakati."
-        )
+            if item.requirement_text and item.requirement_text.strip():
+                req_p = doc.add_paragraph()
+                req_p.paragraph_format.left_indent = Inches(0.2)
+                req_p.paragraph_format.space_after = Pt(4)
+                req_run = req_p.add_run(f"Poin Diskusi / Pertanyaan: {item.requirement_text.strip()}")
+                req_run.italic = True
+                req_run.font.size = Pt(9)
+                req_run.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+
+            resp_text = item.draft_text if item.draft_text.strip() else "[Catatan pembahasan belum diisi]"
+            render_markdown_to_docx(doc, resp_text, heading_offset=3)
+            _insert_item_image_docx(doc, item, prefix=f"Gambar {idx}")
+
+        # Check if action items table is already generated in text or provide fallback table
+        has_action_table = any("action" in (it.title or "").lower() or "tindak lanjut" in (it.title or "").lower() for it in payload.items)
+        if not has_action_table:
+            doc.add_heading("Matriks Rencana Tindak Lanjut (Action Items)", level=2)
+            t_act = doc.add_table(rows=4, cols=5)
+            t_act.alignment = WD_TABLE_ALIGNMENT.CENTER
+            t_act.autofit = False
+
+            headers = ["No.", "Aktivitas / Action Item", "Owner (PIC)", "Target Selesai", "Status"]
+            col_w = [Inches(0.5), Inches(3.0), Inches(1.2), Inches(1.0), Inches(0.8)]
+            for h_idx, h in enumerate(headers):
+                cell = t_act.rows[0].cells[h_idx]
+                cell.width = col_w[h_idx]
+                p = cell.paragraphs[0]
+                r = p.add_run(h)
+                r.bold = True
+                r.font.size = Pt(9)
+                r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                shd = parse_xml(r'<w:shd {} w:fill="1F497D"/>'.format(nsdecls('w')))
+                cell._tc.get_or_add_tcPr().append(shd)
+
+            actions = [
+                ("1", "Mengirimkan update dokumen teknis dan penyesuaian BOQ", "SMG (Gerry)", "3 Hari Kerja", "OPEN"),
+                ("2", "Menyiapkan verifikasi kesiapan environment & akses jaringan", "Klien (Network PIC)", "5 Hari Kerja", "OPEN"),
+                ("3", "Penyelarasan jadwal implementasi dan finalisasi SOW", "Klien & SMG", "1 Minggu", "PENDING"),
+            ]
+            for r_idx, act in enumerate(actions, start=1):
+                row = t_act.rows[r_idx]
+                for c_idx, val in enumerate(act):
+                    cell = row.cells[c_idx]
+                    cell.width = col_w[c_idx]
+                    p = cell.paragraphs[0]
+                    r = p.add_run(val)
+                    r.font.size = Pt(8.5)
+                    if c_idx == 4:
+                        r.bold = True
+
+        # Sign-off Approval Block
+        doc.add_paragraph().paragraph_format.space_after = Pt(12)
+        doc.add_heading("Lembar Pengesahan Berita Acara Rapat (Sign-off)", level=2)
+        t_sign = doc.add_table(rows=2, cols=3)
+        t_sign.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t_sign.autofit = False
+        w_sign = Inches(2.16)
+
+        t_sign.rows[0].cells[0].paragraphs[0].add_run("Disiapkan Oleh (Notulen):").bold = True
+        t_sign.rows[0].cells[1].paragraphs[0].add_run("Diketahui Oleh (Lead):").bold = True
+        t_sign.rows[0].cells[2].paragraphs[0].add_run("Disetujui Oleh (Klien):").bold = True
+
+        t_sign.rows[1].cells[0].paragraphs[0].add_run("\n\n\n_______________________\nGerry August\nSolution Architect SMG")
+        t_sign.rows[1].cells[1].paragraphs[0].add_run("\n\n\n_______________________\nMuhammad Fawwaz Azmi\nProject Manager SMG")
+        t_sign.rows[1].cells[2].paragraphs[0].add_run("\n\n\n_______________________\nPerwakilan PIC Teknis\nKlien Stakeholder")
+
+        for row in t_sign.rows:
+            for c in row.cells:
+                c.width = w_sign
+                for p in c.paragraphs:
+                    for r in p.runs:
+                        r.font.size = Pt(8.5)
+
+    elif payload.template_type == "klarifikasi_teknis":
+        # Format Klarifikasi Teknis Aanwijzing Standar CSUL Finance / CCBI SMG
+        p_title = doc.add_paragraph()
+        p_title.paragraph_format.space_before = Pt(14)
+        p_title.paragraph_format.space_after = Pt(4)
+        r_title = p_title.add_run("KLARIFIKASI TEKNIS & HASIL AANWIJZING")
+        r_title.bold = True
+        r_title.font.size = Pt(22)
+        r_title.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
+
+        p_sub = doc.add_paragraph()
+        p_sub.paragraph_format.space_after = Pt(14)
+        r_sub = p_sub.add_run(f"Tanggapan Resmi atas Dokumen Tender: {payload.document_title}")
+        r_sub.bold = True
+        r_sub.font.size = Pt(13)
+        r_sub.font.color.rgb = RGBColor(0x4A, 0x86, 0xE8)
+
+        # Metadata Table
+        t_meta = doc.add_table(rows=3, cols=2)
+        t_meta.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t_meta.autofit = False
+        col_w = Inches(3.25)
+        for row in t_meta.rows:
+            row.cells[0].width = col_w
+            row.cells[1].width = col_w
+
+        t_meta.cell(0, 0).paragraphs[0].add_run("Penyusun Tanggapan:").bold = True
+        t_meta.cell(0, 1).paragraphs[0].add_run("Ditujukan Kepada:").bold = True
+        t_meta.cell(1, 0).paragraphs[0].add_run(f"{payload.company_name or 'PT Smartnet Magna Global'}\nPresales & Solution Architect Division").font.size = Pt(9.5)
+        t_meta.cell(1, 1).paragraphs[0].add_run(f"{payload.document_title}\nPanitia Pengadaan & Tim Evaluator").font.size = Pt(9.5)
+        t_meta.cell(2, 0).paragraphs[0].add_run("Status: Baseline Penawaran Teknis").font.size = Pt(8.5)
+        t_meta.cell(2, 1).paragraphs[0].add_run(f"Tanggal Sesi: {datetime.now().strftime('%d %B %Y')}").font.size = Pt(8.5)
+
+        for row in t_meta.rows:
+            for c in row.cells:
+                shd = parse_xml(r'<w:shd {} w:fill="F8FAFC"/>'.format(nsdecls('w')))
+                c._tc.get_or_add_tcPr().append(shd)
+
+        doc.add_paragraph().paragraph_format.space_after = Pt(12)
+
+        # Render sections
+        for idx, item in enumerate(payload.items, start=1):
+            title_clean = (item.title or f"Bagian {idx}").strip()
+            num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
+            if num_match:
+                num_str = num_match.group(1)
+                parts = [p for p in num_str.split('.') if p]
+                level = min(max(len(parts), 1), 4)
+                h = doc.add_heading(level=level)
+                base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
+                add_formatted_text(h, title_clean, base_color=base_color)
+            else:
+                h = doc.add_heading(level=2)
+                add_formatted_text(h, f"{idx}. {title_clean}", base_color=RGBColor(0x4A, 0x86, 0xE8))
+
+            if item.requirement_text and item.requirement_text.strip():
+                req_p = doc.add_paragraph()
+                req_p.paragraph_format.left_indent = Inches(0.2)
+                req_p.paragraph_format.space_after = Pt(4)
+                req_run = req_p.add_run(f"Ketentuan Dokumen Acuan: {item.requirement_text.strip()}")
+                req_run.italic = True
+                req_run.font.size = Pt(9)
+                req_run.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+
+            resp_text = item.draft_text if item.draft_text.strip() else "[Tanggapan klarifikasi belum disusun]"
+            render_markdown_to_docx(doc, resp_text, heading_offset=3)
+            _insert_item_image_docx(doc, item, prefix=f"Gambar {idx}")
+
+        # Sign-off
+        doc.add_paragraph().paragraph_format.space_after = Pt(12)
+        doc.add_heading("Lembar Pengesahan Klarifikasi Teknis", level=2)
+        t_sign = doc.add_table(rows=2, cols=2)
+        t_sign.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t_sign.autofit = False
+        t_sign.rows[0].cells[0].width = Inches(3.25)
+        t_sign.rows[0].cells[1].width = Inches(3.25)
+        t_sign.rows[0].cells[0].paragraphs[0].add_run("Diajukan Oleh:\nPT Smartnet Magna Global").bold = True
+        t_sign.rows[0].cells[1].paragraphs[0].add_run("Diterima & Dicatat Oleh:\nPanitia Pengadaan").bold = True
+        t_sign.rows[1].cells[0].paragraphs[0].add_run("\n\n\n___________________________________\nTim Presales & Solution Architect\nPT Smartnet Magna Global")
+        t_sign.rows[1].cells[1].paragraphs[0].add_run("\n\n\n___________________________________\nKetua / Perwakilan Panitia Pengadaan\n" + payload.document_title[:30])
 
     elif payload.template_type == "pitch_deck":
         # Format Pitch Deck Executive Briefing & Slide Blueprint
@@ -1333,7 +1734,8 @@ def export_proposal_docx(payload: ExportDocxRequest):
             p.add_run("Latar Belakang / Kebutuhan Stakeholder:\n").bold = True
             p.add_run(f"\"{item.requirement_text}\"\n\n")
             p.add_run("Talking Points & Solusi yang Disampaikan:\n").bold = True
-            p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Talking points belum diisi]")
+            resp_text = item.draft_text.strip() if item.draft_text.strip() else "[Talking points belum diisi]"
+            render_markdown_to_docx(doc, resp_text, heading_offset=3)
             p.paragraph_format.space_after = Pt(10)
             _insert_item_image_docx(doc, item, prefix=f"Visual Slide {idx}")
 
