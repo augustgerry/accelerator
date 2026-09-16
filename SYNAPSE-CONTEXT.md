@@ -4,24 +4,30 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Sesi terakhir (Antigravity):** Multi-Document Engine & Library Learning TELAH SELESAI. Synapse telah dihubungkan langsung dan "belajar" dari seluruh 172 dokumen otentik di Google Drive / Supabase DB (MoM, Solution Brief, SoW, Klarifikasi Teknis, Pitch Deck, dan Proposal Teknis CSUL).
-- **Hasil Ekstraksi Dokumen Otentik Perusahaan (Ground-Truth):**
-  1. **MoM (Minutes of Meeting):** Struktur dipelajari langsung dari template resmi `[CUSTOMER NAME] [DATE] MoM [Agenda Title].docx` dan `[MoM][SMG] - General Meeting - 02 September 2026.docx` serta `MoM Meeting_BlueBird`. Menghasilkan Header Metadata Tabel (Hari/Tanggal, Waktu, Lokasi/Platform, Agenda, Notulen), Tabel Daftar Hadir (Peserta Klien vs SMG), Catatan Pembahasan & Keputusan, Matriks Action Items (No, Aktivitas, PIC, Target Selesai, Status), dan Lembar Pengesahan Tanda Tangan (Notulen, PM SMG, PIC Klien).
-  2. **Solution Brief:** Struktur dipelajari langsung dari template resmi `[CUSTOMER NAME] Solution Brief - Title.docx` dan implementasi Hitachi/Pasifik Agro Sentosa. Menghasilkan Executive Summary Callout Box (`#F0F4F8`), Business Understanding (Pain points & OKRs), In/Out Scope, Arsitektur HLD, Integrasi & Regulasi OJK/BI, Keamanan/IAM/Enkripsi, Kriteria Sukses Terukur, dan Mengapa PT Smartnet Magna Global (Member of CTI Group).
-  3. **Scope of Work (SoW):** Struktur dipelajari langsung dari `SOW_Corrective_Maintenance_xFusion_SMBC.docx` dan `SOW_Implementation and Services_GCP_PT Hitachi Indonesia.docx`. Menghasilkan Document Release Version, Ruang Lingkup Pengerjaan, Scope Boundary Matrix (SMG vs Klien), Matriks Tingkat Layanan SLA (P1 30 min / 4 jam onsite 24x7, P2 60 min, P3, P4), Deliverables, dan Sign-off Block.
-  4. **Klarifikasi Teknis (Bukan Sekadar Aanwijzing):** Berdasarkan acuan otentik `Klarifikasi Teknis - CSUL Finance_Penggantian dan Implementasi Storage On-Premise v1.0.pdf`, Klarifikasi Teknis adalah dokumen tanggapan teknis komprehensif 6 bagian:
-     - Bagian 01: Latar Belakang, Kondisi Existing (Nimble EOL/EOS), Mitigasi Risiko Downtime, dan Adopsi Hasil Klarifikasi sebagai Baseline.
-     - Bagian 02: Solusi yang Diusulkan (Pure Storage //RC20, Inline DRR Deduplication & Compression, Sizing Data Growth 10%/tahun, HLD Redundant Fabric A & B, Gartner Magic Quadrant Leaders).
-     - Bagian 03: Compliance Matrix & Bill of Quantity (BOQ Part Number, Deskripsi, Qty).
-     - Bagian 04: Rencana Implementasi & Timeline (Scope of Work SMG, Out of Scope, Timeline Implementasi 2026).
-     - Bagian 05: Maintenance Plan & Service Level Agreement (SLA Dukungan 60 Bulan / 5 Tahun, PM min 2x/th, CM, Principal Support Severity 1 15 Menit).
-     - Bagian 06: Susunan Tim Proyek (Project Manager & Certified Engineers) & Profil PT Smartnet Magna Global.
-  5. **Proposal Teknis (CSUL Layout):** Standar enterprise Bab 1-7 lengkap dengan Cover Table 0, Table 1 Document Release, NDA paragraph, Daftar Isi/Gambar/Tabel dinamis dengan dot leaders, dan heading bertingkat (2.1.1, 3.2.1).
-- **Pembaruan Kode:**
-  - `frontend/lib/skeletons.ts`: Seluruh outline dokumen (`narrative`, `sow`, `solution_brief`, `mom`, `klarifikasi_teknis`, `pitch_deck`) diperbarui mencerminkan struktur dokumen otentik di library.
-  - `backend/app/services/llm_provider.py`: Ditambahkan `_fallback_recommend_structure` lengkap per tipe dokumen dan disempurnakan `_build_system_prompt` agar LLM menghasilkan format tabel markdown, penomoran bertingkat, dan branding resmi PT Smartnet Magna Global (Member of CTI Group).
-  - `backend/app/routers/draft.py`: Seluruh exporter DOCX (`/draft/export-docx`) dirombak dari heading/paragraf polos menjadi dokumen berstandar corporate otentik dengan tabel metadata, tabel SLA, matriks action item, dan blok tanda tangan pengesahan.
-- **Status Service:** Backend aktif di port 8000 (`http://127.0.0.1:8000/health` 200 OK, LLM: `gemini-3.6-flash`), Frontend aktif di port 3000. Seluruh test export (MoM, Solution Brief, SoW, Klarifikasi Teknis, Narrative) berhasil diekspor tanpa error. Branch `feat/proposal-visual-engine` bersih dan up to date dengan remote.
+- **Sesi terakhir (Antigravity):** PENGGABUNGAN LENGKAP (MERGE) ANTARA BRANCH CLAUDE (`feat/search-citation-drawer`) DAN ANTIGRAVITY (`feat/proposal-visual-engine`) TELAH SELESAI & TERUJI.
+- **Branch Aktif:** `feat/proposal-visual-engine` (commit `c35f628` — up to date dengan remote).
+- **Komponen yang Telah Digabungkan & Terintegrasi Penuh:**
+  1. **Claude Code Search & Citation Suite:**
+     - Interactive Citation Drawer (`frontend/components/search/citation-drawer.tsx`) dengan focus trap, keyboard nav (Esc, Arrow keys), direct download file asli Drive, dan link "Buka di Drive".
+     - Inline citation markers `[1]`, `[2]` di jawaban AI (`frontend/components/search/answer-with-citations.tsx`) & backend prompt QA mode numerik.
+     - Search history & bookmarking tersimpan di `localStorage` dengan rendering chips.
+     - Highlight keyword di cuplikan drawer (`frontend/components/search/highlighted-text.tsx`).
+     - Standardisasi `DOC_TYPE_COLORS` (`frontend/components/search/doc-type-colors.ts`).
+     - Filter ekstensi file (`.pdf`, `.docx`, `.pptx`) dan bulk delete dokumen dari index di `/documents`.
+     - Animasi kustom enter/fade di `frontend/app/globals.css`.
+  2. **Antigravity Multi-Document Learning & Corporate Visual Engine:**
+     - Pengetahuan otentik dari seluruh 172 dokumen perusahaan (MoM, Solution Brief, SoW, Klarifikasi Teknis, Proposal CSUL, Pitch Deck).
+     - **Klarifikasi Teknis Otentik CSUL Finance** (6 bagian lengkap: baseline, sizing Pure Storage //RC20, BOQ compliance, implementation timeline, 60-bulan SLA, tim proyek PM/Certified Engineers & profil SMG).
+     - Standardisasi branding PT Smartnet Magna Global (Member of CTI Group).
+     - Dynamic Table of Contents, Figures, & Tables dengan tab stop dot leaders di Word (.docx).
+     - Zero markdown leakage (teks bersih dari `#`, `*`, `_` di dokumen hasil ekspor).
+     - Visual hardware & HLD diagram recommendation preview di draft editor.
+- **Status Build & Runtime:**
+  - TypeScript check: `npx tsc --noEmit` exit 0 (Clean).
+  - Python check: `py_compile` all clean.
+  - Backend Uvicorn aktif di port 8000 (`/health` 200 OK, LLM: `gemini-3.6-flash`).
+  - Frontend Next.js aktif di port 3000.
+  - Test live `POST /query` mengembalikan respon grounded dengan grounding Pure Storage CSUL & sitasi.
 
 ---
 
@@ -276,17 +282,17 @@ knowledge-accelerator/
 ## 🔄 STATUS GIT & HANDOFF TERAKHIR
 
 **Status Repositori:**
-- Branch: `main`
-- Commit Terakhir: lihat `git log -1` — commit paling atas judulnya soal redesign alur Draft/Export (sesi Claude Code, lanjutan dari sesi Antigravity di atas).
-- Status: **Up to date dengan origin/main (GitHub). Working tree CLEAN** (di-push langsung setelah commit, bukan lewat auto-commit script — `auto-commit.ps1` gak jalan otomatis, harus dijalanin manual kalau mau dipakai lagi).
-- Semua file kode di backend dan frontend sudah ter-push ke GitHub repo https://github.com/augustgerry/accelerator.
-- `LLM_PROVIDER=gemini` di `.env` (Anthropic credit habis) — lihat bagian ⚠️ LLM PROVIDER di atas sebelum lanjut kerja.
+- Branch: `feat/proposal-visual-engine` (incorporates `feat/search-citation-drawer`)
+- Commit Terakhir: `c35f628` (*"merge: integrate feat/search-citation-drawer (interactive citation drawer, focus trap, document filters) with feat/proposal-visual-engine"*)
+- Status: **Up to date dengan origin/feat/proposal-visual-engine (GitHub). Working tree CLEAN.**
+- Semua perubahan kode backend dan frontend telah diuji dan ter-push ke GitHub repo https://github.com/augustgerry/accelerator.
+- `LLM_PROVIDER=gemini` di `.env` (Google API key aktif, model: `gemini-3.6-flash`).
 
 > 💡 **PETUNJUK UNTUK AGENT BERIKUTNYA (Antigravity atau lainnya):**
-> 1. Kode sudah 100% tersinkronisasi di GitHub dan lokal.
-> 2. Backend: `cd backend && ./venv/Scripts/python.exe -m uvicorn main:app --port 8000` (lihat catatan startup Windows di bagian ⚠️ LLM PROVIDER — hindari `--reload` kalau ragu, dan jangan panggil `uvicorn.exe` langsung).
+> 1. Kode sudah 100% tersinkronisasi di GitHub dan lokal pada branch `feat/proposal-visual-engine`.
+> 2. Backend: `cd backend && ./venv/Scripts/python.exe -m uvicorn main:app --port 8000` (JANGAN pakai `venv/Scripts/uvicorn.exe` langsung).
 > 3. Frontend berjalan di port 3000 (`npm run dev` di folder `frontend/`).
-> 4. Baca bagian "🔧 SESI CLAUDE CODE — REDESIGN ALUR DRAFT & EXPORT" di atas buat konteks lengkap kerjaan terakhir sebelum lanjutin apa pun.
+> 4. Seluruh fitur search citation drawer, keyboard a11y, format otentik CSUL/MoM/SoW/Klarifikasi Teknis, dan template engine sudah bersatu di branch ini.
 
 ---
 
