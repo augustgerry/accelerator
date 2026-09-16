@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Sparkles, Download, RotateCcw, CheckCircle2, Clock, AlertCircle, ShieldCheck, MoreVertical } from "lucide-react";
+import { FileText, Sparkles, Download, RotateCcw, CheckCircle2, Clock, AlertCircle, ShieldCheck, MoreVertical, BarChart3, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RequirementItem } from "@/lib/types";
 
@@ -19,6 +19,8 @@ interface ProgressHeaderProps {
   onSaveSession: () => void;
   isSavingSession: boolean;
   sessionSaved?: string;
+  onCheckCoverage: () => void;
+  isCheckingCoverage: boolean;
 }
 
 export function ProgressHeader({
@@ -35,6 +37,8 @@ export function ProgressHeader({
   onSaveSession,
   isSavingSession,
   sessionSaved,
+  onCheckCoverage,
+  isCheckingCoverage,
 }: ProgressHeaderProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const total = items.length;
@@ -125,6 +129,22 @@ export function ProgressHeader({
           >
             <Sparkles size={14} className={isDraftingAll ? "animate-spin text-accent-ink" : "text-accent-ink"} />
             <span className="hidden sm:inline">{isDraftingAll ? "Menyusun..." : "Generate All"}</span>
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onCheckCoverage}
+            disabled={isCheckingCoverage || total === 0}
+            className="flex items-center gap-1.5 border-surface-border px-2.5 hover:border-accent sm:px-3"
+            title="Audit persentase kebutuhan TOR yang sudah terjawab di draf"
+          >
+            {isCheckingCoverage ? (
+              <Loader2 size={14} className="animate-spin text-accent-ink" />
+            ) : (
+              <BarChart3 size={14} className="text-accent-ink" />
+            )}
+            <span className="hidden sm:inline">Audit Kepatuhan</span>
           </Button>
 
           <Button

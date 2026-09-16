@@ -34,6 +34,9 @@ import {
   Layers,
   Image as ImageIcon,
   Maximize2,
+  Flag,
+  ChevronDown,
+  BarChart3,
 } from "lucide-react";
 import {
   uploadTor,
@@ -44,8 +47,12 @@ import {
   saveProposalSession,
   listDocuments,
   getDocumentChunks,
+  scanCriticalClauses,
+  checkRequirementCoverage,
   type QualityCheckResult,
   type RecommendedSection,
+  type CriticalClausesScanResponse,
+  type RequirementCoverageResponse,
 } from "@/lib/api";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import type { RequirementItem, RequirementStatus, SourceCitation, IndexedDocument } from "@/lib/types";
@@ -107,6 +114,13 @@ function getGroundingBadge(item: RequirementItem): GroundingBadge | null {
   };
 }
 
+const WIN_THEME_PRESETS = [
+  "🏷️ TCO Hemat",
+  "🛡️ High Availability",
+  "👨‍💻 Engineer Tersertifikasi Lokal",
+  "🏆 Track Record Perbankan",
+];
+
 const LS_KEY = "synapse-draft-session";
 const LS_SESSION_ID_KEY = "synapse-proposal-session-id";
 
@@ -165,6 +179,19 @@ export default function DraftPage() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingLibraryDoc, setPendingLibraryDoc] = useState<IndexedDocument | null>(null);
   const autoSavedSignature = useRef<string | null>(null);
+
+  // Red-flag / critical clause scanner (runs once, right after TOR extraction)
+  const [criticalClauses, setCriticalClauses] = useState<CriticalClausesScanResponse | null>(null);
+  const [scanningClauses, setScanningClauses] = useState(false);
+  const [clausesCardOpen, setClausesCardOpen] = useState(true);
+
+  // Win themes injected into every draft generation call
+  const [selectedWinThemes, setSelectedWinThemes] = useState<Set<string>>(new Set());
+
+  // Requirement coverage / gap audit
+  const [coverageReport, setCoverageReport] = useState<RequirementCoverageResponse | null>(null);
+  const [checkingCoverage, setCheckingCoverage] = useState(false);
+  const [isCoverageModalOpen, setIsCoverageModalOpen] = useState(false);
 
   // Draft textarea: local state + 200ms debounce so fast typing doesn't push a
   // setItems (and re-render the whole 20+ item sidebar) on every keystroke.
@@ -254,6 +281,15 @@ export default function DraftPage() {
     () => filterDocsByQuery(referenceDocs, referenceSearch),
     [referenceDocs, referenceSearch]
   );
+
+  const toggleWinTheme = (theme: string) => {
+    setSelectedWinThemes((prev) => {
+      const next = new Set(prev);
+      if (next.has(theme)) next.delete(theme);
+      else next.add(theme);
+      return next;
+    });
+  };
 
   const filteredLibrarySourceDocs = useMemo(
     () => filterDocsByQuery(referenceDocs, librarySourceSearch),
@@ -426,6 +462,7 @@ export default function DraftPage() {
               undefined,
               pickRelevantTorExcerpt(textContext, item.title),
               Array.from(selectedReferenceIds),
+              Array.from(selectedWinThemes)
             );
             return { itemId: item.id, result };
           } catch {
@@ -452,6 +489,20 @@ export default function DraftPage() {
     setIsDraftingAll(false);
   };
 
+  const runClauseScan = async (text: string) => {
+    setScanningClauses(true);
+    setCriticalClauses(null);
+    try {
+      const result = await scanCriticalClauses(text);
+      setCriticalClauses(result);
+      setClausesCardOpen(result.risk_level !== "Low");
+    } catch (err) {
+      console.warn("scanCriticalClauses failed:", err);
+    } finally {
+      setScanningClauses(false);
+    }
+  };
+
   const processSourceText = async (extractedText: string, title: string) => {
     setTorText(extractedText);
     setFileName(title);
@@ -460,6 +511,7 @@ export default function DraftPage() {
     // Transition into Structure Curation View
     setCuratingStructure(true);
     setIsRecommendingStructure(true);
+    runClauseScan(extractedText); // fire-and-forget, runs alongside structure recommendation
     try {
       const resp = await recommendStructure({
         tor_text: extractedText,
@@ -661,6 +713,10 @@ export default function DraftPage() {
     setQualityReport(null);
     setPendingFile(null);
     setPendingLibraryDoc(null);
+    setCriticalClauses(null);
+    setScanningClauses(false);
+    setSelectedWinThemes(new Set());
+    setCoverageReport(null);
     try {
       localStorage.removeItem(LS_KEY);
       localStorage.removeItem(LS_SESSION_ID_KEY);
@@ -683,7 +739,8 @@ export default function DraftPage() {
         item.requirement_text,
         instruction,
         pickRelevantTorExcerpt(torText, item.title),
-        Array.from(selectedReferenceIds)
+        Array.from(selectedReferenceIds),
+        Array.from(selectedWinThemes)
       );
 
       setItems((prev) =>
@@ -750,6 +807,28 @@ export default function DraftPage() {
       setErrorMessage(err instanceof Error ? err.message : "Gagal menjalankan quality check");
     } finally {
       setCheckingQuality(false);
+    }
+  };
+
+  const handleCheckCoverage = async () => {
+    if (items.length === 0 || checkingCoverage) return;
+    setCheckingCoverage(true);
+    try {
+      const report = await checkRequirementCoverage(
+        torText,
+        items.map((item) => ({
+          id: item.id,
+          title: item.title,
+          requirement_text: item.requirement_text,
+          draft_text: item.draft_text,
+        }))
+      );
+      setCoverageReport(report);
+      setIsCoverageModalOpen(true);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Gagal menjalankan audit kepatuhan");
+    } finally {
+      setCheckingCoverage(false);
     }
   };
 
@@ -1395,6 +1474,70 @@ export default function DraftPage() {
               </div>
             </div>
 
+            {/* Red-Flag & Critical Clause Scanner */}
+            {(scanningClauses || criticalClauses) && (
+              <div className="rounded-xl border border-surface-border bg-surface-raised shadow-subtle overflow-hidden animate-in fade-in duration-300">
+                <button
+                  type="button"
+                  onClick={() => setClausesCardOpen((open) => !open)}
+                  disabled={!criticalClauses}
+                  className="w-full flex items-center justify-between gap-3 p-4 text-left"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Flag size={16} className="text-red-600" />
+                    <span className="text-sm font-bold text-text-primary">🚩 Risiko &amp; Klausul Kritis TOR</span>
+                    {scanningClauses ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-text-muted">
+                        <Loader2 size={12} className="animate-spin" /> Memindai...
+                      </span>
+                    ) : criticalClauses ? (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold border ${
+                          criticalClauses.risk_level === "High"
+                            ? "bg-red-50 text-red-700 border-red-200"
+                            : criticalClauses.risk_level === "Medium"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        }`}
+                      >
+                        Risiko {criticalClauses.risk_level}
+                      </span>
+                    ) : null}
+                  </div>
+                  {criticalClauses && (
+                    <ChevronDown
+                      size={16}
+                      className={`shrink-0 text-text-muted transition-transform ${clausesCardOpen ? "rotate-180" : ""}`}
+                    />
+                  )}
+                </button>
+
+                {clausesCardOpen && criticalClauses && (
+                  <div className="border-t border-surface-border p-4 space-y-3 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                    {criticalClauses.executive_summary_alerts.length > 0 && (
+                      <ul className="space-y-1.5">
+                        {criticalClauses.executive_summary_alerts.map((alert, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-2 rounded-lg border border-red-200/50 bg-red-50/60 px-3 py-2 text-xs text-text-primary"
+                          >
+                            <AlertCircle size={13} className="mt-0.5 shrink-0 text-red-600" />
+                            <span>{alert}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="grid grid-cols-2 gap-2 text-[11px] text-text-muted sm:grid-cols-4">
+                      <span>📋 {criticalClauses.mandatory_requirements.length} kebutuhan wajib</span>
+                      <span>⚠️ {criticalClauses.penalties_and_risks.length} penalti/risiko</span>
+                      <span>🔧 {criticalClauses.sla_and_maintenance.length} SLA/maintenance</span>
+                      <span>📜 {criticalClauses.certifications_and_legal.length} sertifikasi/legal</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* AI Discussion & Revision Input */}
             <div className="rounded-xl border border-surface-border bg-surface-raised p-4 shadow-subtle">
               <label className="block text-xs font-bold text-text-primary mb-1">
@@ -1613,6 +1756,8 @@ export default function DraftPage() {
             onSaveSession={handleSaveSession}
             isSavingSession={savingSession}
             sessionSaved={sessionSaved ?? undefined}
+            onCheckCoverage={handleCheckCoverage}
+            isCheckingCoverage={checkingCoverage}
           />
 
           {/* Real-time Drafting Progress Banner */}
@@ -2112,6 +2257,30 @@ export default function DraftPage() {
                           )}
                         </Button>
                       </div>
+                    </div>
+
+                    {/* Win Themes — injected into the next Generate/Regenerate call */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="mr-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                        Sorot Keunggulan:
+                      </span>
+                      {WIN_THEME_PRESETS.map((theme) => {
+                        const active = selectedWinThemes.has(theme);
+                        return (
+                          <button
+                            key={theme}
+                            type="button"
+                            onClick={() => toggleWinTheme(theme)}
+                            className={`rounded-full border px-2.5 py-1 text-[11px] transition-all active:scale-[0.98] ${
+                              active
+                                ? "border-accent bg-accent-soft text-accent-ink font-medium"
+                                : "border-surface-border/70 bg-surface text-text-secondary hover:border-accent/50 hover:text-text-primary"
+                            }`}
+                          >
+                            {theme}
+                          </button>
+                        );
+                      })}
                     </div>
 
                     {/* Textarea Editor */}
@@ -2697,6 +2866,104 @@ export default function DraftPage() {
                 className="bg-ink-900 text-white hover:bg-ink-800 text-xs"
               >
                 Tutup Auditor
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Requirement Coverage & Gap Audit Modal */}
+      {isCoverageModalOpen && coverageReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="flex w-full max-w-2xl max-h-[85vh] flex-col rounded-xl border border-surface-border bg-surface-raised shadow-panel overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-surface-border px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-soft text-accent-ink">
+                  <BarChart3 size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary">Audit Kepatuhan Kebutuhan TOR</h3>
+                  <p className="text-xs text-text-muted">
+                    Seberapa banyak kebutuhan dokumen acuan sudah terjawab di draf saat ini
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCoverageModalOpen(false)}
+                className="rounded-md p-1.5 text-text-muted hover:bg-surface hover:text-text-primary transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              {/* Coverage score card */}
+              <div className="rounded-xl border border-surface-border bg-surface p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-text-muted">
+                    {coverageReport.overall_coverage_pct}% Kebutuhan TOR Terjawab
+                  </p>
+                  <p className="text-xs text-text-secondary mt-0.5">
+                    {coverageReport.covered_count} dari {coverageReport.total_requirements} kebutuhan sudah tercakup di draf
+                    {coverageReport.uncovered_count > 0 && `, ${coverageReport.uncovered_count} belum dibahas`}.
+                  </p>
+                </div>
+                <div
+                  className={`rounded-xl px-4 py-2 text-center font-bold ${
+                    coverageReport.overall_coverage_pct >= 80
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : coverageReport.overall_coverage_pct >= 50
+                      ? "bg-amber-50 text-amber-700 border border-amber-200"
+                      : "bg-red-50 text-red-700 border border-red-200"
+                  }`}
+                >
+                  <div className="text-2xl font-mono leading-none">{coverageReport.overall_coverage_pct}</div>
+                  <div className="text-[10px] uppercase tracking-wider mt-0.5">/ 100%</div>
+                </div>
+              </div>
+
+              {/* Uncovered items */}
+              {coverageReport.uncovered_items.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+                    Belum Dibahas di Draf ({coverageReport.uncovered_items.length})
+                  </h4>
+                  {coverageReport.uncovered_items.map((it, i) => (
+                    <div key={i} className="rounded-lg border border-amber-200/60 bg-amber-50/60 p-3 text-xs space-y-1">
+                      <p className="font-semibold text-text-primary">{it.requirement}</p>
+                      <p className="text-text-secondary">{it.tip}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Recommendations */}
+              {coverageReport.recommendations.length > 0 && (
+                <div className="rounded-lg bg-accent-soft/40 border border-accent/25 p-3 text-xs text-text-primary space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5 text-accent-ink text-[11px] uppercase tracking-wider">
+                    <Sparkles size={13} /> Rekomendasi:
+                  </div>
+                  <ul className="list-disc list-inside space-y-1 pl-1 text-xs text-text-secondary">
+                    {coverageReport.recommendations.map((rec, i) => (
+                      <li key={i}>{rec}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="border-t border-surface-border px-6 py-3 bg-surface flex items-center justify-end">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsCoverageModalOpen(false)}
+                className="bg-ink-900 text-white hover:bg-ink-800 text-xs"
+              >
+                Tutup
               </Button>
             </div>
           </div>
