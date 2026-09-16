@@ -31,10 +31,10 @@ def _hybrid_ranked_chunks(
     """Blend vector candidates with exact-term candidates before returning top-k."""
     candidate_limit = max(top_k * 4, 20)
     filters = [DocumentChunk.workspace_id == workspace_id]
-    if doc_type:
-        filters.append(DocumentChunk.document.has(Document.doc_type == doc_type))
-    if division:
-        filters.append(DocumentChunk.document.has(Document.division == division))
+    if doc_type and doc_type.strip():
+        filters.append(DocumentChunk.document.has(Document.doc_type.ilike(doc_type.strip())))
+    if division and division.strip():
+        filters.append(DocumentChunk.document.has(Document.division.ilike(division.strip())))
     if doc_ids:
         filters.append(DocumentChunk.document_id.in_(doc_ids))
 

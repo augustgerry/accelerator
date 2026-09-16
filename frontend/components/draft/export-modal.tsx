@@ -113,13 +113,17 @@ export function ExportModal({
     }
   }, []);
 
+  const prevIsOpenRef = useRef(false);
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       setExportStep(1);
       setActiveTab("standard");
       setDocTypeId(initialDocTypeId);
       setFormat(initialFormat);
+      setPreviewedOnce(false);
+      setAgreedToExport(false);
     }
+    prevIsOpenRef.current = isOpen;
   }, [initialDocTypeId, initialFormat, isOpen]);
 
   // ── Tab state

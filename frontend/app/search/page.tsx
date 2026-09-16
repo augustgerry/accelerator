@@ -21,7 +21,7 @@ import {
   Check,
   Link2,
 } from "lucide-react";
-import { searchKnowledgeBase, type SearchResult } from "@/lib/api";
+import { searchKnowledgeBase, listDocuments, type SearchResult } from "@/lib/api";
 import { CitationDrawer } from "@/components/search/citation-drawer";
 import { HighlightedText } from "@/components/search/highlighted-text";
 import { AnswerWithCitations } from "@/components/search/answer-with-citations";
@@ -79,18 +79,34 @@ function SearchContent() {
   const inputRef = useRef<HTMLInputElement>(null);
   const requestIdRef = useRef(0);
 
+  const [availableDivisions, setAvailableDivisions] = useState<string[]>([]);
+
   useEffect(() => {
     setHistory(loadHistory());
     setBookmarks(loadBookmarks());
-    // Fall back to the last-used filter only when the URL didn't already specify one
-    // (a shared/reloaded link always wins over a stale local preference).
-    if (!searchParams.get("docType") && !searchParams.get("division")) {
-      try {
-        const persisted = JSON.parse(localStorage.getItem(LS_FILTERS_KEY) ?? "{}");
-        if (persisted.docType) setDocTypeFilter(persisted.docType);
-        if (persisted.division) setDivisionFilter(persisted.division);
-      } catch { /* private mode */ }
-    }
+    listDocuments()
+      .then((docs) => {
+        const divs = new Set<string>();
+        docs.forEach((d) => {
+          if (d.division) divs.add(d.division);
+        });
+        const divList = Array.from(divs).sort();
+        setAvailableDivisions(divList);
+
+        if (!searchParams.get("docType") && !searchParams.get("division")) {
+          try {
+            const persisted = JSON.parse(localStorage.getItem(LS_FILTERS_KEY) ?? "{}");
+            if (persisted.docType) setDocTypeFilter(persisted.docType);
+            // Only use persisted division if it exists in the active workspace
+            if (persisted.division && divList.includes(persisted.division)) {
+              setDivisionFilter(persisted.division);
+            } else if (persisted.division) {
+              localStorage.setItem(LS_FILTERS_KEY, JSON.stringify({ docType: persisted.docType || "", division: "" }));
+            }
+          } catch { /* private mode */ }
+        }
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -252,13 +268,12 @@ function SearchContent() {
             <select
               value={divisionFilter}
               onChange={(e) => handleFilterChange("division", e.target.value)}
-              className="rounded-md border border-surface-border bg-surface px-2 py-1.5 text-[11px] text-text-secondary outline-none focus:border-accent"
+              className="rounded-md border border-surface-border bg-surface px-2 py-1.5 text-[11px] text-text-secondary outline-none focus:border-accent cursor-pointer"
             >
               <option value="">Semua divisi</option>
-              <option value="presales">Presales</option>
-              <option value="infrastructure">Infrastructure</option>
-              <option value="security">Security</option>
-              <option value="application">Application</option>
+              {availableDivisions.map((div) => (
+                <option key={div} value={div}>{div}</option>
+              ))}
             </select>
             {(docTypeFilter || divisionFilter) && (
               <button

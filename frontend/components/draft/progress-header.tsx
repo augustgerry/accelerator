@@ -137,6 +137,17 @@ export function ProgressHeader({
             <span className="hidden sm:inline">Export</span>
           </Button>
 
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onResetFile}
+            className="flex items-center gap-1.5 border-surface-border px-2.5 hover:border-accent sm:px-3 text-xs text-text-secondary"
+            title="Mulai dokumen baru atau ganti TOR/RFP acuan"
+          >
+            <RotateCcw size={13} />
+            <span className="hidden sm:inline">Ganti File</span>
+          </Button>
+
           <div className="relative">
             <button
               onClick={() => setMoreOpen((open) => !open)}

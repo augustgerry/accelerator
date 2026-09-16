@@ -44,6 +44,7 @@ import {
   getProposalSession,
   saveProposalSession,
   listDocuments,
+  getDocumentChunks,
   type QualityCheckResult,
   type RecommendedSection,
 } from "@/lib/api";
@@ -110,8 +111,11 @@ export default function DraftPage() {
   const [docTypeId, setDocTypeId] = useState<DraftDocTypeId>("narrative");
   const [format, setFormat] = useState<DraftFormat>("docx");
   const [referenceDocs, setReferenceDocs] = useState<IndexedDocument[]>([]);
+  const [loadingReferenceDocs, setLoadingReferenceDocs] = useState(false);
   const [selectedReferenceIds, setSelectedReferenceIds] = useState<Set<string>>(new Set());
   const [referenceSearch, setReferenceSearch] = useState("");
+  const [sourceInputMode, setSourceInputMode] = useState<"upload" | "library">("upload");
+  const [librarySourceSearch, setLibrarySourceSearch] = useState("");
   const autoSavedSignature = useRef<string | null>(null);
 
   // Structure Curation & Discussion Gate
@@ -164,8 +168,20 @@ export default function DraftPage() {
   }, []);
 
   // ── Load Drive documents for the "Sumber Referensi" multi-select ────────
+  const loadReferenceDocs = async () => {
+    setLoadingReferenceDocs(true);
+    try {
+      const docs = await listDocuments();
+      setReferenceDocs(docs);
+    } catch {
+      setReferenceDocs([]);
+    } finally {
+      setLoadingReferenceDocs(false);
+    }
+  };
+
   useEffect(() => {
-    listDocuments().then(setReferenceDocs).catch(() => setReferenceDocs([]));
+    loadReferenceDocs();
   }, []);
 
   const toggleReferenceDoc = (id: string) => {
@@ -180,8 +196,24 @@ export default function DraftPage() {
   const filteredReferenceDocs = useMemo(() => {
     const q = referenceSearch.trim().toLowerCase();
     if (!q) return referenceDocs;
-    return referenceDocs.filter((d) => d.title.toLowerCase().includes(q));
+    return referenceDocs.filter(
+      (d) =>
+        d.title.toLowerCase().includes(q) ||
+        d.division?.toLowerCase().includes(q) ||
+        d.docType?.toLowerCase().includes(q)
+    );
   }, [referenceDocs, referenceSearch]);
+
+  const filteredLibrarySourceDocs = useMemo(() => {
+    const q = librarySourceSearch.trim().toLowerCase();
+    if (!q) return referenceDocs;
+    return referenceDocs.filter(
+      (d) =>
+        d.title.toLowerCase().includes(q) ||
+        d.division?.toLowerCase().includes(q) ||
+        d.docType?.toLowerCase().includes(q)
+    );
+  }, [referenceDocs, librarySourceSearch]);
 
   useEffect(() => {
     const rawBrief = sessionStorage.getItem("synapse-search-brief");
@@ -345,57 +377,81 @@ export default function DraftPage() {
     setIsDraftingAll(false);
   };
 
+  const processSourceText = async (extractedText: string, title: string) => {
+    setTorText(extractedText);
+    setFileName(title);
+    setUploading(false);
+
+    // Transition into Structure Curation View
+    setCuratingStructure(true);
+    setIsRecommendingStructure(true);
+    try {
+      const resp = await recommendStructure({
+        tor_text: extractedText,
+        doc_type: docTypeId,
+        document_title: title,
+      });
+      const recItems: RequirementItem[] = resp.items.map((sec: RecommendedSection) => ({
+        id: sec.id,
+        title: sec.title,
+        requirement_text: sec.requirement_text,
+        category: sec.category,
+        rationale: sec.rationale,
+        draft_text: "",
+        status: "todo",
+      }));
+      setCurationItems(recItems);
+      setStructureSummary(resp.summary);
+    } catch (err) {
+      console.warn("recommendStructure fallback:", err);
+      const skeleton = SKELETONS[docTypeId];
+      setCurationItems(
+        skeleton.map((sec) => ({
+          id: sec.id,
+          title: sec.title,
+          requirement_text: sec.description,
+          category: sec.category,
+          rationale: `Rekomendasi sub-bab baku untuk format ${getDocType(docTypeId).label}.`,
+          draft_text: "",
+          status: "todo",
+        }))
+      );
+    } finally {
+      setIsRecommendingStructure(false);
+    }
+  };
+
   const processSourceFile = async (file: File) => {
     setUploading(true);
     setErrorMessage(null);
     try {
       const extractedText = await uploadTor(file);
-      setTorText(extractedText);
-      setFileName(file.name);
-      setUploading(false);
-
-      // Transition into Structure Curation View
-      setCuratingStructure(true);
-      setIsRecommendingStructure(true);
-      try {
-        const resp = await recommendStructure({
-          tor_text: extractedText,
-          doc_type: docTypeId,
-          document_title: file.name,
-        });
-        const recItems: RequirementItem[] = resp.items.map((sec: RecommendedSection) => ({
-          id: sec.id,
-          title: sec.title,
-          requirement_text: sec.requirement_text,
-          category: sec.category,
-          rationale: sec.rationale,
-          draft_text: "",
-          status: "todo",
-        }));
-        setCurationItems(recItems);
-        setStructureSummary(resp.summary);
-      } catch (err) {
-        console.warn("recommendStructure fallback:", err);
-        const skeleton = SKELETONS[docTypeId];
-        setCurationItems(
-          skeleton.map((sec) => ({
-            id: sec.id,
-            title: sec.title,
-            requirement_text: sec.description,
-            category: sec.category,
-            rationale: `Rekomendasi sub-bab baku untuk format ${getDocType(docTypeId).label}.`,
-            draft_text: "",
-            status: "todo",
-          }))
-        );
-      } finally {
-        setIsRecommendingStructure(false);
-      }
+      await processSourceText(extractedText, file.name);
     } catch (err) {
       setErrorMessage(
         err instanceof Error
           ? err.message
           : "Gagal memproses dokumen. Pastikan API server aktif."
+      );
+      setUploading(false);
+    }
+  };
+
+  const handleSelectDriveSource = async (doc: IndexedDocument) => {
+    setUploading(true);
+    setErrorMessage(null);
+    try {
+      const chunkRes = await getDocumentChunks(doc.id);
+      const fullText = (chunkRes.chunks || []).map((c) => c.content).join("\n\n");
+      if (!fullText.trim()) {
+        throw new Error("Dokumen terpilih di library tidak memiliki teks yang dapat diproses.");
+      }
+      await processSourceText(fullText, doc.title);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : "Gagal memuat dokumen dari library Google Drive."
       );
       setUploading(false);
     }
@@ -838,40 +894,167 @@ export default function DraftPage() {
                   </select>
                 </div>
 
-                <div className="mt-3 flex items-center gap-2 text-xs text-text-secondary">
-                  {getDocType(docTypeId).formats.map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setFormat(f)}
-                      className={`rounded border px-2 py-0.5 font-mono transition-all ${
-                        format === f
-                          ? "border-accent bg-accent-soft text-accent-ink"
-                          : "border-surface-border bg-surface hover:border-accent"
-                      }`}
-                    >
-                      {FORMAT_LABELS[f]}
-                    </button>
-                  ))}
+                <div className="mt-4 w-full max-w-md text-left">
+                  <label className="mb-1.5 block text-xs font-semibold text-text-primary">
+                    Format / Ekstensi Output yang Ingin Dihasilkan
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {getDocType(docTypeId).formats.map((f) => {
+                      const isSelected = format === f;
+                      return (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => setFormat(f)}
+                          className={`flex flex-col items-center justify-center gap-1 py-2.5 px-3 rounded-lg border text-xs transition-all ${
+                            isSelected
+                              ? "border-accent bg-accent-soft text-accent-ink shadow-sm ring-1 ring-accent font-semibold"
+                              : "border-surface-border bg-surface hover:border-accent/60 text-text-secondary hover:text-text-primary"
+                          }`}
+                        >
+                          <span className="text-base">
+                            {f === "docx" ? "📄" : f === "pdf" ? "📕" : "📊"}
+                          </span>
+                          <span className="font-mono text-[11px]">{FORMAT_LABELS[f]}</span>
+                          {isSelected && (
+                            <span className="text-[10px] bg-accent/30 text-accent-ink px-1.5 py-0.2 rounded font-bold">
+                              Dipilih
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.docx"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
+                {/* Source Document Selection (Upload or Library) */}
+                <div className="mt-6 w-full max-w-md text-left">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-text-primary">
+                      Pilih Dokumen Sumber (TOR / RFP / RKS)
+                    </label>
+                    <span className="text-[10px] text-text-muted">
+                      Wajib 1 dokumen acuan
+                    </span>
+                  </div>
 
-                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                  <Button
-                    variant="primary"
-                    disabled={uploading}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="bg-ink-900 hover:bg-ink-800 text-white min-w-[140px]"
-                  >
-                    {uploading ? "Mengupload..." : "Pilih dokumen sumber"}
-                  </Button>
+                  {/* Mode selector tab */}
+                  <div className="grid grid-cols-2 gap-1 rounded-lg border border-surface-border bg-surface p-1 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setSourceInputMode("upload")}
+                      className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs transition-all ${
+                        sourceInputMode === "upload"
+                          ? "bg-surface-raised text-text-primary font-semibold shadow-subtle border border-surface-border"
+                          : "text-text-muted hover:text-text-primary"
+                      }`}
+                    >
+                      <UploadCloud size={14} />
+                      <span>Upload dari Laptop</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSourceInputMode("library")}
+                      className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md text-xs transition-all ${
+                        sourceInputMode === "library"
+                          ? "bg-surface-raised text-text-primary font-semibold shadow-subtle border border-surface-border"
+                          : "text-text-muted hover:text-text-primary"
+                      }`}
+                    >
+                      <BookOpen size={14} />
+                      <span>Pilih dari Library ({referenceDocs.length})</span>
+                    </button>
+                  </div>
+
+                  {sourceInputMode === "upload" ? (
+                    <div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-surface-border hover:border-accent rounded-xl bg-surface/40 hover:bg-surface-raised cursor-pointer transition-all group text-center"
+                      >
+                        <div className="h-11 w-11 rounded-xl bg-accent-soft text-accent-ink flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+                          {uploading ? <Loader2 size={22} className="animate-spin" /> : <UploadCloud size={22} />}
+                        </div>
+                        <p className="text-xs font-semibold text-text-primary">
+                          {uploading ? "Sedang mengekstrak teks..." : "Klik untuk Pilih File TOR / RFP"}
+                        </p>
+                        <p className="text-[11px] text-text-muted mt-0.5">
+                          Mendukung format PDF (.pdf), Word (.docx), atau Teks (.txt)
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                        <input
+                          type="text"
+                          value={librarySourceSearch}
+                          onChange={(e) => setLibrarySourceSearch(e.target.value)}
+                          placeholder="Cari nama dokumen TOR, RKS, RFP di library..."
+                          className="w-full rounded-md border border-surface-border bg-surface pl-8 pr-7 py-2 text-xs text-text-primary outline-none focus:border-accent"
+                        />
+                        {librarySourceSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setLibrarySourceSearch("")}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="max-h-56 overflow-y-auto rounded-lg border border-surface-border bg-surface divide-y divide-surface-border">
+                        {loadingReferenceDocs ? (
+                          <div className="flex items-center justify-center p-6 text-xs text-text-muted gap-2">
+                            <Loader2 size={14} className="animate-spin text-accent" /> Memuat dokumen dari library...
+                          </div>
+                        ) : filteredLibrarySourceDocs.length === 0 ? (
+                          <div className="p-6 text-center text-xs text-text-muted">
+                            {referenceDocs.length === 0 ? "Library belum terhubung atau kosong." : "Tidak ada dokumen yang cocok."}
+                          </div>
+                        ) : (
+                          filteredLibrarySourceDocs.map((doc) => (
+                            <button
+                              key={doc.id}
+                              type="button"
+                              onClick={() => handleSelectDriveSource(doc)}
+                              disabled={uploading}
+                              className="w-full flex items-center justify-between p-2.5 text-left hover:bg-surface-raised transition-colors group"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                <FileText size={16} className="text-accent shrink-0" />
+                                <div className="truncate">
+                                  <p className="text-xs font-medium text-text-primary truncate group-hover:text-accent-ink">
+                                    {doc.title}
+                                  </p>
+                                  <div className="flex items-center gap-2 text-[10px] text-text-muted mt-0.5">
+                                    {doc.division && (
+                                      <span className="bg-surface-raised border border-surface-border rounded px-1 text-[10px]">
+                                        {doc.division}
+                                      </span>
+                                    )}
+                                    <span>{doc.chunkCount || 0} chunks</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="shrink-0 text-[11px] font-bold text-accent-ink opacity-80 group-hover:opacity-100 transition-opacity bg-accent-soft px-2.5 py-1 rounded border border-accent/40 flex items-center gap-1">
+                                Gunakan ➔
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {errorMessage && (
@@ -881,41 +1064,99 @@ export default function DraftPage() {
                   </div>
                 )}
 
+                {/* Additional Reference Sources (Optional Grounding) */}
                 <div className="mt-6 w-full max-w-md text-left">
                   <div className="mb-1.5 flex items-center justify-between">
-                    <label className="text-xs font-semibold text-text-primary">Sumber Referensi (opsional)</label>
-                    {selectedReferenceIds.size > 0 && (
-                      <span className="text-[11px] font-medium text-accent-ink">{selectedReferenceIds.size} dipilih</span>
+                    <label className="text-xs font-semibold text-text-primary">
+                      Sumber Referensi Tambahan (opsional)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {selectedReferenceIds.size > 0 && (
+                        <span className="text-[11px] font-medium text-accent-ink bg-accent-soft px-1.5 py-0.5 rounded border border-accent/30">
+                          {selectedReferenceIds.size} dipilih
+                        </span>
+                      )}
+                      {referenceDocs.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedReferenceIds.size === referenceDocs.length) {
+                              setSelectedReferenceIds(new Set());
+                            } else {
+                              setSelectedReferenceIds(new Set(referenceDocs.map((d) => d.id)));
+                            }
+                          }}
+                          className="text-[10px] text-text-muted hover:text-accent-ink hover:underline"
+                        >
+                          {selectedReferenceIds.size === referenceDocs.length ? "Batal Semua" : "Pilih Semua"}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={loadReferenceDocs}
+                        disabled={loadingReferenceDocs}
+                        className="text-text-muted hover:text-text-primary p-0.5"
+                        title="Muat ulang dokumen dari Drive"
+                      >
+                        <RefreshCw size={11} className={loadingReferenceDocs ? "animate-spin" : ""} />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="mb-2 text-[11px] text-text-muted leading-relaxed">
+                    Pilih beberapa dokumen internal sebagai acuan jawaban grounding AI (gaya NotebookLM).
+                  </p>
+
+                  <div className="relative mb-2">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                    <input
+                      type="text"
+                      value={referenceSearch}
+                      onChange={(e) => setReferenceSearch(e.target.value)}
+                      placeholder="Cari dokumen di Drive..."
+                      className="w-full rounded-md border border-surface-border bg-surface pl-8 pr-7 py-1.5 text-xs text-text-primary outline-none focus:border-accent"
+                    />
+                    {referenceSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setReferenceSearch("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                      >
+                        <X size={12} />
+                      </button>
                     )}
                   </div>
-                  <p className="mb-1.5 text-[11px] text-text-muted">
-                    Pilih beberapa dokumen dari Drive sebagai acuan jawaban, seperti sumber di NotebookLM.
-                  </p>
-                  <input
-                    type="text"
-                    value={referenceSearch}
-                    onChange={(e) => setReferenceSearch(e.target.value)}
-                    placeholder="Cari dokumen di Drive..."
-                    className="mb-1.5 w-full rounded-md border border-surface-border bg-surface px-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent"
-                  />
-                  <div className="max-h-40 overflow-y-auto rounded-md border border-surface-border bg-surface p-1.5">
-                    {filteredReferenceDocs.length === 0 ? (
-                      <p className="px-1.5 py-1 text-xs text-text-muted">
-                        {referenceDocs.length === 0 ? "Drive belum tersinkron atau kosong." : "Tidak ada dokumen cocok."}
+
+                  <div className="max-h-44 overflow-y-auto rounded-md border border-surface-border bg-surface p-1.5 space-y-0.5">
+                    {loadingReferenceDocs ? (
+                      <div className="flex items-center justify-center p-4 text-xs text-text-muted gap-1.5">
+                        <Loader2 size={13} className="animate-spin text-accent" /> Memuat dokumen...
+                      </div>
+                    ) : filteredReferenceDocs.length === 0 ? (
+                      <p className="px-2 py-2 text-xs text-text-muted text-center">
+                        {referenceDocs.length === 0 ? "Drive belum tersinkron atau kosong." : "Tidak ada dokumen yang cocok."}
                       </p>
                     ) : (
                       filteredReferenceDocs.map((doc) => (
                         <label
                           key={doc.id}
-                          className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-xs text-text-primary hover:bg-surface-raised"
+                          className={`flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-xs transition-colors ${
+                            selectedReferenceIds.has(doc.id) ? "bg-accent-soft/50 font-medium text-accent-ink" : "text-text-primary hover:bg-surface-raised"
+                          }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={selectedReferenceIds.has(doc.id)}
-                            onChange={() => toggleReferenceDoc(doc.id)}
-                            className="shrink-0 rounded border-surface-border text-accent focus:ring-accent"
-                          />
-                          <span className="truncate">{doc.title}</span>
+                          <div className="flex items-center gap-2 min-w-0 pr-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedReferenceIds.has(doc.id)}
+                              onChange={() => toggleReferenceDoc(doc.id)}
+                              className="shrink-0 rounded border-surface-border text-accent focus:ring-accent"
+                            />
+                            <span className="truncate">{doc.title}</span>
+                          </div>
+                          {doc.division && (
+                            <span className="shrink-0 rounded bg-surface border border-surface-border px-1.5 py-0.5 text-[9px] text-text-muted">
+                              {doc.division}
+                            </span>
+                          )}
                         </label>
                       ))
                     )}

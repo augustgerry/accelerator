@@ -4,30 +4,30 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Sesi terakhir (Antigravity):** PENGGABUNGAN LENGKAP (MERGE) ANTARA BRANCH CLAUDE (`feat/search-citation-drawer`) DAN ANTIGRAVITY (`feat/proposal-visual-engine`) TELAH SELESAI & TERUJI.
-- **Branch Aktif:** `feat/proposal-visual-engine` (commit `c35f628` — up to date dengan remote).
-- **Komponen yang Telah Digabungkan & Terintegrasi Penuh:**
-  1. **Claude Code Search & Citation Suite:**
-     - Interactive Citation Drawer (`frontend/components/search/citation-drawer.tsx`) dengan focus trap, keyboard nav (Esc, Arrow keys), direct download file asli Drive, dan link "Buka di Drive".
-     - Inline citation markers `[1]`, `[2]` di jawaban AI (`frontend/components/search/answer-with-citations.tsx`) & backend prompt QA mode numerik.
-     - Search history & bookmarking tersimpan di `localStorage` dengan rendering chips.
-     - Highlight keyword di cuplikan drawer (`frontend/components/search/highlighted-text.tsx`).
-     - Standardisasi `DOC_TYPE_COLORS` (`frontend/components/search/doc-type-colors.ts`).
-     - Filter ekstensi file (`.pdf`, `.docx`, `.pptx`) dan bulk delete dokumen dari index di `/documents`.
-     - Animasi kustom enter/fade di `frontend/app/globals.css`.
-  2. **Antigravity Multi-Document Learning & Corporate Visual Engine:**
-     - Pengetahuan otentik dari seluruh 172 dokumen perusahaan (MoM, Solution Brief, SoW, Klarifikasi Teknis, Proposal CSUL, Pitch Deck).
-     - **Klarifikasi Teknis Otentik CSUL Finance** (6 bagian lengkap: baseline, sizing Pure Storage //RC20, BOQ compliance, implementation timeline, 60-bulan SLA, tim proyek PM/Certified Engineers & profil SMG).
-     - Standardisasi branding PT Smartnet Magna Global (Member of CTI Group).
-     - Dynamic Table of Contents, Figures, & Tables dengan tab stop dot leaders di Word (.docx).
-     - Zero markdown leakage (teks bersih dari `#`, `*`, `_` di dokumen hasil ekspor).
-     - Visual hardware & HLD diagram recommendation preview di draft editor.
+- **Sesi terakhir (Antigravity):** PERBAIKAN 3 BUG KRITIS LAPORAN USER (Search Dokumen, Format Output Selector, & Pemilihan Dokumen Sumber) TELAH SELESAI & TERUJI.
+- **Branch Aktif:** `feat/proposal-visual-engine` (siap commit & push ke remote).
+- **Rincian Perbaikan Bug:**
+  1. **Bug 1 — Cari Dokumen Gagal / Blank (`/search` & `/draft`):**
+     - Root cause: CORS middleware di `backend/main.py` hanya mengizinkan `http://localhost:3000` (request dari `127.0.0.1:3000` ditolak browser), dan filter divisi di `/search` sebelumnya hardcoded nilai dummy (`presales`, `infrastructure`, `security`) yang tidak ada di database 172 dokumen.
+     - Perbaikan:
+       - CORS diperluas dengan `allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?"` dan origin eksplisit.
+       - `_hybrid_ranked_chunks` di `backend/app/services/retrieval.py` diperbarui menggunakan case-insensitive matching (`ilike`) dengan trimmed whitespace untuk divisi & tipe dokumen.
+       - Halaman `/search` kini mengambil divisi nyata dari database (`listDocuments()`) secara dinamis (`MoM`, `DPBM`, `Hitachi`, `Product`, `Others`, dll) dan membersihkan divisi usang/invalid di `localStorage`.
+  2. **Bug 2 — Gagal Pilih Ekstensi / Format Dokumen yang Ingin Dibuat:**
+     - Root cause: Format card di layar upload `/draft` kurang affordance visual interaktif, dan di `ExportModal` terjadi bug re-render infinite di mana `useEffect` modal mereset `format` kembali ke `initialFormat` setiap kali state autosave draf induk aktif (setiap 1.2 detik).
+     - Perbaikan:
+       - Memperbaiki `useEffect` di `frontend/components/draft/export-modal.tsx` menggunakan `prevIsOpenRef` sehingga format pilihan user tidak pernah ter-reset saat parent melakukan autosave atau render ulang.
+       - Redesign format selector di layar upload `/draft` dengan label jelas (`📄 Word (.docx)`, `📕 Adobe PDF (.pdf)`, `📊 PowerPoint (.pptx)`), active badge pill yang kontras, border highlight indigo, dan deskripsi tujuan dokumen.
+  3. **Bug 3 — Gagal Pilih Dokumen Sumber (TOR / RFP):**
+     - Root cause: Layar upload sebelumnya HANYA mengizinkan user mengunggah file lokal dari laptop. Pengguna tidak memiliki opsi memilih dari 172 dokumen enterprise yang sudah ada di Google Drive / Database.
+     - Perbaikan:
+       - Menambahkan tab switcher di card input dokumen sumber: **"Upload dari Laptop"** vs **"Pilih dari Library"**.
+       - Tab "Pilih dari Library" menyediakan live search instan, filter dokumen berdasarkan judul dan divisi, serta tombol 1-klik "Gunakan Dokumen Ini ➔".
+       - Mengintegrasikan fungsi `getDocumentChunks` untuk mengambil teks langsung dari database pgvector tanpa perlu download ulang dari Google Drive, lalu otomatis memuat struktur bab dan draf.
+       - Menambahkan tombol langsung "Ganti File" (`RotateCcw`) di progress header workspace aktif agar user dapat dengan mudah mengganti dokumen sumber kapan saja.
 - **Status Build & Runtime:**
-  - TypeScript check: `npx tsc --noEmit` exit 0 (Clean).
-  - Python check: `py_compile` all clean.
-  - Backend Uvicorn aktif di port 8000 (`/health` 200 OK, LLM: `gemini-3.6-flash`).
-  - Frontend Next.js aktif di port 3000.
-  - Test live `POST /query` mengembalikan respon grounded dengan grounding Pure Storage CSUL & sitasi.
+  - Frontend: `npm run build` berhasil 100% (9/9 static pages, 0 TypeScript error).
+  - Backend: `py_compile` clean, Uvicorn port 8000 aktif (`/health` 200 OK, `/query` dengan filter division 200 OK).
 
 ---
 
