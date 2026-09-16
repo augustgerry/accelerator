@@ -392,6 +392,21 @@ export default function DraftPage() {
     });
   }, [items, filterStatus, searchQuery, qualityReport]);
 
+  // Alt+Up / Alt+Down — jump between sub-bab without reaching for the mouse.
+  useEffect(() => {
+    if (!fileName || curatingStructure || filteredItems.length === 0) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.altKey || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+      e.preventDefault();
+      const currentIndex = filteredItems.findIndex((it) => it.id === selectedItemId);
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      const nextIndex = (currentIndex + step + filteredItems.length) % filteredItems.length;
+      setSelectedItemId(filteredItems[nextIndex].id);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [fileName, curatingStructure, filteredItems, selectedItemId]);
+
   const startDraftingBatch = async (targetItems: RequirementItem[], textContext: string) => {
     setIsDraftingAll(true);
     setDraftingProgress({ current: 0, total: targetItems.length, title: targetItems[0]?.title || "" });
@@ -1456,9 +1471,9 @@ export default function DraftPage() {
                       style={{ animationDelay: `${i * 80}ms` }}
                       className="animate-in fade-in duration-300 fill-mode-both rounded-xl border border-surface-border bg-surface-raised p-4 space-y-2"
                     >
-                      <div className="h-3 w-1/3 rounded bg-surface-border/60 animate-pulse" />
-                      <div className="h-2.5 w-2/3 rounded bg-surface-border/40 animate-pulse" />
-                      <div className="h-2 w-full rounded bg-surface-border/40 animate-pulse" />
+                      <div className="h-3 w-1/3 rounded bg-surface-border/60 animate-shimmer" />
+                      <div className="h-2.5 w-2/3 rounded bg-surface-border/40 animate-shimmer" />
+                      <div className="h-2 w-full rounded bg-surface-border/40 animate-shimmer" />
                     </div>
                   ))}
                 </div>
@@ -2050,7 +2065,7 @@ export default function DraftPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {selectedItem.draft_text && (
+                        {localDraftText && (
                           <Button
                             variant="secondary"
                             size="sm"

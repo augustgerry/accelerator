@@ -60,4 +60,24 @@
   .duration-300 {
     animation-duration: 300ms;
   }
+
+  /* Shimmer wave for skeleton loading placeholders (AI draft/structure generation). */
+  @keyframes shimmer-wave {
+    from {
+      background-position: -200% 0;
+    }
+    to {
+      background-position: 200% 0;
+    }
+  }
+  .animate-shimmer {
+    background-image: linear-gradient(
+      90deg,
+      var(--tw-shimmer-base, rgba(148, 163, 184, 0.18)) 25%,
+      var(--tw-shimmer-highlight, rgba(148, 163, 184, 0.4)) 50%,
+      var(--tw-shimmer-base, rgba(148, 163, 184, 0.18)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer-wave 1.4s ease-in-out infinite;
+  }
 }
