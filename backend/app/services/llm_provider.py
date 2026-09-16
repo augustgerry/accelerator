@@ -12,6 +12,32 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Canonical outline for doc_type "narrative" (Proposal Teknis) — kept as one constant so
+# the LLM prompt (ClaudeProvider/GeminiProvider.recommend_structure) and the offline
+# fallback (_fallback_recommend_structure) stay in sync instead of drifting independently.
+NARRATIVE_STRUCTURE_TEMPLATE = """1. Latar Belakang
+1.1 Kondisi Existing Infrastruktur
+1.2 Risiko End of Life (EOL) / End of Support (EOS)
+2. Tujuan
+3. Proposed Solution
+3.1 Solution Overview
+3.2 Sizing dan Opsi Penawaran
+3.2.1 Dasar Perhitungan Kapasitas
+3.3 Proposed High Level Design (HLD)
+4. Compliance Matrix (berdasarkan dokumen acuan RFP/TOR/KAK/RKS)
+5. Bill of Quantity
+6. Implementation Plan
+6.1 Timeline Pekerjaan
+6.2 Scope of Work
+6.3 Out of Scope
+7. Maintenance Plan
+7.1 Preventive Maintenance (PM)
+7.2 Corrective Maintenance (CM)
+7.3 Service Level Agreement (SLA)
+8. Lampiran
+8.1 Profil Perusahaan & Legalitas
+8.2 Tim Tenaga Ahli & Sertifikasi"""
+
 
 class LLMProviderError(RuntimeError):
     """User-safe error raised when an LLM provider is unavailable."""
@@ -193,6 +219,13 @@ class ClaudeProvider(LLMProvider):
         instruction: str = "",
     ) -> list[dict]:
         truncated_text = (tor_text or "")[:35000]
+        structure_rule = (
+            f"WAJIB ikuti kerangka baku Proposal Teknis berikut secara persis (boleh menambah "
+            f"sub-poin turunan sesuai isi TOR spesifik, misal 1.3, 3.2.2, dst — tapi urutan bab "
+            f"utama, judul, dan penomoran hierarkis di bawah ini tidak boleh diubah):\n{NARRATIVE_STRUCTURE_TEMPLATE}"
+            if doc_type == "narrative"
+            else "Hasilkan antara 5 hingga 9 sub-bab yang logis dan berurutan dari awal hingga penutup."
+        )
         prompt = (
             f"Anda adalah Senior Enterprise Solution Architect dan Presales Specialist berpengalaman.\n"
             f"Tugas: Analisis dokumen acuan tender (TOR/RKS/KAK/RFP) dan rancang rekomendasi "
@@ -200,10 +233,11 @@ class ClaudeProvider(LLMProvider):
             f"Judul Tender: {document_title or 'Tender Pengadaan IT'}\n"
             f"Instruksi Tambahan User: {instruction or 'Buat struktur sub-bab yang adaptif dan komprehensif.'}\n\n"
             f"Syarat output:\n"
-            f"1. Hasilkan antara 5 hingga 9 sub-bab yang logis dan berurutan dari awal hingga penutup.\n"
+            f"1. {structure_rule}\n"
             f"2. Sertakan 'rationale' konkret mengapa sub-bab tersebut direkomendasikan dengan merujuk klausul sumber.\n"
-            f"3. Format HARUS murni JSON array of objects:\n"
-            f'[{{"id": "sec-1", "title": "Judul Sub-Bab", "category": "Teknis | Umum | SLA & Support | Manajemen Proyek | Administrasi & Legal", "requirement_text": "Cakupan kebutuhan", "rationale": "Alasan rekomendasi"}}]\n\n'
+            f"3. Setiap judul sub-bab HARUS diawali penomoran hierarkis (contoh: '1.', '1.1', '3.2.1') sesuai levelnya.\n"
+            f"4. Format HARUS murni JSON array of objects, urut sesuai urutan tampil di dokumen:\n"
+            f'[{{"id": "sec-1", "title": "1. Judul Sub-Bab", "category": "Teknis | Umum | SLA & Support | Manajemen Proyek | Administrasi & Legal", "requirement_text": "Cakupan kebutuhan", "rationale": "Alasan rekomendasi"}}]\n\n'
             f"Teks Dokumen Acuan:\n{truncated_text}"
         )
         try:
@@ -315,18 +349,26 @@ class GeminiProvider(LLMProvider):
         instruction: str = "",
     ) -> list[dict]:
         truncated_text = (tor_text or "")[:35000]
+        structure_rule = (
+            f"WAJIB ikuti kerangka baku Proposal Teknis berikut secara persis (boleh menambah "
+            f"sub-poin turunan sesuai isi TOR spesifik, misal 1.3, 3.2.2, dst — tapi urutan bab "
+            f"utama, judul, dan penomoran hierarkis di bawah ini tidak boleh diubah):\n{NARRATIVE_STRUCTURE_TEMPLATE}"
+            if doc_type == "narrative"
+            else "Gunakan penomoran hierarkis standar proposal profesional dan hasilkan struktur bab/sub-bab yang adaptif sesuai isi dokumen acuan."
+        )
         prompt = (
             f"Anda adalah Senior Enterprise Solution Architect dan Presales Specialist di PT Smartnet Magna Global (SMG).\n"
             f"Tugas: Analisis dokumen acuan tender (TOR / RKS / KAK / RFP) berikut dan rancang rekomendasi "
             f"struktur bab dan sub-bab terbaik untuk menyusun dokumen tanggapan resmi '{doc_type}'.\n\n"
             f"Judul Dokumen Tender: {document_title or 'Tender Pengadaan IT'}\n"
-            f"Instruksi Tambahan User: {instruction or 'Buat struktur bab dan sub-bab hierarkis standar proposal teknis enterprise (seperti format CSUL: Latar Belakang, Tujuan, Proposed Solution dengan HLD & Sizing, Compliance Matrix, Implementation Plan, Maintenance Plan & SLA, Penutup).'}\n\n"
+            f"Instruksi Tambahan User: {instruction or 'Buat struktur bab dan sub-bab hierarkis standar proposal teknis enterprise.'}\n\n"
             f"Syarat output:\n"
-            f"1. Gunakan penomoran hierarkis standar proposal profesional: misalnya '1. Latar Belakang', '1.1 Kondisi Existing & Analisis Kebutuhan', '2. Tujuan & Sasaran Solusi', '3. Proposed Solution & Arsitektur Sistem', '3.1 Solution Overview & Rekomendasi Hardware', '3.2 High Level Design (HLD) Topologi Sistem', '4. Compliance Matrix', '5. Implementation Plan & Scope of Work', '6. Maintenance Plan & SLA Dukungan 24x7', '7. Penutup & Tim Tenaga Ahli'.\n"
+            f"1. {structure_rule}\n"
             f"2. Untuk SETIAP bagian, sertakan 'rationale' (alasan konkret) yang menjelaskan relevansinya terhadap klausul dokumen acuan.\n"
-            f"3. Format JSON HARUS valid berupa array objek:\n"
+            f"3. Setiap judul sub-bab HARUS diawali penomoran hierarkis (contoh: '1.', '1.1', '3.2.1') sesuai levelnya, dan array HARUS terurut sesuai urutan tampil di dokumen.\n"
+            f"4. Format JSON HARUS valid berupa array objek:\n"
             f"[\n"
-            f'  {{"id": "sec-1", "title": "1.1 Judul Sub-Bab", "category": "Teknis | Umum | SLA & Support | Manajemen Proyek | Administrasi & Legal", "requirement_text": "Cakupan detail yang harus dijawab di sub-bab ini", "rationale": "Alasan rekomendasi berdasarkan dokumen sumber"}}\n'
+            f'  {{"id": "sec-1", "title": "1. Judul Sub-Bab", "category": "Teknis | Umum | SLA & Support | Manajemen Proyek | Administrasi & Legal", "requirement_text": "Cakupan detail yang harus dijawab di sub-bab ini", "rationale": "Alasan rekomendasi berdasarkan dokumen sumber"}}\n'
             f"]"
         )
         try:
@@ -418,15 +460,31 @@ def _fallback_recommend_structure(doc_type: str, tor_text: str = "", document_ti
             {"id": "sec-6", "title": "Slide 6: Implementation Roadmap & Next Steps", "category": "Manajemen Proyek", "requirement_text": "Tahapan implementasi bertahap, alokasi tim ahli, dan ajakan tindak lanjut konkret.", "rationale": "Closing yang jelas dan terarah."},
         ]
     else:
-        # Default: Proposal Teknis CSUL Enterprise Standard
+        # Default: Proposal Teknis CSUL Enterprise Standard — struktur baku 8 bab dengan
+        # penomoran hierarkis (1.1, 3.2.1, dst) mengikuti format proposal tender otentik SMG.
         return [
-            {"id": "sec-1", "title": "1. Latar Belakang & Analisis Kebutuhan", "category": "Umum", "requirement_text": f"Latar belakang proyek {clean_title}, kondisi existing infrastruktur klien, serta urgensi modernisasi perangkat.", "rationale": "Format Bab 1 standar proposal teknis CSUL."},
-            {"id": "sec-2", "title": "2. Tujuan & Sasaran Implementasi", "category": "Umum", "requirement_text": "Tujuan strategis dan sasaran teknis yang ingin dicapai melalui implementasi solusi yang diusulkan.", "rationale": "Format Bab 2 standar proposal teknis CSUL."},
-            {"id": "sec-3", "title": "3. Proposed Solution & Arsitektur Solusi", "category": "Teknis", "requirement_text": "Gambaran umum solusi yang ditawarkan oleh PT Smartnet Magna Global, arsitektur High Level Design (HLD), sizing kapasitas, dan spesifikasi hardware.", "rationale": "Format Bab 3 standar proposal teknis CSUL."},
-            {"id": "sec-4", "title": "4. Compliance Matrix Spesifikasi Teknis", "category": "Teknis", "requirement_text": "Tabel matriks kepatuhan spesifikasi teknis terhadap butir kebutuhan TOR (Comply / Not Comply / Exceed) beserta rincian komitmen pemenuhan teknis SMG.", "rationale": "Format Bab 4 standar proposal teknis CSUL."},
-            {"id": "sec-5", "title": "5. Implementation Plan, Scope of Work & Deliverables", "category": "Manajemen Proyek", "requirement_text": "Rencana implementasi, tahapan pelaksanaan, batasan ruang lingkup (in-scope / out-of-scope), deliverables, dan prosedur UAT.", "rationale": "Format Bab 5 standar proposal teknis CSUL."},
-            {"id": "sec-6", "title": "6. Maintenance Plan (PM/CM) & Service Level Agreement (SLA)", "category": "SLA & Support", "requirement_text": "Layanan pemeliharaan berkala Preventive Maintenance (PM), penanganan gangguan Corrective Maintenance (CM), komitmen SLA response time 24x7, dan dukungan prinsipal.", "rationale": "Format Bab 6 standar proposal teknis CSUL."},
-            {"id": "sec-7", "title": "7. Penutup, Tim Tenaga Ahli & Profil PT Smartnet Magna Global", "category": "Administrasi & Legal", "requirement_text": "Kesimpulan proposal, struktur tim tenaga ahli bersertifikasi, rekam jejak pengalaman PT Smartnet Magna Global, dan surat dukungan prinsipal resmi.", "rationale": "Format Bab 7 standar proposal teknis CSUL."},
+            {"id": "sec-1", "title": "1. Latar Belakang", "category": "Umum", "requirement_text": f"Konteks proyek {clean_title}, latar belakang pengadaan, dan urgensi modernisasi infrastruktur klien.", "rationale": "Bab pembuka standar proposal teknis CSUL."},
+            {"id": "sec-1-1", "title": "1.1 Kondisi Existing Infrastruktur", "category": "Teknis", "requirement_text": "Deskripsi kondisi eksisting perangkat/sistem klien saat ini beserta keterbatasan dan bottleneck operasionalnya.", "rationale": "Baseline pemahaman kondisi klien sebelum masuk ke solusi."},
+            {"id": "sec-1-2", "title": "1.2 Risiko End of Life (EOL) / End of Support (EOS)", "category": "Teknis", "requirement_text": "Analisis risiko perangkat yang sudah/akan EOL-EOS dan dampak operasional jika tidak segera diganti.", "rationale": "Menegaskan urgensi bisnis untuk modernisasi, bukan sekadar preferensi teknis."},
+            {"id": "sec-2", "title": "2. Tujuan", "category": "Umum", "requirement_text": "Tujuan strategis dan sasaran teknis yang ingin dicapai melalui implementasi solusi yang diusulkan.", "rationale": "Bab 2 standar proposal teknis CSUL."},
+            {"id": "sec-3", "title": "3. Proposed Solution", "category": "Teknis", "requirement_text": "Gambaran umum solusi yang ditawarkan oleh PT Smartnet Magna Global untuk menjawab kebutuhan pada dokumen acuan.", "rationale": "Bab inti pembuktian kapabilitas solusi."},
+            {"id": "sec-3-1", "title": "3.1 Solution Overview", "category": "Teknis", "requirement_text": "Ringkasan solusi, komponen utama, dan value proposition teknis yang ditawarkan.", "rationale": "Ringkasan solusi sebelum detail sizing dan HLD."},
+            {"id": "sec-3-2", "title": "3.2 Sizing dan Opsi Penawaran", "category": "Teknis", "requirement_text": "Perhitungan sizing kapasitas dan opsi-opsi penawaran solusi (mis. varian kapasitas/performa) sesuai kebutuhan klien.", "rationale": "Menunjukkan solusi disesuaikan dengan kebutuhan riil, bukan generik."},
+            {"id": "sec-3-2-1", "title": "3.2.1 Dasar Perhitungan Kapasitas", "category": "Teknis", "requirement_text": "Metodologi dan asumsi perhitungan kapasitas: data growth rate, redundancy, overhead, dan proyeksi 3-5 tahun ke depan.", "rationale": "Transparansi metodologi sizing agar mudah diverifikasi klien."},
+            {"id": "sec-3-3", "title": "3.3 Proposed High Level Design (HLD)", "category": "Teknis", "requirement_text": "Diagram topologi arsitektur solusi yang diusulkan, termasuk konektivitas dan skema redundansi.", "rationale": "Visualisasi arsitektur wajib untuk pembuktian desain solusi enterprise."},
+            {"id": "sec-4", "title": "4. Compliance Matrix", "category": "Teknis", "requirement_text": "Matriks kepatuhan spesifikasi teknis terhadap setiap butir dokumen acuan (RFP/TOR/KAK/RKS) — Comply / Not Comply / Exceed.", "rationale": "Wajib merujuk langsung ke klausul dokumen acuan sebagai bukti pemenuhan requirement, bukan klaim sepihak."},
+            {"id": "sec-5", "title": "5. Bill of Quantity", "category": "Teknis", "requirement_text": "Rincian item, part number, deskripsi, dan kuantitas perangkat/lisensi yang ditawarkan.", "rationale": "BOQ jadi acuan komersial dan teknis yang harus konsisten dengan Compliance Matrix di atasnya."},
+            {"id": "sec-6", "title": "6. Implementation Plan", "category": "Manajemen Proyek", "requirement_text": "Rencana pelaksanaan proyek secara keseluruhan dari persiapan hingga serah terima.", "rationale": "Bab tata kelola implementasi, menaungi timeline/scope/out-of-scope di bawahnya."},
+            {"id": "sec-6-1", "title": "6.1 Timeline Pekerjaan", "category": "Manajemen Proyek", "requirement_text": "Jadwal pelaksanaan tiap tahapan proyek (persiapan, instalasi, konfigurasi, migrasi, UAT, BAST).", "rationale": "Kepastian waktu jadi salah satu kriteria evaluasi utama tender."},
+            {"id": "sec-6-2", "title": "6.2 Scope of Work", "category": "Manajemen Proyek", "requirement_text": "Rincian lingkup pekerjaan yang menjadi tanggung jawab penyedia selama implementasi.", "rationale": "Batasan tanggung jawab yang jelas mencegah dispute operasional."},
+            {"id": "sec-6-3", "title": "6.3 Out of Scope", "category": "Administrasi & Legal", "requirement_text": "Daftar pekerjaan yang secara tegas berada di luar lingkup penawaran.", "rationale": "Melindungi batas tanggung jawab garansi dan komersial penyedia."},
+            {"id": "sec-7", "title": "7. Maintenance Plan", "category": "SLA & Support", "requirement_text": "Layanan pemeliharaan pasca-implementasi mencakup PM, CM, dan komitmen SLA.", "rationale": "Bab layanan purnajual, menaungi PM/CM/SLA di bawahnya."},
+            {"id": "sec-7-1", "title": "7.1 Preventive Maintenance (PM)", "category": "SLA & Support", "requirement_text": "Jadwal dan cakupan pemeliharaan preventif berkala untuk menjaga performa dan umur perangkat.", "rationale": "Bagian standar layanan purnajual SMG."},
+            {"id": "sec-7-2", "title": "7.2 Corrective Maintenance (CM)", "category": "SLA & Support", "requirement_text": "Prosedur penanganan gangguan/insiden termasuk response time dan eskalasi.", "rationale": "Bagian standar layanan purnajual SMG."},
+            {"id": "sec-7-3", "title": "7.3 Service Level Agreement (SLA)", "category": "SLA & Support", "requirement_text": "Komitmen SLA response time 24x7, target uptime, dan skema eskalasi dukungan teknis.", "rationale": "Komitmen terukur yang bisa dijadikan acuan kontraktual."},
+            {"id": "sec-8", "title": "8. Lampiran", "category": "Administrasi & Legal", "requirement_text": "Dokumen pendukung penawaran: profil perusahaan, legalitas, dan tim tenaga ahli.", "rationale": "Bab penutup berisi bukti pendukung administratif dan legal."},
+            {"id": "sec-8-1", "title": "8.1 Profil Perusahaan & Legalitas", "category": "Administrasi & Legal", "requirement_text": "Profil PT Smartnet Magna Global (Member of CTI Group), akta, NIB, dan sertifikasi perusahaan relevan.", "rationale": "Bukti kualifikasi administratif penyedia."},
+            {"id": "sec-8-2", "title": "8.2 Tim Tenaga Ahli & Sertifikasi", "category": "Administrasi & Legal", "requirement_text": "Struktur tim proyek, CV ringkas, dan sertifikasi profesional tenaga ahli yang ditugaskan.", "rationale": "Bukti kapabilitas SDM yang akan mengeksekusi proyek."},
         ]
 
 

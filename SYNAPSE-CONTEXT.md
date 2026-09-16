@@ -3,6 +3,33 @@
 
 ---
 
+## 🐛 SESI CLAUDE CODE — 4 BUG LAPORAN USER LANGSUNG (branch `feat/proposal-visual-engine`)
+
+User laporin 4 hal langsung setelah nyoba UI, semua dicek & dibenerin:
+
+1. **Filter "Semua Jenis Dokumen"/"Semua Divisi" di `/search` dihapus total** — user gak mau dropdown filter itu ada. `frontend/app/search/page.tsx`: hapus state `docTypeFilter`/`divisionFilter`/`availableDivisions`, `handleFilterChange`, `persistFilters`, fetch divisi dari `listDocuments()`, dan UI dropdown-nya. `doSearch` sekarang selalu cari tanpa filter.
+   - **Simbol markdown `**`/`*` di hasil pencarian dihapus** — snippet kutipan & jawaban AI sering nampilin `**kata**` mentah (dari markdown di dokumen sumber/jawaban LLM) karena mekanisme highlight query di `HighlightedText` sendiri makai `**` sebagai penanda internal, jadi markdown asli dari teks sumber ketabrak/kebaca sebagai bagian dari mekanisme highlight. Fix: `components/search/highlighted-text.tsx` tambah `stripMarkdown()` (strip `**bold**`/`*italic*`/`` `code` ``) yang jalan otomatis di dalam `HighlightedText`, dan dipanggil manual di `search/page.tsx` sebelum teks jawaban AI masuk ke `AnswerWithCitations`.
+2. **& 3. Struktur sub-bab hasil rekomendasi AI (`/draft/recommend-structure`) dirombak total** — sebelumnya semua fallback/prompt cuma flat list tanpa nested numbering asli (gak ada `1.1`/`3.2.1`), dan urutan bab (Scope of Work, Timeline, dst) gak konsisten sama dokumen real. Sekarang struktur baku "Proposal Teknis" (doc_type `narrative`) jadi:
+   ```
+   1. Latar Belakang → 1.1 Kondisi Existing, 1.2 Risiko EOL/EOS
+   2. Tujuan
+   3. Proposed Solution → 3.1 Solution Overview, 3.2 Sizing dan Opsi Penawaran → 3.2.1 Dasar Perhitungan Kapasitas, 3.3 Proposed HLD
+   4. Compliance Matrix (berdasarkan RFP/TOR/KAK/RKS)
+   5. Bill of Quantity
+   6. Implementation Plan → 6.1 Timeline Pekerjaan, 6.2 Scope of Work, 6.3 Out of Scope
+   7. Maintenance Plan → 7.1 PM, 7.2 CM, 7.3 SLA
+   8. Lampiran → 8.1 Profil Perusahaan & Legalitas, 8.2 Tim Tenaga Ahli & Sertifikasi
+   ```
+   Diterapkan di **3 tempat sekaligus** biar konsisten kapan pun jalur mana yang aktif:
+   - `backend/app/services/llm_provider.py` `_fallback_recommend_structure()` branch default/narrative — daftar 22 section flat dengan title yang udah embed nomor hierarkis (mekanisme parsing level heading di `_add_item_heading` udah otomatis baca kedalaman dari jumlah titik di nomor, gak perlu ubah kode render).
+   - Prompt `recommend_structure()` di `ClaudeProvider` DAN `GeminiProvider` — konstanta baru `NARRATIVE_STRUCTURE_TEMPLATE` (satu sumber kebenaran dipakai kedua prompt) diselipkan sebagai instruksi WAJIB kalau `doc_type == "narrative"`, biar hasil AI asli (bukan cuma fallback) juga ikut kerangka ini.
+   - `frontend/lib/skeletons.ts` `SKELETONS.narrative` (client-side fallback kalau API `recommend-structure` gagal total) — disamakan persis.
+   - **Verified end-to-end:** generate docx asli pake 22 section baru → cek heading level via `python-docx` (Heading 1 buat "1."/"2."/dst, Heading 2 buat "x.y", Heading 3 buat "3.2.1") → hasilnya PERSIS sesuai kedalaman yang diminta. Lanjut convert ke PDF via Word COM juga sukses (694KB, real dokumen ~22 bagian).
+4. **BUG NYATA: "Gagal Preview Dokumen" — root cause ketemu & fixed.** Setiap dokumen hasil export (SEMUA `template_type`, bukan cuma satu) gagal dibuka Word lewat COM automation (`convert-office-pdf` / tombol Preview di Export Wizard) dengan error "Word experienced an error trying to open the file." Root cause: kode footer nomor halaman di `export_proposal_docx` (`backend/app/routers/draft.py`) append elemen XML `<w:fldChar>`/`<w:instrText>` LANGSUNG ke `<w:p>` (paragraph), padahal OOXML mewajibkan elemen itu ada di dalam `<w:r>` (run). `python-docx`/lxml baca balik dokumennya tanpa keluhan (makanya lolos semua smoke test sebelumnya yang cuma cek `len(doc.paragraphs)`/`len(doc.tables)`), tapi Word asli (dipakai buat render PDF preview) nolak file yang secara struktural invalid ini — **jadi PREVIEW EMANG SELALU GAGAL SEJAK FITUR INI DIBUAT**, bukan cuma sesekali. Fix: bungkus fldChar/instrText dalam satu `p_foot.add_run()` yang benar. **Verified:** re-test HTTP round-trip penuh (`export-docx` → `convert-office-pdf`) buat narrative/matrix/sow — ketiganya sekarang 200 OK dengan PDF bytes asli (sebelumnya 503 di ketiganya).
+- Verifikasi keseluruhan: backend `py_compile` + `import main` clean, frontend `npx tsc --noEmit` + `npm run build` (7/7 route) clean. Backend & frontend dev server di-restart biar kode terbaru ke-load, dites hidup (`/health` 200, `localhost:3000` 200) sebelum diserahkan ke user buat dicoba manual.
+
+---
+
 ## 🩹 SESI CLAUDE CODE — FULL CODEBASE BUG SWEEP & DEDUP (branch `feat/proposal-visual-engine`)
 
 User minta: cek seluruh codebase, benerin semua bug, efisienkan kode yang duplikat/berulang, sampai "perfect tanpa issue", baru mau ditest manual. Prosesnya: jalanin `/code-review` (8 agent paralel, angle correctness/reuse/efficiency/removed-behavior/cross-file) atas diff `main..feat/proposal-visual-engine`, lalu semua temuan di-cross-verify manual satu-satu sebelum di-fix (bukan asal apply).

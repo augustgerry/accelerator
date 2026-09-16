@@ -953,14 +953,19 @@ def export_proposal_docx(payload: ExportDocxRequest):
         r_fl.font.size = Pt(8.5)
         r_fl.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
 
+        # fldChar/instrText MUST live inside a <w:r> run per the OOXML schema — appending
+        # them straight onto the paragraph produces a file python-docx reads back fine but
+        # real Word rejects outright ("Word experienced an error trying to open the file"),
+        # which broke the Office-COM PDF preview for every export.
+        fld_run = p_foot.add_run()
         fldChar1 = parse_xml(r'<w:fldChar %s w:fldCharType="begin"/>' % nsdecls('w'))
         instrText = parse_xml(r'<w:instrText %s xml:space="preserve"> PAGE </w:instrText>' % nsdecls('w'))
         fldChar2 = parse_xml(r'<w:fldChar %s w:fldCharType="separate"/>' % nsdecls('w'))
         fldChar3 = parse_xml(r'<w:fldChar %s w:fldCharType="end"/>' % nsdecls('w'))
-        p_foot._p.append(fldChar1)
-        p_foot._p.append(instrText)
-        p_foot._p.append(fldChar2)
-        p_foot._p.append(fldChar3)
+        fld_run._r.append(fldChar1)
+        fld_run._r.append(instrText)
+        fld_run._r.append(fldChar2)
+        fld_run._r.append(fldChar3)
 
     # Header logos and Cover structure
     company_logo_bytes = _decode_logo_bytes(payload.logo_data_url)

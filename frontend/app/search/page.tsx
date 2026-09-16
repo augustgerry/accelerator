@@ -13,7 +13,6 @@ import {
   BookOpen,
   X,
   ChevronRight,
-  SlidersHorizontal,
   History,
   Bookmark,
   BookmarkCheck,
@@ -21,15 +20,14 @@ import {
   Check,
   Link2,
 } from "lucide-react";
-import { searchKnowledgeBase, listDocuments, type SearchResult } from "@/lib/api";
+import { searchKnowledgeBase, type SearchResult } from "@/lib/api";
 import { CitationDrawer } from "@/components/search/citation-drawer";
-import { HighlightedText } from "@/components/search/highlighted-text";
+import { HighlightedText, stripMarkdown } from "@/components/search/highlighted-text";
 import { AnswerWithCitations } from "@/components/search/answer-with-citations";
 import { DOC_TYPE_COLORS } from "@/components/search/doc-type-colors";
 
 const LS_HISTORY_KEY = "synapse-search-history";
 const LS_BOOKMARKS_KEY = "synapse-search-bookmarks";
-const LS_FILTERS_KEY = "synapse-search-filters";
 
 type BookmarkEntry = { question: string; answer: string; savedAt: string };
 
@@ -70,8 +68,6 @@ function SearchContent() {
   const [error, setError] = useState<string | null>(null);
   const [selectedChunkIdx, setSelectedChunkIdx] = useState<number | null>(null);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
-  const [docTypeFilter, setDocTypeFilter] = useState(searchParams.get("docType") ?? "");
-  const [divisionFilter, setDivisionFilter] = useState(searchParams.get("division") ?? "");
   const [history, setHistory] = useState<string[]>([]);
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
   const [answerCopied, setAnswerCopied] = useState(false);
@@ -79,46 +75,10 @@ function SearchContent() {
   const inputRef = useRef<HTMLInputElement>(null);
   const requestIdRef = useRef(0);
 
-  const [availableDivisions, setAvailableDivisions] = useState<string[]>([]);
-
   useEffect(() => {
     setHistory(loadHistory());
     setBookmarks(loadBookmarks());
-    listDocuments()
-      .then((docs) => {
-        const divs = new Set<string>();
-        docs.forEach((d) => {
-          if (d.division) divs.add(d.division);
-        });
-        const divList = Array.from(divs).sort();
-        setAvailableDivisions(divList);
-
-        if (!searchParams.get("docType") && !searchParams.get("division")) {
-          try {
-            const persisted = JSON.parse(localStorage.getItem(LS_FILTERS_KEY) ?? "{}");
-            if (persisted.docType) setDocTypeFilter(persisted.docType);
-            // Only use persisted division if it exists in the active workspace
-            if (persisted.division && divList.includes(persisted.division)) {
-              setDivisionFilter(persisted.division);
-            } else if (persisted.division) {
-              localStorage.setItem(LS_FILTERS_KEY, JSON.stringify({ docType: persisted.docType || "", division: "" }));
-            }
-          } catch { /* private mode */ }
-        }
-      })
-      .catch(() => {
-        // Backend unreachable on mount — fall back to the known baseline divisions
-        // instead of leaving the filter dropdown permanently empty for the session.
-        setAvailableDivisions(["presales", "infrastructure", "security", "application"]);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const persistFilters = (nextDocType: string, nextDivision: string) => {
-    try {
-      localStorage.setItem(LS_FILTERS_KEY, JSON.stringify({ docType: nextDocType, division: nextDivision }));
-    } catch { /* private mode */ }
-  };
 
   const isBookmarked = !!result && bookmarks.some((b) => b.question === query);
 
@@ -140,7 +100,7 @@ function SearchContent() {
     setTimeout(() => setAnswerCopied(false), 2000);
   };
 
-  const doSearch = async (q: string, nextDocType = docTypeFilter, nextDivision = divisionFilter) => {
+  const doSearch = async (q: string) => {
     if (!q.trim()) return;
     const myRequestId = ++requestIdRef.current;
     const previousConversation = conversation.slice(-6);
@@ -151,10 +111,7 @@ function SearchContent() {
     setError(null);
     setResult(null);
     setSelectedChunkIdx(null);
-    const urlParams = new URLSearchParams({ q });
-    if (nextDocType) urlParams.set("docType", nextDocType);
-    if (nextDivision) urlParams.set("division", nextDivision);
-    router.replace(`/search?${urlParams.toString()}`, { scroll: false });
+    router.replace(`/search?q=${encodeURIComponent(q)}`, { scroll: false });
 
     // Persist to search history (max 10, no duplicates)
     try {
@@ -165,7 +122,7 @@ function SearchContent() {
     } catch { /* private mode */ }
 
     try {
-      const res = await searchKnowledgeBase(q, { docType: nextDocType, division: nextDivision }, previousConversation);
+      const res = await searchKnowledgeBase(q, undefined, previousConversation);
       if (myRequestId !== requestIdRef.current) return; // a newer search superseded this one
       setResult(res);
       setConversation((previous) => [...previous, { role: "assistant", content: res.answer } as ConversationMessage].slice(-8));
@@ -187,18 +144,6 @@ function SearchContent() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     doSearch(inputValue);
-  };
-
-  const handleFilterChange = (kind: "docType" | "division", value: string) => {
-    if (kind === "docType") {
-      setDocTypeFilter(value);
-      persistFilters(value, divisionFilter);
-      if (query) doSearch(query, value, divisionFilter);
-    } else {
-      setDivisionFilter(value);
-      persistFilters(docTypeFilter, value);
-      if (query) doSearch(query, docTypeFilter, value);
-    }
   };
 
   const copyLink = () => {
@@ -257,37 +202,6 @@ function SearchContent() {
             Cari
           </button>
         </form>
-
-          <div className="mt-2 flex max-w-3xl flex-wrap items-center gap-2">
-            <SlidersHorizontal size={13} className="text-text-muted" />
-            <select
-              value={docTypeFilter}
-              onChange={(e) => handleFilterChange("docType", e.target.value)}
-              className="rounded-md border border-surface-border bg-surface px-2 py-1.5 text-[11px] text-text-secondary outline-none focus:border-accent"
-            >
-              <option value="">Semua jenis dokumen</option>
-              <option value="document">Dokumen</option>
-              <option value="template">Template</option>
-            </select>
-            <select
-              value={divisionFilter}
-              onChange={(e) => handleFilterChange("division", e.target.value)}
-              className="rounded-md border border-surface-border bg-surface px-2 py-1.5 text-[11px] text-text-secondary outline-none focus:border-accent cursor-pointer"
-            >
-              <option value="">Semua divisi</option>
-              {availableDivisions.map((div) => (
-                <option key={div} value={div}>{div}</option>
-              ))}
-            </select>
-            {(docTypeFilter || divisionFilter) && (
-              <button
-                onClick={() => { setDocTypeFilter(""); setDivisionFilter(""); persistFilters("", ""); if (query) doSearch(query, "", ""); }}
-                className="text-[11px] font-medium text-secondary hover:underline"
-              >
-                Reset filter
-              </button>
-            )}
-          </div>
 
         {/* Search history */}
         {!query && history.length > 0 && (
@@ -505,7 +419,7 @@ function SearchContent() {
                 <div className="rounded-lg border-l-4 border-accent bg-surface p-4">
                   <p className="text-sm leading-relaxed text-text-primary whitespace-pre-wrap">
                     <AnswerWithCitations
-                      text={result.answer}
+                      text={stripMarkdown(result.answer)}
                       sourceCount={result.sources.length}
                       onCitationClick={(idx) => setSelectedChunkIdx(idx)}
                     />

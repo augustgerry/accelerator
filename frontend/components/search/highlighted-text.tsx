@@ -1,3 +1,13 @@
+// Search results come from indexed source documents (and LLM answers) that may
+// contain literal markdown — strip it for display since actual bold/italic
+// formatting is already visible in the real document preview, not needed here.
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/`(.*?)`/g, "$1");
+}
+
 export function highlightKeywords(text: string, query: string): string {
   if (!query.trim()) return text;
   const words = query.trim().split(/\s+/).filter((w) => w.length > 2);
@@ -7,7 +17,7 @@ export function highlightKeywords(text: string, query: string): string {
 }
 
 export function HighlightedText({ text, query }: { text: string; query: string }) {
-  const highlighted = highlightKeywords(text, query);
+  const highlighted = highlightKeywords(stripMarkdown(text), query);
   const parts = highlighted.split(/\*\*(.*?)\*\*/g);
   return (
     <span>
