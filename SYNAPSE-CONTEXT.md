@@ -4,23 +4,18 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Sesi terakhir (Antigravity):** Fitur Pencarian Gambar Publik Hardware, Generator Topologi HLD Otomatis (Mermaid + Kroki), Integrasi Visual DOCX/PDF, serta Modernisasi Presentasi PPTX 16:9 dengan Transisi Animasi Slide TELAH SELESAI, teruji end-to-end, dan branch git telah dipisahkan secara bersih (Opsi B).
-- **Pemisahan Branch & Git Hygiene (Opsi B):**
-  1. Commit `844b882` (Sub-Bab Adaptif & Auditor) telah di-cherry-pick bersih ke `main` (`c54b9ed`) dan di-push ke `origin/main`.
-  2. Branch kerja baru `feat/proposal-visual-engine` dibuat dari `main` untuk seluruh fitur visual dan PPTX.
-  3. Script `auto-commit.ps1` dinonaktifkan / tidak berjalan di background; semua file di-commit secara terisolasi dan eksplisit.
-- **Ringkasan Fitur Visual & PPTX yang Selesai:**
-  1. **Pencarian Gambar Publik Hardware Enterprise:** Multi-engine search (`backend/app/services/image_search.py`) via Wikimedia Commons API dan Bing scraper untuk menemukan foto resmi perangkat (server rackmount HPE/Dell, switch Cisco, firewall Fortinet, storage). Dilengkapi optimizer gambar Pillow (RGB, aspect ratio scaling, base64 data URL) via endpoint `POST /draft/search-images` dan `POST /draft/download-image`.
-  2. **Generator Arsitektur High Level Design (HLD) Otomatis:** Endpoint `POST /draft/generate-hld` memanfaatkan Gemini 3.6 Flash untuk membaca kondisi existing TOR dan solusi SMG, menghasilkan diagram topologi Mermaid multi-subgraph (DC vs DR vs Interconnect), dan me-render ke PNG via Kroki API (`POST /draft/render-mermaid`).
-  3. **Visual Asset Studio UI:** Komponen interaktif `frontend/components/draft/visual-asset-studio.tsx` terpasang di workspace `/draft` dengan 3 tab: Cari Gambar Publik, Generate Diagram HLD, dan Upload Lokal. Dilengkapi pratinjau thumbnail terlampir, penyunting keterangan (caption), dan badge penanda visual pada navigator kiri.
-  4. **Penyisipan Gambar pada Word (.docx) & PDF:**
-     - Word: helper `_insert_item_image_docx` menyisipkan gambar terpusat berskala proporsional dan caption italic formal di format naratif, SoW, Solution Brief, dan Pitch Deck.
-     - PDF: helper `_build_item_image_story` menyisipkan `RLImage` dan caption formal ReportLab.
-  5. **Modernisasi PPTX 16:9 & Transisi Animasi Slide:**
-     - Layout slide diupgrade ke format widescreen 16:9 (13.333 x 7.5 inci) dengan visual container card.
-     - Transisi animasi slide (`<p:transition spd="med" advClick="1"><p:fade/></p:transition>`) diinjeksikan ke semua slide (Cover, Agenda, Konten, Penutup) dan kompatibel penuh dengan PowerPoint/Google Slides.
-     - Slide dengan aset visual otomatis mengadopsi layout 2-kolom: kolom kiri narasi poin kunci, kolom kanan kartu visual hardware/HLD dengan caption elegan.
-- **Status Service:** Backend aktif di port 8000 (`http://127.0.0.1:8000/health` 200 OK, LLM: `gemini-3.6-flash`), Frontend aktif di port 3000. `npx tsc --noEmit` exit 0, Python `py_compile` exit 0.
+- **Sesi terakhir (Antigravity):** Multi-Document Engine & Library Learning TELAH SELESAI. Synapse telah dihubungkan langsung dan "belajar" dari seluruh 172 dokumen otentik di Google Drive / Supabase DB (MoM, Solution Brief, SoW, Klarifikasi Teknis, Pitch Deck, dan Proposal Teknis CSUL).
+- **Hasil Ekstraksi Dokumen Otentik Perusahaan (Ground-Truth):**
+  1. **MoM (Minutes of Meeting):** Struktur dipelajari langsung dari template resmi `[CUSTOMER NAME] [DATE] MoM [Agenda Title].docx` dan `[MoM][SMG] - General Meeting - 02 September 2026.docx` serta `MoM Meeting_BlueBird`. Menghasilkan Header Metadata Tabel (Hari/Tanggal, Waktu, Lokasi/Platform, Agenda, Notulen), Tabel Daftar Hadir (Peserta Klien vs SMG), Catatan Pembahasan & Keputusan, Matriks Action Items (No, Aktivitas, PIC, Target Selesai, Status), dan Lembar Pengesahan Tanda Tangan (Notulen, PM SMG, PIC Klien).
+  2. **Solution Brief:** Struktur dipelajari langsung dari template resmi `[CUSTOMER NAME] Solution Brief - Title.docx` dan implementasi Hitachi/Pasifik Agro Sentosa. Menghasilkan Executive Summary Callout Box (`#F0F4F8`), Business Understanding (Pain points & OKRs), In/Out Scope, Arsitektur HLD, Integrasi & Regulasi OJK/BI, Keamanan/IAM/Enkripsi, Kriteria Sukses Terukur, dan Mengapa PT Smartnet Magna Global (Member of CTI Group).
+  3. **Scope of Work (SoW):** Struktur dipelajari langsung dari `SOW_Corrective_Maintenance_xFusion_SMBC.docx` dan `SOW_Implementation and Services_GCP_PT Hitachi Indonesia.docx`. Menghasilkan Document Release Version, Ruang Lingkup Pengerjaan, Scope Boundary Matrix (SMG vs Klien), Matriks Tingkat Layanan SLA (P1 30 min / 4 jam onsite 24x7, P2 60 min, P3, P4), Deliverables, dan Sign-off Block.
+  4. **Klarifikasi Teknis (Aanwijzing):** Struktur dipelajari langsung dari `Klarifikasi Teknis - CSUL Finance v1.0.pdf` dan CCBI. Menghasilkan Matriks Tanggapan Aanwijzing, Penyesuaian Arsitektur & Sizing (Growth 10%/th, DRR), Bill of Quantity (BOQ), dan Tim Project bersertifikasi.
+  5. **Proposal Teknis (CSUL Layout):** Standar enterprise Bab 1-7 lengkap dengan Cover Table 0, Table 1 Document Release, NDA paragraph, Daftar Isi/Gambar/Tabel dinamis dengan dot leaders, dan heading bertingkat (2.1.1, 3.2.1).
+- **Pembaruan Kode:**
+  - `frontend/lib/skeletons.ts`: Seluruh outline dokumen (`narrative`, `sow`, `solution_brief`, `mom`, `klarifikasi_teknis`, `pitch_deck`) diperbarui mencerminkan struktur dokumen otentik di library.
+  - `backend/app/services/llm_provider.py`: Ditambahkan `_fallback_recommend_structure` lengkap per tipe dokumen dan disempurnakan `_build_system_prompt` agar LLM menghasilkan format tabel markdown, penomoran bertingkat, dan branding resmi PT Smartnet Magna Global (Member of CTI Group).
+  - `backend/app/routers/draft.py`: Seluruh exporter DOCX (`/draft/export-docx`) dirombak dari heading/paragraf polos menjadi dokumen berstandar corporate otentik dengan tabel metadata, tabel SLA, matriks action item, dan blok tanda tangan pengesahan.
+- **Status Service:** Backend aktif di port 8000 (`http://127.0.0.1:8000/health` 200 OK, LLM: `gemini-3.6-flash`), Frontend aktif di port 3000. Seluruh test export (MoM, Solution Brief, SoW, Klarifikasi Teknis, Narrative) berhasil diekspor tanpa error. Branch `feat/proposal-visual-engine` bersih dan up to date dengan remote.
 
 ---
 
