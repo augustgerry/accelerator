@@ -3210,3 +3210,25 @@ async def clone_template_pptx(
         headers={"Content-Disposition": f'attachment; filename="PitchDeck-Cloned-{clean_name}.pptx"'},
     )
 
+
+@router.post("/calculate-sizing")
+def calculate_sizing_endpoint(payload: dict):
+    """
+    On-Demand Presales Sizing & BoQ Calculation Endpoint.
+    Calculates storage (Pure Storage) or HCI (Sangfor) capacity, controller recommendations,
+    and returns a structured BoQ Markdown table ready for inclusion in proposal items.
+    """
+    from app.services.sizing_calculator import SizingRequest, perform_sizing_calculation
+    
+    req = SizingRequest(
+        platform=payload.get("platform", "pure_storage"),
+        usable_capacity_tb=float(payload.get("usable_capacity_tb", 0.0) or 0.0),
+        target_workload=payload.get("target_workload", "general_virtualization"),
+        data_reduction_ratio=float(payload.get("data_reduction_ratio")) if payload.get("data_reduction_ratio") else None,
+        growth_buffer_pct=float(payload.get("growth_buffer_pct", 20.0) or 20.0),
+        requirement_text=payload.get("requirement_text", "")
+    )
+    return perform_sizing_calculation(req)
+
+
+

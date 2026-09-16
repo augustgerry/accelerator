@@ -644,3 +644,49 @@ export async function cloneTemplatePptx(payload: {
   }
   return res.blob();
 }
+
+export interface SizingCalculationRequest {
+  platform: "pure_storage" | "sangfor_hci" | "generic_compute";
+  usable_capacity_tb?: number;
+  target_workload?: "database" | "vdi" | "general_virtualization" | "analytics";
+  data_reduction_ratio?: number;
+  growth_buffer_pct?: number;
+  requirement_text?: string;
+}
+
+export interface SizingCalculationResult {
+  platform: string;
+  recommended_model: string;
+  metrics: {
+    target_usable_tb: number;
+    planned_usable_tb: number;
+    raw_capacity_provisioned_tb?: number;
+    effective_capacity_tb?: number;
+    data_reduction_ratio?: string;
+    growth_buffer_pct?: number;
+    dfm_count?: number;
+    dfm_type?: string;
+    cluster_nodes?: number;
+    total_cpu_cores?: number;
+    redundancy_policy?: string;
+  };
+  boq_markdown: string;
+  executive_summary: string;
+}
+
+export async function calculateSizing(
+  payload: SizingCalculationRequest
+): Promise<SizingCalculationResult> {
+  const res = await fetch(`${API_BASE}/draft/calculate-sizing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal kalkulasi sizing (${res.status}): ${detail}`);
+  }
+  return res.json();
+}
+
+

@@ -1,0 +1,163 @@
+{
+  "tasks": [
+    {
+      "id": "task-e5097016",
+      "assignee": "agent-2-data-ops",
+      "task_type": "database_vector_audit",
+      "title": "Audit Vector DB Health & Chunk Indexing",
+      "status": "FAILED",
+      "created_by": "agent-1-leader",
+      "created_at": "2026-09-16 21:25:44",
+      "started_at": "2026-09-16 21:25:45",
+      "completed_at": "2026-09-16 21:25:46",
+      "payload": {},
+      "result": null,
+      "error": "Could not parse SQLAlchemy URL from given URL string"
+    },
+    {
+      "id": "task-92aab501",
+      "assignee": "agent-2-data-ops",
+      "task_type": "database_vector_audit",
+      "title": "Audit Vector DB Health & Storage Metrics",
+      "status": "COMPLETED",
+      "created_by": "agent-1-leader",
+      "created_at": "2026-09-16 21:26:16",
+      "started_at": "2026-09-16 21:26:16",
+      "completed_at": "2026-09-16 21:26:19",
+      "payload": {},
+      "result": {
+        "status": "success",
+        "health_score": "100% HEALTHY",
+        "database_stats": {
+          "workspaces_count": 1,
+          "documents_count": 172,
+          "chunks_count": 4894,
+          "proposal_sessions_count": 12,
+          "null_embeddings_count": 0,
+          "avg_chunk_length_chars": 782.8
+        },
+        "recent_documents": [
+          {
+            "id": "10hSjwrdMhccrk-XEEyNoLZmbxO-0fC69",
+            "title": "Sangfor_HCI_6.9.1_Associate_2024_01_Introduction of Sangfor HCI_ID.pptx",
+            "doc_type": "template",
+            "updated_at": "2026-09-15 08:04:58.552724"
+          },
+          {
+            "id": "1IefIJJiwt95U_-XvpHb-D5jgWPMvGzT8",
+            "title": "Customer Presentation - HPE ProLiant Compute Gen12.PPTX",
+            "doc_type": "template",
+            "updated_at": "2026-09-15 08:04:47.433178"
+          },
+          {
+            "id": "19hH5_PNAVmHp6ceO0jJieDeFUKzSeYeH",
+            "title": "Family Guide - HPE Storage Portfolio.pptx",
+            "doc_type": "template",
+            "updated_at": "2026-09-15 08:04:12.595590"
+          },
+          {
+            "id": "1nJDqdAoNINQsJ9Wh49z4BHP-bm4hn6Qe",
+            "title": "DELL OVERVIEW PORTOFOLIO - Sigit.pptx",
+            "doc_type": "template",
+            "updated_at": "2026-09-15 08:03:56.382600"
+          },
+          {
+            "id": "1treENO3LJds49GnjmyAVSqA8dNP_1QSw",
+            "title": "Dell Server Storage.pptx",
+            "doc_type": "template",
+            "updated_at": "2026-09-15 08:02:39.363121"
+          }
+        ],
+        "agent_verdict": "Database vector storage and indexing are fully synchronized and operative."
+      },
+      "error": null
+    },
+    {
+      "id": "task-ab1f2e84",
+      "assignee": "agent-2-data-ops",
+      "task_type": "run_benchmark_eval",
+      "title": "Autonomous Presales Grounding Benchmark Suite",
+      "status": "COMPLETED",
+      "created_by": "agent-1-leader",
+      "created_at": "2026-09-16 21:26:29",
+      "started_at": "2026-09-16 21:26:29",
+      "completed_at": "2026-09-16 21:26:29",
+      "payload": {},
+      "result": {
+        "status": "failed",
+        "return_code": 1,
+        "metrics": {
+          "passed_cases": 0,
+          "failed_cases": 0,
+          "total_evaluated": 0
+        },
+        "raw_summary": "",
+        "agent_verdict": "Some benchmark test cases failed."
+      },
+      "error": null
+    },
+    {
+      "id": "task-3c886d4b",
+      "assignee": "agent-2-data-ops",
+      "task_type": "run_benchmark_eval",
+      "title": "Autonomous Presales Grounding Benchmark Suite",
+      "status": "COMPLETED",
+      "created_by": "agent-1-leader",
+      "created_at": "2026-09-16 21:28:05",
+      "started_at": "2026-09-16 21:28:06",
+      "completed_at": "2026-09-16 21:28:46",
+      "payload": {},
+      "result": {
+        "status": "success",
+        "return_code": 0,
+        "metrics": {
+          "passed_cases": 4,
+          "failed_cases": 0,
+          "total_evaluated": 4
+        },
+        "raw_summary": " terms: boq, bill of quantity, spesifikasi, unit\n--------------------------------------------------------------------------------\n\nBENCHMARK SUMMARY REPORT\nTotal Test Cases : 4\nPassed           : 4 (100.0%)\nAverage Latency  : 9333.0 ms / query (Reranker pass included)\n\nRETRIEVAL QUALITY BENCHMARK PASSED (Meets accuracy & latency criteria)\n\n\nWarning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n\nLoading weights:   0%|          | 0/199 [00:00<?, ?it/s]\nLoading weights:  10%|#         | 20/199 [00:00<00:00, 199.64it/s]\nLoading weights:  20%|##        | 40/199 [00:00<00:00, 199.78it/s]\nLoading weights:  38%|###7      | 75/199 [00:00<00:00, 249.28it/s]\nLoading weights:  67%|######7   | 134/199 [00:00<00:00, 355.39it/s]\nLoading weights: 100%|##########| 199/199 [00:00<00:00, 373.42it/s]\n\nLoading weights:   0%|          | 0/41 [00:00<?, ?it/s]\nLoading weights: 100%|##########| 41/41 [00:00<00:00, 5850.79it/s]\n",
+        "agent_verdict": "All Presales Grounding benchmarks passed with strong evidence retrieval."
+      },
+      "error": null
+    },
+    {
+      "id": "task-f1bbc7a7",
+      "assignee": "agent-2-data-ops",
+      "task_type": "run_test_suite",
+      "title": "Unit & Integration Test Suite Verification",
+      "status": "COMPLETED",
+      "created_by": "agent-1-leader",
+      "created_at": "2026-09-16 21:29:17",
+      "started_at": "2026-09-16 21:29:18",
+      "completed_at": "2026-09-16 21:29:19",
+      "payload": {},
+      "result": {
+        "status": "failed",
+        "return_code": 1,
+        "output": "Traceback (most recent call last):\n  File \"D:\\Downloads\\Mini Project\\Proposal Acceleator\\knowledge-accelerator\\backend\\tests\\test_proposal_intelligence.py\", line 13, in <module>\n    from app.services.proposal_intelligence import scan_critical_clauses, audit_requirement_coverage\nModuleNotFoundError: No module named 'app'",
+        "agent_verdict": "Unit test suite encountered errors."
+      },
+      "error": null
+    },
+    {
+      "id": "task-db47bd3e",
+      "assignee": "agent-2-data-ops",
+      "task_type": "run_test_suite",
+      "title": "Re-verify Unit & Integration Test Suite",
+      "status": "COMPLETED",
+      "created_by": "agent-1-leader",
+      "created_at": "2026-09-16 21:31:15",
+      "started_at": "2026-09-16 21:31:17",
+      "completed_at": "2026-09-16 21:31:19",
+      "payload": {},
+      "result": {
+        "status": "success",
+        "return_code": 0,
+        "output": ">> test_audit_requirement_coverage PASS: Coverage = 67 %\n>> test_http_endpoints PASS: Both /draft endpoints returned 200 OK\n>> test_scan_critical_clauses PASS: Total critical found = 6\n\n...\n----------------------------------------------------------------------\nRan 3 tests in 0.052s\n\nOK",
+        "agent_verdict": "All unit tests and integration tests passed cleanly."
+      },
+      "error": null
+    }
+  ],
+  "updated_at": 1789569079.7089047
+}

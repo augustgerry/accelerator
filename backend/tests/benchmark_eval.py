@@ -7,8 +7,12 @@ cross-encoder relevance scoring, and retrieval latency.
 
 import sys
 import time
+from pathlib import Path
 from dataclasses import dataclass
 from typing import List
+
+# Ensure backend root is in sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings
 from app.db import SessionLocal
