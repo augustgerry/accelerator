@@ -831,7 +831,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
     from docx import Document as DocxDocument
     from docx.shared import Inches, Pt, RGBColor
     from docx.enum.table import WD_TABLE_ALIGNMENT
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
     from docx.oxml import parse_xml
     from docx.oxml.ns import nsdecls
 
@@ -1030,6 +1030,81 @@ def export_proposal_docx(payload: ExportDocxRequest):
         )
         r3.font.size = Pt(10)
         r3.italic = True
+
+        doc.add_page_break()
+
+        # ── Daftar Isi (Table of Contents - CSUL Ground Truth) ──────────────
+        h_toc = doc.add_heading(level=1)
+        r_toc = h_toc.add_run("Daftar Isi")
+        r_toc.font.color.rgb = RGBColor(0x4A, 0x86, 0xE8)
+
+        for item_idx, item in enumerate(payload.items, start=1):
+            title_clean = (item.title or f"Bagian {item_idx}").strip()
+            num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
+            is_sub = False
+            if num_match:
+                parts = [p for p in num_match.group(1).split('.') if p]
+                is_sub = len(parts) > 1
+
+            p_toc = doc.add_paragraph()
+            p_toc.paragraph_format.space_after = Pt(3)
+            p_toc.paragraph_format.tab_stops.add_tab_stop(Inches(6.5), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
+            if is_sub:
+                p_toc.paragraph_format.left_indent = Inches(0.25)
+                r_item = p_toc.add_run(title_clean)
+                r_item.font.size = Pt(9.5)
+                r_item.font.color.rgb = RGBColor(0x37, 0x41, 0x51)
+            else:
+                r_item = p_toc.add_run(title_clean if num_match else f"{item_idx}. {title_clean}")
+                r_item.bold = True
+                r_item.font.size = Pt(10)
+                r_item.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
+            p_toc.add_run("\t")
+
+        # ── Daftar Gambar (Table of Figures) ────────────────────────────────
+        images_attached = [
+            it for it in payload.items if getattr(it, "image_data_url", None)
+        ]
+        if images_attached:
+            p_gap = doc.add_paragraph()
+            p_gap.paragraph_format.space_before = Pt(8)
+            h_fig = doc.add_heading(level=1)
+            r_fig = h_fig.add_run("Daftar Gambar")
+            r_fig.font.color.rgb = RGBColor(0x4A, 0x86, 0xE8)
+
+            for img_idx, img_item in enumerate(images_attached, start=1):
+                cap = getattr(img_item, "image_caption", None) or f"Gambar {img_idx}: Visualisasi {img_item.title}"
+                p_fig = doc.add_paragraph()
+                p_fig.paragraph_format.space_after = Pt(3)
+                p_fig.paragraph_format.tab_stops.add_tab_stop(Inches(6.5), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
+                r_fig_cap = p_fig.add_run(cap)
+                r_fig_cap.font.size = Pt(9.5)
+                r_fig_cap.italic = True
+                r_fig_cap.font.color.rgb = RGBColor(0x37, 0x41, 0x51)
+                p_fig.add_run("\t")
+
+        # ── Daftar Tabel (Table of Tables) ──────────────────────────────────
+        p_gap2 = doc.add_paragraph()
+        p_gap2.paragraph_format.space_before = Pt(8)
+        h_tbl = doc.add_heading(level=1)
+        r_tbl = h_tbl.add_run("Daftar Tabel")
+        r_tbl.font.color.rgb = RGBColor(0x4A, 0x86, 0xE8)
+
+        table_entries = [
+            "Tabel 1: Document Release",
+        ]
+        for it in payload.items:
+            if "|" in (it.draft_text or ""):
+                table_entries.append(f"Tabel: Spesifikasi & Pemenuhan {it.title}")
+
+        for tbl_entry in table_entries:
+            p_tbl = doc.add_paragraph()
+            p_tbl.paragraph_format.space_after = Pt(3)
+            p_tbl.paragraph_format.tab_stops.add_tab_stop(Inches(6.5), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
+            r_tent = p_tbl.add_run(tbl_entry)
+            r_tent.font.size = Pt(9.5)
+            r_tent.font.color.rgb = RGBColor(0x37, 0x41, 0x51)
+            p_tbl.add_run("\t")
 
         doc.add_page_break()
 

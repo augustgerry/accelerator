@@ -533,9 +533,17 @@ npm run dev
   - **Slide Cover & Penutup Dark Executive**: Background Slate 900 (`#0F172A`) dengan garis aksen atas `#4A86E8`, tipografi kontras tinggi (judul putih 36pt/44pt, badge amber `#F59E0B`, subtitle biru muda `#60A5FA`).
   - **Slide Konten**: Dilengkapi top corporate stripe (`#2F5FE0`), running footer di bawah (`PT Smartnet Magna Global · Dokumen Proposal Teknis & Arsitektur Solusi`), serta nomor slide `Slide X / Y`.
 
+### 11. Halaman Daftar Isi, Daftar Gambar & Daftar Tabel Otomatis (CSUL Style)
+- Di `backend/app/routers/draft.py` (`export_proposal_docx`):
+  - **Daftar Isi**: Dihasilkan otomatis tepat setelah halaman *Pengakuan Kerahasiaan* dengan dot leader tab stops (`WD_TAB_LEADER.DOTS`) rata kanan pada 6.5 inci, membedakan bab utama (bold 10pt `#111827`) dan sub-bab (indent 0.25 inci, 9.5pt `#374151`).
+  - **Daftar Gambar**: Menginventarisasi otomatis seluruh foto hardware publik & diagram topologi HLD yang tersemat pada proposal lengkap dengan nomor urut dan caption formal.
+  - **Daftar Tabel**: Menginventarisasi otomatis Tabel 1 Document Release dan tabel-tabel compliance matrix teknis pada dokumen.
+  - Diikuti page break formal menuju Bab 1.
+
 ---
 
 *Branch aktif: `feat/proposal-visual-engine`*
 *Branch Claude (`feat/search-citation-drawer`) tetap terisolasi dan tidak tersentuh (Claude menggunakan git worktree terpisah).*
+
 
 
