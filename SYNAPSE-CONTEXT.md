@@ -18,6 +18,21 @@
 
 ---
 
+## ✅ CLAUDE CODE (FRONTEND) — SELESAI: Sufficiency badge + one-click regenerate + loading polish di `/draft`
+
+Task dari user, scope frontend-only (`frontend/app/draft/page.tsx`, commit `7fcc8d1`), gak nyentuh file backend Antigravity yang lagi diedit bareng (`draft.py`, `retrieval.py`, `embeddings.py`, `drive_sync.py`, `main.py` — noted lagi ada kerjaan reranking pass, sesuai `synapse-gap-analysis.md` #1).
+
+1. **Grounding sufficiency badge per sub-bab** — dihitung dari `item.sources.length` (hasil citation generate terakhir), TANPA endpoint backend baru: 0 sumber → "Perlu Tambahan Referensi" (merah), 1-2 → "Grounding Sedang" (amber), 3+ → "Grounding Kuat" (hijau). Cuma muncul kalau `draft_text` udah ada (belum di-generate = gak ada badge). Tampil di 2 tempat: list row (bawah judul, ganti posisi spinner pas gak lagi generating) dan header editor panel item terpilih (sebelah badge kategori).
+2. **Tombol "Regenerate Bagian Ini" one-click** — icon `RefreshCw` di list row (sebelah panah reorder ↑↓), langsung manggil `handleGenerateItemDraft(item.id)` tanpa perlu buka section itu dulu. Reuse fungsi yang udah ada, gak ada logic baru.
+3. **Loading/transisi diperhalus:**
+   - Skeleton placeholder card (bukan spinner polos doang) pas AI lagi rekomendasiin struktur sub-bab dari TOR.
+   - Stagger fade-in pas kartu-kartu hasil kurasi struktur muncul, dan pas badge grounding muncul/berubah.
+   - Pulse accent-color singkat (700ms) di textarea draft pas generate/regenerate baru selesai — feedback visual "ini baru di-update".
+   - Semua pakai utility `animate-in`/`fade-in`/`slide-in-from-bottom-1`/`fill-mode-both` yang udah di-hand-roll di `globals.css` sesi sebelumnya (bukan dependency baru).
+- Verifikasi: `npx tsc --noEmit` clean, `npm run build` (7/7 route) clean. Belum sempat diklik manual di browser — servernya sempat dimatiin user sebelum switch ke Antigravity, jadi verifikasi visual pending pas server nyala lagi.
+
+---
+
 ## 🔒 SESI CLAUDE CODE — SECURITY REVIEW + TOOLING SETUP (branch `feat/proposal-visual-engine`)
 
 Atas permintaan user, dijalanin `/security-review` (skill resmi, bukan review manual) atas seluruh diff `feat/proposal-visual-engine`. Ketemu 1 vulnerability nyata (verified via sub-task filtering terpisah, confidence 9/10), 1 kandidat lain di-drop (confidence 3/10 — data ke kroki.io/mermaid.ink itu HTTPS ke layanan legit, bukan vulnerability, cuma catatan data-governance kalau mau diformalkan nanti).
