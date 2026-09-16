@@ -33,6 +33,8 @@ import {
   RefreshCw,
   SlidersHorizontal,
   Layers,
+  Image as ImageIcon,
+  Maximize2,
 } from "lucide-react";
 import {
   uploadTor,
@@ -133,6 +135,20 @@ export default function DraftPage() {
   const [sectionFormCategory, setSectionFormCategory] = useState("Teknis");
   const [sectionFormDescription, setSectionFormDescription] = useState("");
   const [sectionFormRationale, setSectionFormRationale] = useState("");
+
+  // Visual Asset Studio state & lightbox preview
+  const [isVisualStudioOpen, setIsVisualStudioOpen] = useState(false);
+  const [visualStudioTab, setVisualStudioTab] = useState<"search" | "hld" | "upload">("search");
+  const [previewImageModal, setPreviewImageModal] = useState<{ url: string; caption: string } | null>(null);
+  const visualStudioRef = useRef<HTMLDivElement>(null);
+
+  const handleOpenStudio = (tab: "search" | "hld" | "upload") => {
+    setVisualStudioTab(tab);
+    setIsVisualStudioOpen(true);
+    setTimeout(() => {
+      visualStudioRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  };
 
   // ── Restore from localStorage on mount ──────────────────────────────────
   useEffect(() => {
@@ -1689,16 +1705,213 @@ export default function DraftPage() {
                     )}
                   </div>
 
-                  {/* Visual Asset Studio (Public Hardware Search, AI HLD Diagram, and Image Attachment) */}
-                  <VisualAssetStudio
-                    item={selectedItem}
-                    torText={torText}
-                    onUpdateItem={(updated) => {
-                      setItems((prev) =>
-                        prev.map((it) => (it.id === updated.id ? updated : it))
-                      );
-                    }}
-                  />
+                  {/* Poin 1: Inline Visual Preview & Action Card */}
+                  {selectedItem.image_data_url ? (
+                    <div className="rounded-xl border border-blue-200/80 bg-gradient-to-r from-blue-50/40 via-white to-indigo-50/30 p-4 shadow-subtle">
+                      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                        {/* Thumbnail with click-to-zoom */}
+                        <div
+                          onClick={() =>
+                            setPreviewImageModal({
+                              url: selectedItem.image_data_url!,
+                              caption:
+                                selectedItem.image_caption ||
+                                `Aset Visual: ${selectedItem.title}`,
+                            })
+                          }
+                          className="relative group w-36 h-24 bg-slate-900 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer border border-slate-200 shadow-sm"
+                          title="Klik untuk pratinjau ukuran penuh"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={selectedItem.image_data_url}
+                            alt={selectedItem.image_caption || "Visual Asset"}
+                            className="w-full h-full object-contain p-1 transition-transform duration-200 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-medium gap-1">
+                            <Maximize2 size={13} />
+                            <span>Perbesar</span>
+                          </div>
+                          <span className="absolute bottom-1 right-1 bg-black/75 text-[9px] font-mono text-white px-1.5 py-0.5 rounded">
+                            Word & PPTX
+                          </span>
+                        </div>
+
+                        {/* Detail, Caption Input, & Quick Action Bar */}
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-800">
+                                Aset Visual Terlampir
+                              </span>
+                              <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[9.5px] font-semibold border border-emerald-200">
+                                ✓ Siap Ekspor ke Word & PPTX
+                              </span>
+                            </div>
+
+                            {/* Quick Action Buttons */}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenStudio("search")}
+                                className="rounded-md px-2.5 py-1 text-[11px] font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1 shadow-2xs"
+                                title="Ganti foto dengan pencarian perangkat publik"
+                              >
+                                <RefreshCw size={11} />
+                                <span>Ganti Foto</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenStudio("hld")}
+                                className="rounded-md px-2.5 py-1 text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors flex items-center gap-1 shadow-2xs"
+                                title="Buat atau edit topologi arsitektur di HLD Studio"
+                              >
+                                <Layers size={11} />
+                                <span>Edit HLD</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewImageModal({
+                                    url: selectedItem.image_data_url!,
+                                    caption:
+                                      selectedItem.image_caption ||
+                                      `Aset Visual: ${selectedItem.title}`,
+                                  })
+                                }
+                                className="rounded-md px-2 py-1 text-[11px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1 shadow-2xs"
+                                title="Lihat ukuran penuh"
+                              >
+                                <Maximize2 size={11} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = {
+                                    ...selectedItem,
+                                    image_data_url: undefined,
+                                    image_caption: undefined,
+                                  };
+                                  setItems((prev) =>
+                                    prev.map((it) =>
+                                      it.id === updated.id ? updated : it
+                                    )
+                                  );
+                                }}
+                                className="rounded-md p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
+                                title="Hapus aset visual dari bab ini"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Editable caption */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">
+                              Keterangan Gambar (Caption di Word & PowerPoint):
+                            </label>
+                            <input
+                              type="text"
+                              value={selectedItem.image_caption || ""}
+                              onChange={(e) => {
+                                const newCap = e.target.value;
+                                const updated = {
+                                  ...selectedItem,
+                                  image_caption: newCap,
+                                };
+                                setItems((prev) =>
+                                  prev.map((it) =>
+                                    it.id === updated.id ? updated : it
+                                  )
+                                );
+                              }}
+                              placeholder="Mis: Gambar 2.1: Server HPE ProLiant DL360 Gen10 High Density Rackmount"
+                              className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none shadow-2xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Banner when no image is attached */
+                    <div className="rounded-xl border border-dashed border-slate-300 bg-gradient-to-r from-slate-50 to-indigo-50/20 p-4 transition-colors hover:border-slate-400">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-700 shadow-2xs">
+                            <ImageIcon size={16} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                              Lampirkan Visual Perangkat / Topologi HLD
+                              <span className="text-[10px] text-slate-500 font-normal">
+                                (Opsional)
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 line-clamp-1">
+                              Perkuat proposal teknis dengan foto perangkat enterprise atau diagram arsitektur AI otomatis.
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenStudio("search")}
+                            className="rounded-lg bg-white border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-2xs flex items-center gap-1.5"
+                          >
+                            <Search size={12} className="text-slate-500" />
+                            <span>Cari Foto Publik</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenStudio("hld")}
+                            className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-2xs flex items-center gap-1.5"
+                          >
+                            <Sparkles size={12} className="text-indigo-600" />
+                            <span>Buat Topologi HLD</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenStudio("upload")}
+                            className="rounded-lg bg-white border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors shadow-2xs"
+                            title="Upload gambar dari komputer"
+                          >
+                            <UploadCloud size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Visual Asset Studio (Expandable Drawer / Studio) */}
+                  <div ref={visualStudioRef}>
+                    {isVisualStudioOpen ? (
+                      <VisualAssetStudio
+                        item={selectedItem}
+                        torText={torText}
+                        initialTab={visualStudioTab}
+                        onClose={() => setIsVisualStudioOpen(false)}
+                        onUpdateItem={(updated) => {
+                          setItems((prev) =>
+                            prev.map((it) =>
+                              it.id === updated.id ? updated : it
+                            )
+                          );
+                        }}
+                      />
+                    ) : (
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenStudio("search")}
+                          className="text-xs text-text-secondary hover:text-text-primary hover:underline flex items-center gap-1 font-medium"
+                        >
+                          <span>Buka Panel Studio Visual Lengkap</span>
+                          <ChevronRight size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Internal Knowledge Base Grounding Citations */}
                   <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
@@ -2019,6 +2232,56 @@ export default function DraftPage() {
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}
       />
+
+      {/* Full-resolution Image Lightbox Modal */}
+      {previewImageModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setPreviewImageModal(null)}
+        >
+          <div
+            className="relative max-w-4xl w-full max-h-[90vh] bg-slate-900 rounded-xl overflow-hidden shadow-2xl flex flex-col border border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 bg-slate-950/80 border-b border-slate-800 text-white">
+              <div className="flex items-center gap-2 truncate pr-4">
+                <span className="text-xs font-semibold truncate">
+                  {previewImageModal.caption || "Pratinjau Visual Perangkat / Topologi"}
+                </span>
+                <span className="text-[10px] bg-blue-900/60 text-blue-300 px-1.5 py-0.5 rounded border border-blue-700 font-mono">
+                  Word & PPTX Preview
+                </span>
+              </div>
+              <button
+                onClick={() => setPreviewImageModal(null)}
+                className="text-slate-400 hover:text-white rounded-md p-1 hover:bg-slate-800 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-slate-950">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewImageModal.url}
+                alt={previewImageModal.caption}
+                className="max-h-[75vh] w-auto max-w-full object-contain rounded shadow-lg"
+              />
+            </div>
+            <div className="px-4 py-2.5 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <span className="text-[11px] truncate max-w-lg">
+                {previewImageModal.caption}
+              </span>
+              <a
+                href={previewImageModal.url}
+                download="visual-asset.png"
+                className="text-[11px] text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 font-medium"
+              >
+                Download Gambar Asli
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -506,8 +506,25 @@ npm run dev
 
 ### 6. Harmonisasi Alur Export Modal
 - Step 1 ("Format & Generate") menampilkan banner konfirmasi standar Proposal Teknis CSUL PT Smartnet Magna Global, dengan tombol quick-action ke Step 2 ("Ikuti Gaya File Lain") untuk mengkloning langsung file acuan yang diunggah.
+- Memperbaiki pemanggilan fungsi `handlePickLibraryTemplate` saat user memilih kloning langsung acuan template.
+
+### 7. Halaman Pengakuan Kerahasiaan (NDA) & Running Header/Footer CSUL (Poin 2)
+- Di `backend/app/routers/draft.py` (`export_proposal_docx`):
+  - **Running Header** di halaman 2+: `PT. Smartnet Magna Global · Proposal Teknis` (rata kanan, warna `#9CA3AF`, ukuran 8.5pt).
+  - **Running Footer** di halaman 2+: `CONFIDENTIAL · Dokumen Rahasia PT Smartnet Magna Global  |  Halaman ` dengan nomor halaman dinamis via OpenXML native field (`w:fldChar` / `w:instrText PAGE`).
+  - Halaman cover (halaman 1) tetap bersih tanpa header & footer (`different_first_page_header_footer = True`).
+  - **Halaman Pengakuan Kerahasiaan** disisipkan otomatis tepat setelah Table 1 Document Release dengan Heading 1 `Pengakuan Kerahasiaan` dan klausul formal non-disclosure bertanda tangan PT Smartnet Magna Global, diikuti page break rapi menuju Bab 1.
+
+### 8. Inline Visual Preview & Action Card di Draft Workspace (Poin 1)
+- Di `frontend/app/draft/page.tsx` & `frontend/components/draft/visual-asset-studio.tsx`:
+  - Di bawah editor respons draf, terpasang **Inline Visual Preview & Action Card**:
+    - Saat bab memiliki gambar/HLD: menampilkan thumbnail perangkat dengan efek zoom hover, badge *Siap Ekspor ke Word & PPTX*, field input keterangan gambar (caption) langsung dengan auto-sync, serta action bar ringkas (`[🔄 Ganti Foto]`, `[📐 Edit HLD]`, `[👁️ Perbesar]`, `[🗑️ Hapus]`).
+    - Saat bab belum memiliki gambar: menampilkan banner ajakan visual elegan (`[🔍 Cari Foto Publik]`, `[✨ Buat Topologi HLD]`, `[📁 Upload]`) yang langsung membuka Visual Asset Studio sesuai tab yang dipilih.
+    - **Modal Lightbox Resolusi Penuh**: Klik pada thumbnail membuka modal pratinjau full-screen dengan resolusi asli dan tombol unduh aset.
+  - Penambahan prop `initialTab` pada `VisualAssetStudio` untuk integrasi mulus dengan tombol aksi inline.
 
 ---
 
 *Branch aktif: `feat/proposal-visual-engine`*
-*Branch Claude (`feat/search-citation-drawer`) tetap terisolasi dan tidak tersentuh.*
+*Branch Claude (`feat/search-citation-drawer`) tetap terisolasi dan tidak tersentuh (Claude menggunakan git worktree terpisah).*
+

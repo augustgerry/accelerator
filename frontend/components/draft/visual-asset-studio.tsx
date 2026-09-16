@@ -9,6 +9,7 @@ interface VisualAssetStudioProps {
   torText: string;
   onUpdateItem: (updated: RequirementItem) => void;
   onClose?: () => void;
+  initialTab?: "search" | "hld" | "upload";
 }
 
 export function VisualAssetStudio({
@@ -16,8 +17,15 @@ export function VisualAssetStudio({
   torText,
   onUpdateItem,
   onClose,
+  initialTab = "search",
 }: VisualAssetStudioProps) {
-  const [activeTab, setActiveTab] = useState<"search" | "hld" | "upload">("search");
+  const [activeTab, setActiveTab] = useState<"search" | "hld" | "upload">(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState("");

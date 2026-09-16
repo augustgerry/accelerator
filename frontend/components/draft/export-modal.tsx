@@ -720,7 +720,7 @@ export function ExportModal({
                   <button
                     type="button"
                     onClick={() => {
-                      setTemplateDocxDoc(referenceDocxList[0]);
+                      handlePickLibraryTemplate(referenceDocxList[0]);
                       setExportStep(2);
                     }}
                     className="flex items-center gap-1 rounded border border-accent/30 bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-accent-ink hover:bg-accent-soft transition-colors shadow-xs shrink-0"

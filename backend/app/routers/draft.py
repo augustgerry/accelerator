@@ -805,6 +805,32 @@ def export_proposal_docx(payload: ExportDocxRequest):
     font = style.font
     font.name = payload.font_name
     font.size = Pt(10)
+
+    # Configure running header & footer for narrative mode (CSUL Layout)
+    if payload.template_type == "narrative" and doc.sections:
+        main_sec = doc.sections[0]
+        main_sec.different_first_page_header_footer = True
+
+        p_head = main_sec.header.paragraphs[0]
+        p_head.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        r_head = p_head.add_run(f"{payload.company_name or 'PT. Smartnet Magna Global'} · Proposal Teknis")
+        r_head.font.size = Pt(8.5)
+        r_head.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
+
+        p_foot = main_sec.footer.paragraphs[0]
+        r_fl = p_foot.add_run("CONFIDENTIAL · Dokumen Rahasia PT Smartnet Magna Global  |  Halaman ")
+        r_fl.font.size = Pt(8.5)
+        r_fl.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
+
+        fldChar1 = parse_xml(r'<w:fldChar %s w:fldCharType="begin"/>' % nsdecls('w'))
+        instrText = parse_xml(r'<w:instrText %s xml:space="preserve"> PAGE </w:instrText>' % nsdecls('w'))
+        fldChar2 = parse_xml(r'<w:fldChar %s w:fldCharType="separate"/>' % nsdecls('w'))
+        fldChar3 = parse_xml(r'<w:fldChar %s w:fldCharType="end"/>' % nsdecls('w'))
+        p_foot._p.append(fldChar1)
+        p_foot._p.append(instrText)
+        p_foot._p.append(fldChar2)
+        p_foot._p.append(fldChar3)
+
     # Header logos and Cover structure
     company_logo_bytes = _decode_logo_bytes(payload.logo_data_url)
     customer_logo_bytes = _decode_logo_bytes(payload.customer_logo_data_url)
@@ -924,6 +950,42 @@ def export_proposal_docx(payload: ExportDocxRequest):
             cell_rel = t1.cell(1, idx_rel)
             p_rel = cell_rel.paragraphs[0]
             p_rel.add_run(text_rel).font.size = Pt(9)
+
+        doc.add_page_break()
+
+        # Pengakuan Kerahasiaan (Non-Disclosure Statement) - CSUL Ground Truth
+        h_nda = doc.add_heading(level=1)
+        r_nda = h_nda.add_run("Pengakuan Kerahasiaan")
+        r_nda.font.color.rgb = RGBColor(0x4A, 0x86, 0xE8)
+
+        p_nda1 = doc.add_paragraph()
+        p_nda1.paragraph_format.space_before = Pt(8)
+        p_nda1.paragraph_format.space_after = Pt(8)
+        r1 = p_nda1.add_run(
+            f"Dokumen Proposal Teknis ini serta seluruh data, informasi teknis, konfigurasi arsitektur, metodologi, "
+            f"dan rancangan solusi yang tercantum di dalamnya merupakan informasi rahasia dan hak kekayaan intelektual "
+            f"milik {payload.company_name or 'PT Smartnet Magna Global'}."
+        )
+        r1.font.size = Pt(10)
+
+        p_nda2 = doc.add_paragraph()
+        p_nda2.paragraph_format.space_after = Pt(8)
+        r2 = p_nda2.add_run(
+            f"Dokumen ini diserahkan secara khusus dan terbatas kepada {payload.document_title or 'Klien'} "
+            f"hanya untuk keperluan evaluasi teknis pengadaan. Pihak penerima dilarang keras menggandakan, "
+            f"menyebarluaskan, memperlihatkan kepada pihak ketiga, atau memanfaatkan sebagian maupun seluruh isi "
+            f"dokumen ini di luar tujuan evaluasi resmi tanpa izin tertulis terlebih dahulu dari {payload.company_name or 'PT Smartnet Magna Global'}."
+        )
+        r2.font.size = Pt(10)
+
+        p_nda3 = doc.add_paragraph()
+        p_nda3.paragraph_format.space_after = Pt(16)
+        r3 = p_nda3.add_run(
+            f"Seluruh komitmen teknis, tata kelola SLA, dan metodologi implementasi yang diajukan tunduk pada "
+            f"ketentuan kontrak final yang akan disepakati bersama antara para pihak."
+        )
+        r3.font.size = Pt(10)
+        r3.italic = True
 
         doc.add_page_break()
 
