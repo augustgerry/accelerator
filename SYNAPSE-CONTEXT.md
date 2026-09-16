@@ -3,6 +3,19 @@
 
 ---
 
+## 🔒 SESI CLAUDE CODE — SECURITY REVIEW + TOOLING SETUP (branch `feat/proposal-visual-engine`)
+
+Atas permintaan user, dijalanin `/security-review` (skill resmi, bukan review manual) atas seluruh diff `feat/proposal-visual-engine`. Ketemu 1 vulnerability nyata (verified via sub-task filtering terpisah, confidence 9/10), 1 kandidat lain di-drop (confidence 3/10 — data ke kroki.io/mermaid.ink itu HTTPS ke layanan legit, bukan vulnerability, cuma catatan data-governance kalau mau diformalkan nanti).
+
+**FIXED — SSRF di `POST /draft/download-image`:** `backend/app/services/image_search.py` `download_and_optimize_image()` dulu fetch `image_url` (full attacker-controlled string, endpoint gak ada auth) tanpa validasi host/IP sama sekali, plus `follow_redirects=True` — bisa dipakai buat probe/exfiltrate isi endpoint internal (`169.254.169.254` cloud metadata, `127.0.0.1`, RFC1918) lewat backend sebagai proxy. Fix: helper baru `_is_public_http_url()` (tolak scheme selain http/https, resolve hostname lalu tolak kalau ada IP yang loopback/link-local/private/reserved/multicast) dipanggil SEBELUM fetch, plus `_fetch_public_image_bytes()` yang manual-handle redirect (`follow_redirects=False` + loop maks 5 hop, re-validate URL tiap hop) biar URL publik gak bisa 302 ke target privat. **Verified end-to-end lewat HTTP asli:** target metadata/loopback → 400, gambar publik asli (`google.com`) → 200 dengan data_url valid. Regression-check: re-run semua smoke test export docx (7 tipe)/pdf (4 tipe)/pptx/preview-conversion — semua masih 200/OK, gak ada yang somehow ke-block juga.
+
+**Tooling/workflow baru buat kerja bareng Claude Code lebih efisien** (semua skill resmi, langsung diterapin, bukan third-party plugin):
+- `CLAUDE.md` (baru, root repo) — dokumentasi arsitektur + 2 gotcha spesifik `draft.py` yang udah kejadian jadi bug nyata sesi-sesi sebelumnya (no module-level docx import; fldChar/instrText harus di dalam `<w:r>`), plus catatan soal shared-checkout collision sama Antigravity kalau ada 2 agent kerja bareng.
+- `.claude/settings.json` (baru) — hasil scan `fewer-permission-prompts` atas 50 transkrip terakhir: cuma 3 entry MCP read-only (`read_network_requests`/`read_page`/`find` dari claude-in-chrome) yang qualify buat allowlist — sisanya command yang sering dipake (cd/ls/cat/grep/git status/dll) udah auto-allowed Claude Code sendiri, dan `python`/`uvicorn`/`powershell`/`curl` sengaja TIDAK di-allowlist (interpreter/shell = setara arbitrary code execution kalau di-wildcard; curl ambigu/bisa hit apa aja).
+- Verifikasi app juga udah dicoba pake skill `run` (drive beneran via HTTP: semua 6 route frontend 200, endpoint `/draft/recommend-structure` dan `/query` di-hit live pake Gemini asli buat konfirmasi fix struktur adaptif & search jalan).
+
+---
+
 ## 🐛 SESI CLAUDE CODE — 4 BUG LAPORAN USER LANGSUNG (branch `feat/proposal-visual-engine`)
 
 User laporin 4 hal langsung setelah nyoba UI, semua dicek & dibenerin:

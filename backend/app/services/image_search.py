@@ -7,9 +7,11 @@ with image optimization via Pillow.
 import base64
 import html
 import io
+import ipaddress
 import json
 import logging
 import re
+import socket
 import urllib.parse
 from typing import Optional
 import httpx
@@ -21,6 +23,44 @@ logger = logging.getLogger(__name__)
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 WIKI_UA = "SynapseProposalAccelerator/1.0 (https://github.com/augustgerry/accelerator; contact@synapse.smg) httpx/0.28.1"
+
+MAX_IMAGE_FETCH_REDIRECTS = 5
+
+
+def _is_public_http_url(url: str) -> bool:
+    """Reject anything that isn't a plain http(s) URL resolving only to public IPs —
+    blocks SSRF via loopback/link-local (incl. 169.254.169.254 cloud metadata)/RFC1918
+    targets passed in as the image URL to fetch."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return False
+        for family, _, _, _, sockaddr in socket.getaddrinfo(parsed.hostname, None):
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                return False
+        return True
+    except Exception:
+        return False
+
+
+def _fetch_public_image_bytes(client: httpx.Client, url: str) -> Optional[bytes]:
+    """GET a URL that has already passed _is_public_http_url, re-validating the
+    destination on every redirect hop so a public URL can't 302 into a private one."""
+    for _ in range(MAX_IMAGE_FETCH_REDIRECTS):
+        if not _is_public_http_url(url):
+            return None
+        resp = client.get(url, follow_redirects=False)
+        if resp.is_redirect:
+            location = resp.headers.get("location")
+            if not location:
+                return None
+            url = urllib.parse.urljoin(url, location)
+            continue
+        if resp.status_code != 200:
+            return None
+        return resp.content
+    return None
 
 
 def _fetch_wikimedia_images(query: str, limit: int = 6) -> list[dict]:
@@ -139,18 +179,20 @@ def search_public_images(query: str, limit: int = 8) -> list[dict]:
 def download_and_optimize_image(image_url: str, max_dimension: int = 1200) -> Optional[dict]:
     """Download an image from the web, validate with Pillow, resize if oversized, and convert to base64 data URL."""
     try:
+        if not _is_public_http_url(image_url):
+            logger.warning(f"Refusing to fetch non-public image URL: {image_url}")
+            return None
+
         with httpx.Client(
             timeout=12,
             headers={
                 "User-Agent": USER_AGENT,
                 "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
             },
-            follow_redirects=True,
         ) as client:
-            resp = client.get(image_url)
-            if resp.status_code != 200:
+            raw_bytes = _fetch_public_image_bytes(client, image_url)
+            if raw_bytes is None:
                 return None
-            raw_bytes = resp.content
 
         if len(raw_bytes) < 1000:
             return None
