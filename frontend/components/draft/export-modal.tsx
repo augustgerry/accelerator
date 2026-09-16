@@ -9,13 +9,6 @@ import {
   AlertCircle,
   FileText,
   Loader2,
-  UploadCloud,
-  Layout,
-  FileCode2,
-  Wand2,
-  ChevronRight,
-  Table2,
-  BookOpen,
   Presentation,
   Eye,
 } from "lucide-react";
@@ -26,16 +19,18 @@ import {
   exportProposalPdf,
   convertOfficeToPdf,
   exportPreflight,
-  uploadTemplate,
-  exportFromTemplate,
-  cloneTemplate,
-  cloneTemplatePptx,
-  listDocuments,
-  downloadTemplateDocument,
   type ExportPreflightResult,
 } from "@/lib/api";
-import type { RequirementItem, TemplateInfo, IndexedDocument } from "@/lib/types";
-import { DOC_TYPES, FORMAT_LABELS, getDocType, type DraftDocTypeId, type DraftFormat } from "@/lib/document-types";
+import type { RequirementItem, IndexedDocument } from "@/lib/types";
+import { FORMAT_LABELS, getDocType, type DraftDocTypeId, type DraftFormat } from "@/lib/document-types";
+
+// The export menu is deliberately just these three — presales only ever ships
+// one of these three combos; a free doc-type x format matrix confused users.
+const EXPORT_PRESETS: Array<{ docTypeId: DraftDocTypeId; format: DraftFormat; icon: string; label: string; sub: string }> = [
+  { docTypeId: "narrative", format: "docx", icon: "📄", label: "Proposal Teknis", sub: "Word (.docx)" },
+  { docTypeId: "sow", format: "docx", icon: "📋", label: "Scope of Work", sub: "Word (.docx)" },
+  { docTypeId: "pitch_deck", format: "pptx", icon: "📊", label: "Presentation / Pitch Deck", sub: "PowerPoint (.pptx)" },
+];
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -47,8 +42,8 @@ interface ExportModalProps {
   selectedReferenceDocs?: IndexedDocument[];
 }
 
-type ExportTab = "standard" | "template" | "text";
-type ExportStep = 1 | 2 | 3;
+type ExportTab = "standard" | "text";
+type ExportStep = 1 | 2;
 
 type CorporateBranding = {
   companyName: string;
@@ -84,11 +79,7 @@ export function ExportModal({
   items,
   initialDocTypeId = "narrative",
   initialFormat = "docx",
-  selectedReferenceDocs = [],
 }: ExportModalProps) {
-  const referenceDocxList = (selectedReferenceDocs ?? []).filter((d) => d.title.toLowerCase().endsWith(".docx"));
-  const referencePptxList = (selectedReferenceDocs ?? []).filter((d) => d.title.toLowerCase().endsWith(".pptx"));
-
   // ── Standard tab state
   const [onlyFinal, setOnlyFinal] = useState(false);
   const [docTypeId, setDocTypeId] = useState<DraftDocTypeId>("narrative");
@@ -132,56 +123,8 @@ export function ExportModal({
 
   const goToExportStep = (step: ExportStep) => {
     setExportStep(step);
-    setActiveTab(step === 1 ? "standard" : step === 2 ? "template" : "text");
+    setActiveTab(step === 1 ? "standard" : "text");
   };
-
-  // ── Template tab state
-  const templateInputRef = useRef<HTMLInputElement>(null);
-  const [templateInfo, setTemplateInfo] = useState<TemplateInfo | null>(null);
-  const [templateFile, setTemplateFile] = useState<File | null>(null);
-  const [uploadingTemplate, setUploadingTemplate] = useState(false);
-  const [templateError, setTemplateError] = useState<string | null>(null);
-  const [exportingFromTemplate, setExportingFromTemplate] = useState(false);
-  const [convertingTemplatePdf, setConvertingTemplatePdf] = useState(false);
-  const [templateOnlyFinal, setTemplateOnlyFinal] = useState(false);
-  const [templateMode, setTemplateMode] = useState<"structure" | "clone">("clone");
-  const [templateDocType, setTemplateDocType] = useState<DraftDocTypeId>("narrative");
-  // The template-clone/structure backend uses "proposal" where the plain docx/pdf
-  // export uses "narrative" for the same Proposal Teknis wording — two legacy key spaces.
-  const TEMPLATE_BACKEND_TYPE: Record<DraftDocTypeId, "proposal" | "sow" | "solution_brief" | "mom"> = {
-    narrative: "proposal",
-    sow: "sow",
-    solution_brief: "solution_brief",
-    mom: "mom",
-    klarifikasi_teknis: "mom",
-    pitch_deck: "proposal",
-  };
-
-  // ── PPTX clone-template state (separate from docx flow — no structure parsing needed)
-  const pptxTemplateInputRef = useRef<HTMLInputElement>(null);
-  const [pptxTemplateFile, setPptxTemplateFile] = useState<File | null>(null);
-  const [generatingPptxClone, setGeneratingPptxClone] = useState(false);
-  const [convertingPptxPdf, setConvertingPptxPdf] = useState(false);
-  const [pptxCloneError, setPptxCloneError] = useState<string | null>(null);
-  const [pickingPptxLibraryId, setPickingPptxLibraryId] = useState<string | null>(null);
-
-  // ── Google Drive examples/templates
-  const [templateLibrary, setTemplateLibrary] = useState<IndexedDocument[] | null>(null);
-  const [libraryLoading, setLibraryLoading] = useState(false);
-  const [libraryPickError, setLibraryPickError] = useState<string | null>(null);
-  const [pickingLibraryId, setPickingLibraryId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (activeTab !== "template" || templateLibrary !== null) return;
-    setLibraryLoading(true);
-    listDocuments()
-      .then((docs) => setTemplateLibrary(docs))
-      .catch(() => setTemplateLibrary([]))
-      .finally(() => setLibraryLoading(false));
-  }, [activeTab, templateLibrary]);
-
-  const docxTemplateLibrary = (templateLibrary ?? []).filter((d) => d.title.toLowerCase().endsWith(".docx"));
-  const pptxTemplateLibrary = (templateLibrary ?? []).filter((d) => d.title.toLowerCase().endsWith(".pptx"));
 
   const targetItems = items.filter((it) => {
     if (onlyFinal) return it.status === "final";
@@ -219,10 +162,6 @@ export function ExportModal({
     setAgreedToExport(false);
   }, [docTypeId, format, fontName, customerLogoDataUrl, onlyFinal]);
 
-  const templateTargetItems = items.filter((it) => {
-    if (templateOnlyFinal) return it.status === "final";
-    return it.status === "final" || it.status === "draft";
-  });
 
   if (!isOpen) return null;
 
@@ -351,214 +290,10 @@ export function ExportModal({
     document.body.removeChild(link);
   };
 
-  const applyTemplateFile = async (file: File) => {
-    setTemplateFile(file);
-    setUploadingTemplate(true);
-    setTemplateError(null);
-    try {
-      const info = await uploadTemplate(file);
-      setTemplateInfo(info);
-    } catch (err) {
-      setTemplateError(err instanceof Error ? err.message : "Gagal membaca template");
-    } finally {
-      setUploadingTemplate(false);
-    }
-  };
-
-  const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await applyTemplateFile(file);
-    e.target.value = "";
-  };
-
-  const handlePickLibraryTemplate = async (doc: IndexedDocument) => {
-    setPickingLibraryId(doc.id);
-    setLibraryPickError(null);
-    try {
-      const blob = await downloadTemplateDocument(doc.id);
-      const file = new File([blob], doc.title, {
-        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      });
-      await applyTemplateFile(file);
-    } catch (err) {
-      setLibraryPickError(err instanceof Error ? err.message : "Gagal mengambil template");
-    } finally {
-      setPickingLibraryId(null);
-    }
-  };
-
-  const handleExportFromTemplate = async () => {
-    if (!templateInfo || templateTargetItems.length === 0) return;
-    setExportingFromTemplate(true);
-    try {
-      let blob: Blob;
-      if (templateMode === "clone" && templateFile) {
-        blob = await cloneTemplate({
-          templateFile,
-          document_title: documentTitle,
-          company_name: "PT Smartnet Magna Global (SMG)",
-          document_type: TEMPLATE_BACKEND_TYPE[templateDocType],
-          items: templateTargetItems.map((it) => ({
-            id: it.id, title: it.title, requirement_text: it.requirement_text,
-            category: it.category, draft_text: it.draft_text, status: it.status,
-          })),
-        });
-      } else {
-        blob = await exportFromTemplate({
-          document_title: documentTitle,
-          company_name: "PT Smartnet Magna Global (SMG)",
-          template_type: TEMPLATE_BACKEND_TYPE[templateDocType],
-          items: templateTargetItems.map((it) => ({
-            id: it.id, title: it.title, requirement_text: it.requirement_text,
-            category: it.category, draft_text: it.draft_text, status: it.status,
-          })),
-          template_default_font: templateInfo.default_font_name,
-          template_default_font_size: templateInfo.default_font_size_pt,
-          template_sections: templateInfo.sections,
-        });
-      }
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      const cleanTitle = documentTitle.replace(/\.[^/.]+$/, "").replace(/\s+/g, "-");
-      const suffix = templateMode === "clone" ? "Cloned" : "FromTemplate";
-      link.setAttribute("download", `Proposal-${suffix}-${cleanTitle}.docx`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Gagal mengekspor dari template");
-    } finally {
-      setExportingFromTemplate(false);
-    }
-  };
-
-  const handleExportTemplatePdf = async () => {
-    if (!templateInfo || templateTargetItems.length === 0 || convertingTemplatePdf) return;
-    setConvertingTemplatePdf(true);
-    try {
-      const docxBlob = templateMode === "clone" && templateFile
-        ? await cloneTemplate({
-            templateFile,
-            document_title: documentTitle,
-            company_name: branding.companyName,
-            document_type: TEMPLATE_BACKEND_TYPE[templateDocType],
-            items: templateTargetItems,
-          })
-        : await exportFromTemplate({
-            document_title: documentTitle,
-            company_name: branding.companyName,
-            template_type: TEMPLATE_BACKEND_TYPE[templateDocType],
-            items: templateTargetItems,
-            template_default_font: templateInfo.default_font_name,
-            template_default_font_size: templateInfo.default_font_size_pt,
-            template_sections: templateInfo.sections,
-          });
-      const pdfBlob = await convertOfficeToPdf(docxBlob, `${documentTitle}.docx`);
-      const url = URL.createObjectURL(pdfBlob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `Proposal-Template-${documentTitle.replace(/\.[^/.]+$/, "").replace(/\s+/g, "-")}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Gagal membuat PDF full-fidelity dari template");
-    } finally {
-      setConvertingTemplatePdf(false);
-    }
-  };
-
-  const handlePptxTemplateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPptxTemplateFile(file);
-    setPptxCloneError(null);
-    e.target.value = "";
-  };
-
-  const handlePickLibraryPptx = async (doc: IndexedDocument) => {
-    setPickingPptxLibraryId(doc.id);
-    setPptxCloneError(null);
-    try {
-      const blob = await downloadTemplateDocument(doc.id);
-      const file = new File([blob], doc.title, {
-        type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      });
-      setPptxTemplateFile(file);
-    } catch (err) {
-      setPptxCloneError(err instanceof Error ? err.message : "Gagal mengambil template");
-    } finally {
-      setPickingPptxLibraryId(null);
-    }
-  };
-
-  const handleGeneratePptxClone = async () => {
-    if (!pptxTemplateFile || templateTargetItems.length === 0) return;
-    setGeneratingPptxClone(true);
-    setPptxCloneError(null);
-    try {
-      const blob = await cloneTemplatePptx({
-        templateFile: pptxTemplateFile,
-        document_title: documentTitle,
-        company_name: "PT Smartnet Magna Global (SMG)",
-        items: templateTargetItems.map((it) => ({
-          id: it.id, title: it.title, requirement_text: it.requirement_text,
-          category: it.category, draft_text: it.draft_text, status: it.status,
-        })),
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      const cleanTitle = documentTitle.replace(/\.[^/.]+$/, "").replace(/\s+/g, "-");
-      link.setAttribute("download", `PitchDeck-Cloned-${cleanTitle}.pptx`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      setPptxCloneError(err instanceof Error ? err.message : "Gagal clone template PowerPoint");
-    } finally {
-      setGeneratingPptxClone(false);
-    }
-  };
-
-  const handleGeneratePptxPdf = async () => {
-    if (!pptxTemplateFile || templateTargetItems.length === 0 || convertingPptxPdf) return;
-    setConvertingPptxPdf(true);
-    setPptxCloneError(null);
-    try {
-      const pptxBlob = await cloneTemplatePptx({
-        templateFile: pptxTemplateFile,
-        document_title: documentTitle,
-        company_name: branding.companyName,
-        items: templateTargetItems,
-      });
-      const pdfBlob = await convertOfficeToPdf(pptxBlob, pptxTemplateFile.name);
-      const url = URL.createObjectURL(pdfBlob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `PitchDeck-Cloned-${documentTitle.replace(/\.[^/.]+$/, "").replace(/\s+/g, "-")}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setPptxCloneError(err instanceof Error ? err.message : "Gagal membuat PDF full-fidelity PPTX");
-    } finally {
-      setConvertingPptxPdf(false);
-    }
-  };
-
   const STEPS: { key: ExportStep; label: string; caption: string; icon: React.ReactNode }[] = [
-    { key: 1, label: "Format & Generate", caption: "Pilih output", icon: <Table2 size={14} /> },
-    { key: 2, label: "Ikuti Gaya File Lain", caption: "Opsional", icon: <Wand2 size={14} /> },
-    { key: 3, label: "Salin Teks", caption: "Markdown", icon: <Eye size={14} /> },
+    { key: 1, label: "Pilih Dokumen & Generate", caption: "Format output", icon: <FileText size={14} /> },
+    { key: 2, label: "Salin Teks", caption: "Markdown", icon: <Eye size={14} /> },
   ];
-
-  // Headings from template for preview
-  const headingSections = templateInfo?.sections.filter((s) => s.level > 0) ?? [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-200">
@@ -570,7 +305,7 @@ export function ExportModal({
               Kompilasi &amp; Ekspor Proposal
             </h3>
             <p className="text-xs text-text-muted">
-              Ekspor ke Word (Proposal, SoW, Solution Brief, MoM), Slide PPTX, atau ikuti Template Anda
+              Proposal Teknis, Scope of Work, atau Pitch Deck — siap unduh
             </p>
           </div>
           <button
@@ -582,7 +317,7 @@ export function ExportModal({
         </div>
 
         {/* ── Export Wizard Steps ───────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 border-b border-surface-border bg-surface px-3 sm:px-4">
+        <div className="grid grid-cols-2 border-b border-surface-border bg-surface px-3 sm:px-4">
           {STEPS.map((step) => (
             <button
               key={step.key}
@@ -607,44 +342,36 @@ export function ExportModal({
         {/* ── Tab: Standard Word / PPTX Export ─────────────────────────────────── */}
         {activeTab === "standard" && (
           <>
+            {/* The 3 outputs presales actually ships — no doc-type x format matrix to get lost in */}
+            <div className="grid grid-cols-1 gap-2.5 border-b border-surface-border bg-surface px-6 py-4 sm:grid-cols-3">
+              {EXPORT_PRESETS.map((preset) => {
+                const active = docTypeId === preset.docTypeId && format === preset.format;
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setDocTypeId(preset.docTypeId);
+                      setFormat(preset.format);
+                    }}
+                    className={`flex flex-col items-center gap-1 rounded-xl border p-3.5 text-center transition-all active:scale-[0.98] ${
+                      active
+                        ? "border-accent bg-accent-soft shadow-subtle ring-1 ring-accent"
+                        : "border-surface-border bg-surface-raised hover:border-accent/50"
+                    }`}
+                  >
+                    <span className="text-xl">{preset.icon}</span>
+                    <span className={`text-xs font-semibold ${active ? "text-accent-ink" : "text-text-primary"}`}>
+                      {preset.label}
+                    </span>
+                    <span className="text-[10px] text-text-muted">{preset.sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-border bg-surface px-6 py-3 text-xs">
               <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-text-primary">Jenis Dokumen:</span>
-                  <select
-                    value={docTypeId}
-                    onChange={(e) => {
-                      const next = e.target.value as DraftDocTypeId;
-                      setDocTypeId(next);
-                      const allowed = getDocType(next).formats;
-                      if (!allowed.includes(format)) setFormat(allowed[0]);
-                    }}
-                    className="rounded border border-surface-border bg-surface-raised px-2.5 py-1 text-xs text-text-primary font-medium outline-none focus:border-accent cursor-pointer"
-                  >
-                    {DOC_TYPES.map((d) => (
-                      <option key={d.id} value={d.id}>{d.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-text-primary">Format:</span>
-                  <div className="flex rounded border border-surface-border bg-surface-raised p-0.5">
-                    {getDocType(docTypeId).formats.map((f) => (
-                      <button
-                        key={f}
-                        type="button"
-                        onClick={() => setFormat(f)}
-                        className={`rounded px-2 py-1 text-xs font-medium transition-all ${
-                          format === f ? "bg-accent-soft text-accent-ink" : "text-text-muted hover:text-text-primary"
-                        }`}
-                      >
-                        {FORMAT_LABELS[f]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {format === "docx" && (
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-text-primary">Font:</span>
@@ -660,7 +387,7 @@ export function ExportModal({
                   </div>
                 )}
 
-                {(format === "pdf" || format === "docx") && (
+                {format === "docx" && (
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-text-primary">Logo Customer:</span>
                     {customerLogoDataUrl ? (
@@ -706,33 +433,14 @@ export function ExportModal({
             </div>
 
             {docTypeId === "narrative" && (
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border bg-accent/5 px-6 py-2.5 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-ink text-[11px] font-bold">
-                    ✓
-                  </span>
-                  <div>
-                    <span className="font-semibold text-text-primary">
-                      Format Standar Terpilih:
-                    </span>{" "}
-                    <span className="text-text-secondary">
-                      Proposal Teknis Enterprise PT Smartnet Magna Global (Layout Cover CSUL, Penomoran Bab/Sub-bab Hierarkis, Font Google Sans, Gambar &amp; Tabel Otomatis)
-                    </span>
-                  </div>
-                </div>
-                {referenceDocxList.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handlePickLibraryTemplate(referenceDocxList[0]);
-                      setExportStep(2);
-                    }}
-                    className="flex items-center gap-1 rounded border border-accent/30 bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-accent-ink hover:bg-accent-soft transition-colors shadow-xs shrink-0"
-                  >
-                    <Wand2 size={12} />
-                    <span>Kloning Persis Acuan: {referenceDocxList[0].title.slice(0, 26)}...</span>
-                  </button>
-                )}
+              <div className="flex items-center gap-2 border-b border-surface-border bg-accent/5 px-6 py-2.5 text-xs">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-ink text-[11px] font-bold">
+                  ✓
+                </span>
+                <span className="text-text-secondary">
+                  <span className="font-semibold text-text-primary">Format Standar:</span>{" "}
+                  Proposal Teknis Enterprise PT Smartnet Magna Global (Layout Cover CSUL, Penomoran Bab/Sub-bab Hierarkis, Font Google Sans, Gambar &amp; Tabel Otomatis)
+                </span>
               </div>
             )}
 
@@ -749,16 +457,18 @@ export function ExportModal({
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-6 bg-surface/30">
+            {/* Preview area — sized like an A4 sheet on a light desk background, tall
+                enough (70-75vh) to actually read through before exporting */}
+            <div className="flex-1 overflow-y-auto bg-surface/60 p-6 sm:p-8">
               {targetItems.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-text-muted">
+                <div className="flex h-full min-h-[60vh] flex-col items-center justify-center gap-2 text-center text-text-muted">
                   <AlertCircle size={32} />
                   <p className="text-sm font-medium text-text-primary">Belum ada bagian Draf atau Final.</p>
                   <p className="text-xs">Ubah status bagian di halaman utama terlebih dahulu.</p>
                 </div>
               ) : (
-                <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
-                  <div className="flex items-center justify-between border-b border-surface-border pb-3 mb-4">
+                <div className="mx-auto flex min-h-[70vh] max-w-2xl flex-col rounded-lg border border-surface-border bg-white p-6 shadow-panel sm:min-h-[75vh] sm:p-8">
+                  <div className="flex items-center justify-between border-b border-surface-border pb-4 mb-5">
                     <span className="text-xs font-semibold text-text-primary flex items-center gap-1.5">
                       {format === "pptx" ? (
                         <Presentation size={15} className="text-amber-500" />
@@ -771,9 +481,9 @@ export function ExportModal({
                       Target: {getDocType(docTypeId).label} ({FORMAT_LABELS[format]})
                     </span>
                   </div>
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                  <div className="flex-1 space-y-2.5">
                     {targetItems.map((it, idx) => (
-                      <div key={it.id} className="flex items-start gap-2 rounded-md border border-surface-border bg-surface p-2.5">
+                      <div key={it.id} className="flex items-start gap-2 rounded-md border border-surface-border bg-surface p-3">
                         <span className="text-[11px] font-mono text-text-muted shrink-0 w-5">{idx + 1}.</span>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium text-text-primary truncate">{it.title}</p>
@@ -837,456 +547,6 @@ export function ExportModal({
                     <><FileDown size={14} className="mr-1.5 text-accent" />Generate Document (.pdf)</>
                   ) : (
                     <><FileDown size={14} className="mr-1.5 text-accent" />Generate Document (.docx)</>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
-
-
-        {/* ── Tab: Template-Based Export ───────────────────────────────────── */}
-        {activeTab === "template" && (
-          <>
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              {/* Upload Template card */}
-              <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
-                <div className="flex items-center gap-2 mb-3">
-                  <Wand2 size={16} className="text-accent-ink" />
-                  <h4 className="text-sm font-bold text-text-primary">Upload Template Word (.docx)</h4>
-                </div>
-
-                {/* Mode toggle */}
-                <div className="flex rounded-lg border border-surface-border bg-surface p-0.5 text-xs mb-4">
-                  <button
-                    onClick={() => setTemplateMode("clone")}
-                    className={`flex-1 rounded-md py-1.5 px-2 font-medium transition-all ${
-                      templateMode === "clone"
-                        ? "bg-surface-raised text-accent-ink shadow-subtle"
-                        : "text-text-muted hover:text-text-primary"
-                    }`}
-                  >
-                    🔁 Clone Langsung (Ganti Placeholder)
-                  </button>
-                  <button
-                    onClick={() => setTemplateMode("structure")}
-                    className={`flex-1 rounded-md py-1.5 px-2 font-medium transition-all ${
-                      templateMode === "structure"
-                        ? "bg-surface-raised text-accent-ink shadow-subtle"
-                        : "text-text-muted hover:text-text-primary"
-                    }`}
-                  >
-                    🏗️ Susun dari Struktur Template
-                  </button>
-                </div>
-
-                {/* Target document type — controls wording/labels (SoW, Solution Brief, MoM, dll) */}
-                <div className="flex items-center gap-1.5 mb-4 text-xs">
-                  <span className="font-semibold text-text-primary">Jenis Dokumen:</span>
-                  <select
-                    value={templateDocType}
-                    onChange={(e) => setTemplateDocType(e.target.value as DraftDocTypeId)}
-                    className="rounded border border-surface-border bg-surface px-2.5 py-1 text-xs text-text-primary outline-none focus:border-accent"
-                  >
-                    {DOC_TYPES.map((d) => (
-                      <option key={d.id} value={d.id}>{d.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <p className="text-xs text-text-muted mb-3 leading-relaxed">
-                  {templateMode === "clone"
-                    ? <>
-                        <strong className="text-text-primary">Mode Clone:</strong> Template DOCX di-kopi persis,
-                        lalu teks placeholder diganti dengan konten AI. Semua style, header, footer, tabel,
-                        dan margin dipertahankan 100%.{" "}
-                        <span className="text-accent-ink font-medium">Placeholder yang didukung:</span>{" "}
-                        <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{COMPILED_RESPONSES}}"}</code>{", "}
-                        <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{DOCUMENT_TITLE}}"}</code>{", "}
-                        <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{DATE}}"}</code>
-                      </>
-                    : <>
-                        <strong className="text-text-primary">Mode Struktur:</strong> AI membaca heading,
-                        font, dan level dari template, lalu membangun ulang dokumen dengan konten AI
-                        ditempatkan di bawah heading yang sesuai kategorinya.
-                      </>
-                  }
-                </p>
-
-                {!templateInfo ? (
-                  <>
-                    {referenceDocxList.length > 0 && (
-                      <div className="mb-4 rounded-lg border border-accent/40 bg-accent-soft/30 p-3.5">
-                        <span className="text-xs font-semibold text-accent-ink flex items-center gap-1.5 mb-2">
-                          📌 Dari Sumber Referensi Terpilih:
-                        </span>
-                        <div className="flex flex-col gap-2">
-                          {referenceDocxList.map((doc) => (
-                            <div key={doc.id} className="flex items-center justify-between gap-2 bg-surface rounded-md border border-surface-border px-3 py-2 text-xs">
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate font-semibold text-text-primary">{doc.title}</p>
-                                <p className="text-[10px] text-text-muted">Dokumen Drive</p>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={pickingLibraryId === doc.id}
-                                onClick={() => handlePickLibraryTemplate(doc)}
-                                className="shrink-0 h-7 text-xs bg-accent-soft hover:bg-accent text-accent-ink font-semibold border-accent/40"
-                              >
-                                {pickingLibraryId === doc.id ? (
-                                  <><Loader2 size={12} className="animate-spin mr-1" />Memproses...</>
-                                ) : (
-                                  "Gunakan Sebagai Template"
-                                )}
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mb-3">
-                      <span className="text-xs font-semibold text-text-primary block mb-1.5">
-                        Pilih Contoh/Template dari Library Drive
-                      </span>
-                      {libraryLoading ? (
-                        <div className="flex items-center gap-2 text-xs text-text-muted">
-                          <Loader2 size={13} className="animate-spin" /> Memuat daftar dokumen...
-                        </div>
-                      ) : docxTemplateLibrary.length > 0 ? (
-                        <select
-                          value=""
-                          disabled={pickingLibraryId !== null}
-                          onChange={(e) => {
-                            const doc = docxTemplateLibrary.find((d) => d.id === e.target.value);
-                            if (doc) handlePickLibraryTemplate(doc);
-                          }}
-                          className="w-full rounded border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent disabled:opacity-60"
-                        >
-                          <option value="" disabled>
-                            {pickingLibraryId ? "Mengambil dokumen..." : "— Pilih dari Drive —"}
-                          </option>
-                          {docxTemplateLibrary.map((d) => (
-                            <option key={d.id} value={d.id}>
-                              {d.title}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <p className="text-xs text-text-muted">
-                          Belum ada dokumen .docx di library. Sync Google Drive dulu di halaman Documents, atau upload manual di bawah.
-                        </p>
-                      )}
-                      {libraryPickError && (
-                        <p className="text-xs text-red-600 mt-1">{libraryPickError}</p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-3 text-[11px] text-text-muted mb-3">
-                      <div className="h-px flex-1 bg-surface-border" />
-                      atau
-                      <div className="h-px flex-1 bg-surface-border" />
-                    </div>
-
-                    <div
-                      onClick={() => templateInputRef.current?.click()}
-                      className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-surface-border bg-surface p-8 cursor-pointer hover:border-accent hover:bg-accent-soft/30 transition-all group"
-                    >
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-soft text-accent-ink group-hover:scale-105 transition-transform">
-                        {uploadingTemplate ? <Loader2 size={22} className="animate-spin" /> : <UploadCloud size={22} />}
-                      </div>
-                      <div className="text-center">
-                        <p className="text-sm font-semibold text-text-primary">
-                          {uploadingTemplate ? "Membaca template..." : "Klik atau seret file template .docx"}
-                        </p>
-                        <p className="text-xs text-text-muted mt-0.5">Hanya file .docx yang didukung</p>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <FileText size={16} className="text-emerald-600" />
-                        <span className="text-sm font-semibold text-emerald-800">{templateInfo.template_name}</span>
-                      </div>
-                      <button
-                        onClick={() => { setTemplateInfo(null); setTemplateError(null); }}
-                        className="text-xs text-emerald-600 hover:text-emerald-800 underline"
-                      >
-                        Ganti
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-3 text-xs text-emerald-700">
-                      <span>📝 {templateInfo.section_count} paragraf</span>
-                      <span>🔤 Font: <strong>{templateInfo.default_font_name}</strong></span>
-                      <span>📏 Ukuran: <strong>{templateInfo.default_font_size_pt}pt</strong></span>
-                      <span>📑 Heading: <strong>{headingSections.length} bagian</strong></span>
-                    </div>
-                  </div>
-                )}
-
-                {templateError && (
-                  <div className="mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                    <AlertCircle size={13} />
-                    <span>{templateError}</span>
-                  </div>
-                )}
-
-                <input
-                  ref={templateInputRef}
-                  type="file"
-                  accept=".docx"
-                  className="hidden"
-                  onChange={handleTemplateUpload}
-                />
-              </div>
-
-              {/* Template structure preview */}
-              {templateInfo && headingSections.length > 0 && (
-                <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
-                  <div className="flex items-center gap-2 mb-3">
-                    <BookOpen size={15} className="text-secondary" />
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-text-secondary">
-                      Struktur Template Terdeteksi
-                    </h4>
-                  </div>
-                  <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
-                    {headingSections.slice(0, 30).map((sec) => (
-                      <div
-                        key={sec.index}
-                        className="flex items-center gap-2"
-                        style={{ paddingLeft: `${(sec.level - 1) * 14}px` }}
-                      >
-                        <span className={`shrink-0 text-[10px] font-bold rounded px-1.5 py-0.5 ${
-                          sec.level === 1
-                            ? "bg-accent-soft text-accent-ink"
-                            : sec.level === 2
-                            ? "bg-secondary-soft text-secondary"
-                            : "bg-surface border border-surface-border text-text-muted"
-                        }`}>
-                          H{sec.level}
-                        </span>
-                        <span className="text-xs text-text-primary truncate">{sec.text || "(kosong)"}</span>
-                        {sec.font_name && (
-                          <span className="shrink-0 text-[10px] text-text-muted font-mono">{sec.font_name} {sec.font_size_pt && `${sec.font_size_pt}pt`}</span>
-                        )}
-                      </div>
-                    ))}
-                    {headingSections.length > 30 && (
-                      <p className="text-[11px] text-text-muted text-center pt-1">+{headingSections.length - 30} heading lainnya</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Filter */}
-              {templateInfo && (
-                <div className="flex items-center justify-between rounded-lg border border-surface-border bg-surface px-4 py-2.5 text-xs">
-                  <span className="text-text-secondary">
-                    {templateTargetItems.length} bagian akan dimasukkan ke dalam template
-                  </span>
-                  <label className="flex items-center gap-1.5 cursor-pointer text-text-secondary hover:text-text-primary">
-                    <input
-                      type="checkbox"
-                      checked={templateOnlyFinal}
-                      onChange={(e) => setTemplateOnlyFinal(e.target.checked)}
-                      className="rounded border-surface-border text-accent focus:ring-accent"
-                    />
-                    <span>Hanya Final ({items.filter((i) => i.status === "final").length})</span>
-                  </label>
-                </div>
-              )}
-
-              {/* Clone PowerPoint template card — separate flow, no structure parsing needed */}
-              <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
-                <div className="flex items-center gap-2 mb-2">
-                  <Presentation size={16} className="text-amber-500" />
-                  <h4 className="text-sm font-bold text-text-primary">Clone Template PowerPoint (.pptx)</h4>
-                </div>
-                <p className="text-xs text-text-muted mb-3 leading-relaxed">
-                  Upload deck <code className="font-mono bg-surface border border-surface-border rounded px-1">.pptx</code> Anda
-                  sendiri. Tandai <strong className="text-text-primary">satu slide</strong> sebagai slide-per-item pakai placeholder{" "}
-                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{ITEM_TITLE}}"}</code>,{" "}
-                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{ITEM_REQUIREMENT}}"}</code>,{" "}
-                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{ITEM_RESPONSE}}"}</code> — slide
-                  itu akan digandakan sekali per bagian. Slide lain (cover/closing) cukup pakai{" "}
-                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{DOCUMENT_TITLE}}"}</code>,{" "}
-                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{COMPANY_NAME}}"}</code>,{" "}
-                  <code className="font-mono bg-surface border border-surface-border rounded px-1">{"{{DATE}}"}</code>. Desain, warna,
-                  dan font asli deck Anda dipertahankan.
-                </p>
-
-                {!pptxTemplateFile ? (
-                  <>
-                    {referencePptxList.length > 0 && (
-                      <div className="mb-4 rounded-lg border border-accent/40 bg-accent-soft/30 p-3.5">
-                        <span className="text-xs font-semibold text-accent-ink flex items-center gap-1.5 mb-2">
-                          📌 Dari Sumber Referensi Terpilih:
-                        </span>
-                        <div className="flex flex-col gap-2">
-                          {referencePptxList.map((doc) => (
-                            <div key={doc.id} className="flex items-center justify-between gap-2 bg-surface rounded-md border border-surface-border px-3 py-2 text-xs">
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate font-semibold text-text-primary">{doc.title}</p>
-                                <p className="text-[10px] text-text-muted">Slide PowerPoint Drive</p>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={pickingPptxLibraryId === doc.id}
-                                onClick={() => handlePickLibraryPptx(doc)}
-                                className="shrink-0 h-7 text-xs bg-accent-soft hover:bg-accent text-accent-ink font-semibold border-accent/40"
-                              >
-                                {pickingPptxLibraryId === doc.id ? (
-                                  <><Loader2 size={12} className="animate-spin mr-1" />Memproses...</>
-                                ) : (
-                                  "Gunakan Sebagai Slide Acuan"
-                                )}
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mb-3">
-                      <span className="text-xs font-semibold text-text-primary block mb-1.5">
-                        Pilih Contoh/Template dari Library Drive
-                      </span>
-                      {libraryLoading ? (
-                        <div className="flex items-center gap-2 text-xs text-text-muted">
-                          <Loader2 size={13} className="animate-spin" /> Memuat daftar dokumen...
-                        </div>
-                      ) : pptxTemplateLibrary.length > 0 ? (
-                        <select
-                          value=""
-                          disabled={pickingPptxLibraryId !== null}
-                          onChange={(e) => {
-                            const doc = pptxTemplateLibrary.find((d) => d.id === e.target.value);
-                            if (doc) handlePickLibraryPptx(doc);
-                          }}
-                          className="w-full rounded border border-surface-border bg-surface px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-accent disabled:opacity-60"
-                        >
-                          <option value="" disabled>
-                            {pickingPptxLibraryId ? "Mengambil template..." : "— Pilih dari Drive —"}
-                          </option>
-                          {pptxTemplateLibrary.map((d) => (
-                            <option key={d.id} value={d.id}>
-                              {d.title}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <p className="text-xs text-text-muted">
-                          Belum ada dokumen .pptx di library. Sync Google Drive dulu, atau upload manual di bawah.
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-3 text-[11px] text-text-muted mb-3">
-                      <div className="h-px flex-1 bg-surface-border" />
-                      atau
-                      <div className="h-px flex-1 bg-surface-border" />
-                    </div>
-
-                    <div
-                      onClick={() => pptxTemplateInputRef.current?.click()}
-                      className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-surface-border bg-surface p-6 cursor-pointer hover:border-accent hover:bg-accent-soft/30 transition-all group"
-                    >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent-ink group-hover:scale-105 transition-transform">
-                        <UploadCloud size={18} />
-                      </div>
-                      <p className="text-sm font-semibold text-text-primary">Klik atau seret file template .pptx</p>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-3 mb-3">
-                    <div className="flex items-center gap-2">
-                      <Presentation size={16} className="text-emerald-600" />
-                      <span className="text-sm font-semibold text-emerald-800">{pptxTemplateFile.name}</span>
-                    </div>
-                    <button
-                      onClick={() => { setPptxTemplateFile(null); setPptxCloneError(null); }}
-                      className="text-xs text-emerald-600 hover:text-emerald-800 underline"
-                    >
-                      Ganti
-                    </button>
-                  </div>
-                )}
-
-                {pptxCloneError && (
-                  <div className="mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                    <AlertCircle size={13} />
-                    <span>{pptxCloneError}</span>
-                  </div>
-                )}
-
-                <input
-                  ref={pptxTemplateInputRef}
-                  type="file"
-                  accept=".pptx"
-                  className="hidden"
-                  onChange={handlePptxTemplateSelect}
-                />
-
-                {pptxTemplateFile && (
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleGeneratePptxPdf}
-                      disabled={templateTargetItems.length === 0 || generatingPptxClone || convertingPptxPdf}
-                      className="flex-1 border-surface-border"
-                    >
-                      {convertingPptxPdf ? <><Loader2 size={14} className="mr-1.5 animate-spin" />Render...</> : <><FileDown size={14} className="mr-1.5" />PDF Fidelity</>}
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={handleGeneratePptxClone}
-                      disabled={templateTargetItems.length === 0 || generatingPptxClone || convertingPptxPdf}
-                      className="flex-1 bg-ink-900 text-white hover:bg-ink-800"
-                    >
-                      {generatingPptxClone ? (
-                        <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat...</>
-                      ) : (
-                        <><Presentation size={14} className="mr-1.5 text-accent" />PPTX</>
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-surface-border px-6 py-4 bg-surface-raised">
-              <p className="text-xs text-text-muted max-w-xs">
-                {templateInfo
-                  ? "Klik Generate untuk membuat Word yang mengikuti struktur dan font dari template Anda."
-                  : "Upload template terlebih dahulu untuk mengaktifkan ekspor."}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleExportTemplatePdf}
-                  disabled={!templateInfo || templateTargetItems.length === 0 || exportingFromTemplate || convertingTemplatePdf}
-                  className="border-surface-border"
-                >
-                  {convertingTemplatePdf ? <><Loader2 size={14} className="mr-1.5 animate-spin" />Render PDF...</> : <><FileDown size={14} className="mr-1.5" />PDF Full Fidelity</>}
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleExportFromTemplate}
-                  disabled={!templateInfo || templateTargetItems.length === 0 || exportingFromTemplate}
-                  className="bg-ink-900 hover:bg-ink-800 text-white"
-                >
-                  {exportingFromTemplate ? (
-                    <><Loader2 size={14} className="mr-1.5 animate-spin" />Membuat Word...</>
-                  ) : (
-                    <><Wand2 size={14} className="mr-1.5 text-accent" />Generate Word</>
                   )}
                 </Button>
               </div>

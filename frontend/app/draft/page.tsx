@@ -135,13 +135,15 @@ const CHIP_SM =
 // calculator) — style it with the app's own tokens instead of pulling in the
 // Tailwind typography plugin just for a preview toggle.
 const markdownPreviewComponents: Components = {
-  h1: ({ children }) => <h1 className="text-sm font-bold text-text-primary">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-sm font-bold text-text-primary">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-xs font-bold text-text-primary">{children}</h3>,
-  p: ({ children }) => <p className="text-xs leading-relaxed text-text-primary">{children}</p>,
+  h1: ({ children }) => <h1 className="mb-3 mt-1 text-sm font-bold text-text-primary">{children}</h1>,
+  h2: ({ children }) => <h2 className="mb-3 mt-1 text-sm font-bold text-text-primary">{children}</h2>,
+  h3: ({ children }) => <h3 className="mb-2 mt-1 text-xs font-bold text-text-primary">{children}</h3>,
+  // Justified, generously-leaded body text with real paragraph breathing room —
+  // this is what makes AI drafts/answers read like a real document, not a wall of text.
+  p: ({ children }) => <p className="mb-4 text-justify text-xs leading-relaxed text-text-primary">{children}</p>,
   strong: ({ children }) => <strong className="font-semibold text-text-primary">{children}</strong>,
-  ul: ({ children }) => <ul className="list-disc space-y-1 pl-5 text-xs text-text-primary">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5 text-xs text-text-primary">{children}</ol>,
+  ul: ({ children }) => <ul className="mb-4 list-disc space-y-1 pl-5 text-xs leading-relaxed text-text-primary">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-4 list-decimal space-y-1 pl-5 text-xs leading-relaxed text-text-primary">{children}</ol>,
   li: ({ children }) => <li>{children}</li>,
   a: ({ children, href }) => (
     <a href={href} target="_blank" rel="noreferrer" className="text-accent-ink underline">
@@ -151,20 +153,22 @@ const markdownPreviewComponents: Components = {
   code: ({ children }) => (
     <code className="rounded bg-surface-raised px-1 py-0.5 font-mono text-[11px] text-text-primary">{children}</code>
   ),
+  // Zebra-striped, generously-padded table — markdown pipes/dashes never show through.
   table: ({ children }) => (
-    <div className="overflow-x-auto rounded-lg border border-surface-border">
+    <div className="mb-4 overflow-x-auto rounded-lg border border-surface-border shadow-subtle">
       <table className="w-full border-collapse text-xs">{children}</table>
     </div>
   ),
   thead: ({ children }) => <thead className="bg-surface-raised">{children}</thead>,
+  tbody: ({ children }) => <tbody className="[&>tr:nth-child(even)]:bg-surface-raised/50">{children}</tbody>,
   tr: ({ children }) => <tr className="border-b border-surface-border last:border-0">{children}</tr>,
   th: ({ children }) => (
-    <th className="border-r border-surface-border px-2.5 py-1.5 text-left font-semibold text-text-primary last:border-0">
+    <th className="border-r border-surface-border px-3.5 py-2.5 text-left font-semibold text-text-primary last:border-0">
       {children}
     </th>
   ),
   td: ({ children }) => (
-    <td className="border-r border-surface-border px-2.5 py-1.5 text-text-secondary last:border-0">{children}</td>
+    <td className="border-r border-surface-border px-3.5 py-2.5 text-text-secondary last:border-0">{children}</td>
   ),
 };
 
@@ -251,9 +255,10 @@ export default function DraftPage() {
   // Compact workspace intel strip (red-flag risk / coverage / win themes) — which panel is expanded
   const [intelPanelOpen, setIntelPanelOpen] = useState<"clauses" | "coverage" | "winthemes" | null>(null);
 
-  // Editor panel: requirement box collapsed by default, markdown preview off by default
+  // Editor panel: requirement box collapsed by default. Rendered rich view is the
+  // default read mode — raw markdown/textarea editing is the opt-in via toggle.
   const [requirementExpanded, setRequirementExpanded] = useState(false);
-  const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
+  const [showMarkdownPreview, setShowMarkdownPreview] = useState(true);
 
   // Infrastructure Sizing & BoQ Calculator — rarely used, kept behind the "more actions"
   // menu so it never competes with the main drafting workflow for attention.
@@ -502,7 +507,7 @@ export default function DraftPage() {
   // user switches to a different sub-bab.
   useEffect(() => {
     setRequirementExpanded(false);
-    setShowMarkdownPreview(false);
+    setShowMarkdownPreview(true);
   }, [selectedItem?.id]);
 
   // Filtered requirements list
@@ -2578,10 +2583,14 @@ export default function DraftPage() {
                             variant="secondary"
                             size="sm"
                             onClick={() => setShowMarkdownPreview((v) => !v)}
-                            title={showMarkdownPreview ? "Kembali ke Edit" : "Preview Markdown"}
-                            className="h-7 w-7 justify-center px-0 text-xs"
+                            title={showMarkdownPreview ? "Edit teks mentah (markdown)" : "Selesai edit, kembali ke tampilan rapi"}
+                            className="h-7 px-2.5 text-xs"
                           >
-                            {showMarkdownPreview ? <Pencil size={13} /> : <Eye size={13} />}
+                            {showMarkdownPreview ? (
+                              <><Pencil size={12} className="mr-1" /> Edit Teks Mentah</>
+                            ) : (
+                              <><Eye size={12} className="mr-1" /> Selesai Edit</>
+                            )}
                           </Button>
                         )}
                         {localDraftText && (
@@ -2635,15 +2644,11 @@ export default function DraftPage() {
 
                     {/* Textarea Editor / Markdown Preview */}
                     <div className="relative">
-                      {showMarkdownPreview ? (
-                        <div className="min-h-[13rem] w-full space-y-2.5 rounded-lg border border-surface-border bg-surface p-4 text-xs leading-relaxed text-text-primary animate-in fade-in duration-150">
-                          {localDraftText.trim() ? (
-                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
-                              {localDraftText}
-                            </ReactMarkdown>
-                          ) : (
-                            <p className="text-text-muted">Belum ada draf untuk dipratinjau.</p>
-                          )}
+                      {showMarkdownPreview && localDraftText.trim() ? (
+                        <div className="min-h-[13rem] w-full rounded-lg border border-surface-border bg-surface p-4 text-xs leading-relaxed text-text-primary animate-in fade-in duration-150">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
+                            {localDraftText}
+                          </ReactMarkdown>
                         </div>
                       ) : (
                         <textarea
@@ -2731,7 +2736,7 @@ export default function DraftPage() {
                                 `Aset Visual: ${selectedItem.title}`,
                             })
                           }
-                          className="relative group w-36 h-24 bg-slate-900 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer border border-slate-200 shadow-sm"
+                          className="relative group w-36 h-24 bg-slate-900 rounded-lg overflow-hidden flex-shrink-0 cursor-zoom-in border border-slate-200 shadow-sm transition-transform hover:scale-[1.01]"
                           title="Klik untuk pratinjau ukuran penuh"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -3466,7 +3471,7 @@ export default function DraftPage() {
       {/* Full-resolution Image Lightbox Modal */}
       {previewImageModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-150"
           onClick={() => setPreviewImageModal(null)}
         >
           <div
@@ -3506,7 +3511,7 @@ export default function DraftPage() {
                 download="visual-asset.png"
                 className="text-[11px] text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 font-medium"
               >
-                Download Gambar Asli
+                ⬇️ Unduh PNG
               </a>
             </div>
           </div>

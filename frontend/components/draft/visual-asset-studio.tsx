@@ -20,6 +20,7 @@ export function VisualAssetStudio({
   initialTab = "search",
 }: VisualAssetStudioProps) {
   const [activeTab, setActiveTab] = useState<"search" | "hld" | "upload">(initialTab);
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialTab) {
@@ -457,8 +458,12 @@ export function VisualAssetStudio({
                 </span>
               </div>
 
-              {/* Rendered Image Box */}
-              <div className="w-full bg-slate-900/5 rounded-lg p-2 border border-gray-200 flex items-center justify-center overflow-auto max-h-72">
+              {/* Rendered Image Box — click to zoom full-screen */}
+              <div
+                onClick={() => setZoomImageUrl(hldRenderedUrl)}
+                className="w-full bg-slate-900/5 rounded-lg p-2 border border-gray-200 flex items-center justify-center overflow-auto max-h-72 cursor-zoom-in transition-transform hover:scale-[1.01]"
+                title="Klik untuk pratinjau ukuran penuh"
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={hldRenderedUrl}
@@ -518,6 +523,39 @@ export function VisualAssetStudio({
             onChange={handleFileUpload}
             className="text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-gray-900 file:text-white hover:file:bg-black cursor-pointer"
           />
+        </div>
+      )}
+
+      {/* Fullscreen zoom lightbox for the HLD render preview */}
+      {zoomImageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+          onClick={() => setZoomImageUrl(null)}
+        >
+          <div className="relative max-h-[90vh] w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={zoomImageUrl}
+              alt="HLD Diagram — pratinjau penuh"
+              className="mx-auto max-h-[80vh] w-auto max-w-full rounded-lg object-contain shadow-2xl"
+            />
+            <div className="mt-3 flex items-center justify-center gap-3">
+              <a
+                href={zoomImageUrl}
+                download="hld-diagram.png"
+                className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20"
+              >
+                ⬇️ Unduh PNG
+              </a>
+              <button
+                type="button"
+                onClick={() => setZoomImageUrl(null)}
+                className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20"
+              >
+                ✕ Tutup
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

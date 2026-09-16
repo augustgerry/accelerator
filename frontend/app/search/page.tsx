@@ -412,7 +412,7 @@ function SearchContent() {
                   </div>
                 </div>
                 <div className="rounded-lg border-l-4 border-accent bg-surface p-4">
-                  <p className="text-sm leading-relaxed text-text-primary whitespace-pre-wrap">
+                  <p className="text-sm leading-relaxed text-text-primary whitespace-pre-wrap text-justify">
                     <AnswerWithCitations
                       text={stripMarkdown(result.answer)}
                       sourceCount={result.sources.length}
