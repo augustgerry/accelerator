@@ -37,6 +37,7 @@ import {
   Flag,
   ChevronDown,
   BarChart3,
+  Ruler,
 } from "lucide-react";
 import {
   uploadTor,
@@ -49,10 +50,13 @@ import {
   getDocumentChunks,
   scanCriticalClauses,
   checkRequirementCoverage,
+  calculateSizing,
   type QualityCheckResult,
   type RecommendedSection,
   type CriticalClausesScanResponse,
   type RequirementCoverageResponse,
+  type SizingCalculationRequest,
+  type SizingCalculationResult,
 } from "@/lib/api";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import type { RequirementItem, RequirementStatus, SourceCitation, IndexedDocument } from "@/lib/types";
@@ -196,6 +200,17 @@ export default function DraftPage() {
 
   // Compact workspace intel strip (red-flag risk / coverage) — which panel is expanded
   const [intelPanelOpen, setIntelPanelOpen] = useState<"clauses" | "coverage" | null>(null);
+
+  // Infrastructure Sizing & BoQ Calculator — rarely used, kept behind the "more actions"
+  // menu so it never competes with the main drafting workflow for attention.
+  const [isSizingOpen, setIsSizingOpen] = useState(false);
+  const [sizingPlatform, setSizingPlatform] = useState<SizingCalculationRequest["platform"]>("pure_storage");
+  const [sizingCapacityTb, setSizingCapacityTb] = useState("");
+  const [sizingWorkload, setSizingWorkload] = useState<NonNullable<SizingCalculationRequest["target_workload"]>>(
+    "general_virtualization"
+  );
+  const [sizingResult, setSizingResult] = useState<SizingCalculationResult | null>(null);
+  const [calculatingSizing, setCalculatingSizing] = useState(false);
 
   // Draft textarea: local state + 200ms debounce so fast typing doesn't push a
   // setItems (and re-render the whole 20+ item sidebar) on every keystroke.
@@ -738,6 +753,9 @@ export default function DraftPage() {
     setCustomWinThemeInput("");
     setCoverageReport(null);
     setIntelPanelOpen(null);
+    setIsSizingOpen(false);
+    setSizingResult(null);
+    setSizingCapacityTb("");
     try {
       localStorage.removeItem(LS_KEY);
       localStorage.removeItem(LS_SESSION_ID_KEY);
@@ -851,6 +869,33 @@ export default function DraftPage() {
     } finally {
       setCheckingCoverage(false);
     }
+  };
+
+  const handleCalculateSizing = async () => {
+    const capacity = parseFloat(sizingCapacityTb);
+    if (!capacity || capacity <= 0 || calculatingSizing) return;
+    setCalculatingSizing(true);
+    try {
+      const result = await calculateSizing({
+        platform: sizingPlatform,
+        usable_capacity_tb: capacity,
+        target_workload: sizingWorkload,
+      });
+      setSizingResult(result);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Gagal menghitung sizing");
+    } finally {
+      setCalculatingSizing(false);
+    }
+  };
+
+  const handleInsertBoqToDraft = () => {
+    if (!sizingResult || !selectedItem) return;
+    const separator = localDraftText.trim() ? "\n\n" : "";
+    const newText = localDraftText + separator + sizingResult.boq_markdown;
+    setLocalDraftText(newText);
+    handleTextChange(selectedItem.id, newText);
+    setIsSizingOpen(false);
   };
 
   const toggleItemSelection = (itemId: string) => {
@@ -1779,6 +1824,7 @@ export default function DraftPage() {
             sessionSaved={sessionSaved ?? undefined}
             onCheckCoverage={handleCheckCoverage}
             isCheckingCoverage={checkingCoverage}
+            onOpenSizing={() => setIsSizingOpen(true)}
           />
 
           {/* Proposal Intelligence Strip — red-flag risk & coverage, always reachable in workspace */}
@@ -3128,6 +3174,131 @@ export default function DraftPage() {
               >
                 Tutup
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Infrastructure Sizing & BoQ Calculator — rarely used, compact modal, not part of the main flow */}
+      {isSizingOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-xl border border-surface-border bg-surface-raised shadow-panel overflow-hidden animate-in zoom-in fade-in duration-150">
+            <div className="flex items-center justify-between border-b border-surface-border px-5 py-3.5">
+              <div className="flex items-center gap-2">
+                <Ruler size={16} className="text-accent-ink" />
+                <h3 className="text-sm font-bold text-text-primary">📐 Sizing / BoQ Calculator</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSizingOpen(false)}
+                className="rounded-md p-1 text-text-muted hover:bg-surface hover:text-text-primary transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5">
+              {!sizingResult ? (
+                <>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-text-primary">Platform</label>
+                    <select
+                      value={sizingPlatform}
+                      onChange={(e) => setSizingPlatform(e.target.value as SizingCalculationRequest["platform"])}
+                      className="w-full rounded-md border border-surface-border bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-accent"
+                    >
+                      <option value="pure_storage">Pure Storage</option>
+                      <option value="sangfor_hci">Sangfor HCI</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-text-primary">Usable Capacity (TB)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={sizingCapacityTb}
+                      onChange={(e) => setSizingCapacityTb(e.target.value)}
+                      placeholder="mis. 100"
+                      className="w-full rounded-md border border-surface-border bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-text-primary">Workload</label>
+                    <select
+                      value={sizingWorkload}
+                      onChange={(e) =>
+                        setSizingWorkload(e.target.value as NonNullable<SizingCalculationRequest["target_workload"]>)
+                      }
+                      className="w-full rounded-md border border-surface-border bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-accent"
+                    >
+                      <option value="general_virtualization">General Virtualization</option>
+                      <option value="database">Database</option>
+                      <option value="vdi">VDI</option>
+                    </select>
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleCalculateSizing}
+                    disabled={!sizingCapacityTb || calculatingSizing}
+                    className="w-full justify-center bg-ink-900 text-white hover:bg-ink-800 text-xs"
+                  >
+                    {calculatingSizing ? (
+                      <>
+                        <Loader2 size={13} className="mr-1.5 animate-spin" /> Menghitung...
+                      </>
+                    ) : (
+                      "Calculate Sizing & BoQ"
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-1 duration-150">
+                  <div className="rounded-lg border border-accent/40 bg-accent-soft px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-ink">
+                      Model Rekomendasi
+                    </p>
+                    <p className="text-sm font-bold text-text-primary">{sizingResult.recommended_model}</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+                    <div className="rounded-md border border-surface-border bg-surface p-2">
+                      <p className="text-text-muted">Target</p>
+                      <p className="font-mono font-bold text-text-primary">{sizingResult.metrics.target_usable_tb} TB</p>
+                    </div>
+                    <div className="rounded-md border border-surface-border bg-surface p-2">
+                      <p className="text-text-muted">Planned</p>
+                      <p className="font-mono font-bold text-text-primary">{sizingResult.metrics.planned_usable_tb} TB</p>
+                    </div>
+                    <div className="rounded-md border border-surface-border bg-surface p-2">
+                      <p className="text-text-muted">Effective</p>
+                      <p className="font-mono font-bold text-text-primary">
+                        {sizingResult.metrics.effective_capacity_tb ?? "—"} TB
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs leading-relaxed text-text-secondary">{sizingResult.executive_summary}</p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setSizingResult(null)}
+                      className="flex-1 justify-center border-surface-border text-xs"
+                    >
+                      Hitung Ulang
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleInsertBoqToDraft}
+                      disabled={!selectedItem}
+                      title={!selectedItem ? "Pilih sub-bab dulu di workspace" : undefined}
+                      className="flex-1 justify-center bg-ink-900 text-white hover:bg-ink-800 text-xs"
+                    >
+                      Insert BoQ to Draft
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

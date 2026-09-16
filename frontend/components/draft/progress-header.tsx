@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Sparkles, Download, RotateCcw, CheckCircle2, Clock, AlertCircle, ShieldCheck, MoreVertical, BarChart3, Loader2 } from "lucide-react";
+import { FileText, Sparkles, Download, RotateCcw, CheckCircle2, Clock, AlertCircle, ShieldCheck, MoreVertical, BarChart3, Loader2, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RequirementItem } from "@/lib/types";
 
@@ -21,6 +21,7 @@ interface ProgressHeaderProps {
   sessionSaved?: string;
   onCheckCoverage: () => void;
   isCheckingCoverage: boolean;
+  onOpenSizing: () => void;
 }
 
 export function ProgressHeader({
@@ -39,6 +40,7 @@ export function ProgressHeader({
   sessionSaved,
   onCheckCoverage,
   isCheckingCoverage,
+  onOpenSizing,
 }: ProgressHeaderProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const total = items.length;
@@ -178,7 +180,7 @@ export function ProgressHeader({
               <MoreVertical size={15} />
             </button>
             {moreOpen && (
-              <div className="absolute right-0 top-10 z-20 w-48 rounded-lg border border-surface-border bg-surface-raised p-1.5 shadow-panel">
+              <div className="absolute right-0 top-10 z-20 w-56 rounded-lg border border-surface-border bg-surface-raised p-1.5 shadow-panel">
                 <button
                   onClick={() => { onQualityCheck(); setMoreOpen(false); }}
                   disabled={isCheckingQuality || total === 0}
@@ -186,6 +188,14 @@ export function ProgressHeader({
                 >
                   <ShieldCheck size={14} />
                   <span>{isCheckingQuality ? "Memeriksa..." : qualityScore !== undefined ? `Quality check (${qualityScore})` : "Quality check"}</span>
+                </button>
+                <button
+                  onClick={() => { onOpenSizing(); setMoreOpen(false); }}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-text-secondary hover:bg-surface hover:text-text-primary"
+                  title="Jarang dipakai — kalkulator sizing/BoQ manual, opsional"
+                >
+                  <Ruler size={14} />
+                  <span>📐 Sizing / BoQ (Optional)</span>
                 </button>
                 <button
                   onClick={() => { onSaveSession(); setMoreOpen(false); }}
