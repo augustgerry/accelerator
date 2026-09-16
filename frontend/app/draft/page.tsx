@@ -187,11 +187,15 @@ export default function DraftPage() {
 
   // Win themes injected into every draft generation call
   const [selectedWinThemes, setSelectedWinThemes] = useState<Set<string>>(new Set());
+  const [customWinThemeInput, setCustomWinThemeInput] = useState("");
 
   // Requirement coverage / gap audit
   const [coverageReport, setCoverageReport] = useState<RequirementCoverageResponse | null>(null);
   const [checkingCoverage, setCheckingCoverage] = useState(false);
   const [isCoverageModalOpen, setIsCoverageModalOpen] = useState(false);
+
+  // Compact workspace intel strip (red-flag risk / coverage) — which panel is expanded
+  const [intelPanelOpen, setIntelPanelOpen] = useState<"clauses" | "coverage" | null>(null);
 
   // Draft textarea: local state + 200ms debounce so fast typing doesn't push a
   // setItems (and re-render the whole 20+ item sidebar) on every keystroke.
@@ -287,6 +291,21 @@ export default function DraftPage() {
       const next = new Set(prev);
       if (next.has(theme)) next.delete(theme);
       else next.add(theme);
+      return next;
+    });
+  };
+
+  const addCustomWinTheme = () => {
+    const value = customWinThemeInput.trim();
+    if (!value) return;
+    setSelectedWinThemes((prev) => new Set(prev).add(value));
+    setCustomWinThemeInput("");
+  };
+
+  const removeWinTheme = (theme: string) => {
+    setSelectedWinThemes((prev) => {
+      const next = new Set(prev);
+      next.delete(theme);
       return next;
     });
   };
@@ -716,7 +735,9 @@ export default function DraftPage() {
     setCriticalClauses(null);
     setScanningClauses(false);
     setSelectedWinThemes(new Set());
+    setCustomWinThemeInput("");
     setCoverageReport(null);
+    setIntelPanelOpen(null);
     try {
       localStorage.removeItem(LS_KEY);
       localStorage.removeItem(LS_SESSION_ID_KEY);
@@ -1760,6 +1781,114 @@ export default function DraftPage() {
             isCheckingCoverage={checkingCoverage}
           />
 
+          {/* Proposal Intelligence Strip — red-flag risk & coverage, always reachable in workspace */}
+          {(criticalClauses || coverageReport) && (
+            <>
+              <div className="flex flex-wrap items-center gap-2 border-b border-surface-border bg-surface-raised/60 px-6 py-2">
+                {criticalClauses && (
+                  <button
+                    type="button"
+                    onClick={() => setIntelPanelOpen((p) => (p === "clauses" ? null : "clauses"))}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all active:scale-[0.98] ${
+                      criticalClauses.risk_level === "High"
+                        ? "border-red-200 bg-red-50 text-red-700"
+                        : criticalClauses.risk_level === "Medium"
+                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    }`}
+                  >
+                    <Flag size={12} /> Risiko TOR: {criticalClauses.risk_level}
+                    <ChevronDown
+                      size={12}
+                      className={`transition-transform ${intelPanelOpen === "clauses" ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                )}
+
+                {coverageReport ? (
+                  <button
+                    type="button"
+                    onClick={() => setIntelPanelOpen((p) => (p === "coverage" ? null : "coverage"))}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-surface-border bg-surface px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-all hover:border-accent active:scale-[0.98]"
+                  >
+                    <BarChart3 size={12} className="text-accent-ink" /> Coverage: {coverageReport.overall_coverage_pct}%
+                    <ChevronDown
+                      size={12}
+                      className={`transition-transform ${intelPanelOpen === "coverage" ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleCheckCoverage}
+                    disabled={checkingCoverage}
+                    className="text-[11px] text-accent-ink hover:underline disabled:opacity-50"
+                  >
+                    {checkingCoverage ? "Mengaudit coverage..." : "Jalankan audit coverage →"}
+                  </button>
+                )}
+              </div>
+
+              {intelPanelOpen === "clauses" && criticalClauses && (
+                <div className="border-b border-surface-border bg-surface px-6 py-3.5 space-y-2.5 animate-in fade-in slide-in-from-bottom-1 duration-150">
+                  {criticalClauses.executive_summary_alerts.length > 0 ? (
+                    <ul className="space-y-1.5">
+                      {criticalClauses.executive_summary_alerts.map((alert, i) => (
+                        <li
+                          key={i}
+                          className="flex items-start gap-2 rounded-lg border border-red-200/50 bg-red-50/60 px-3 py-1.5 text-xs text-text-primary"
+                        >
+                          <AlertCircle size={13} className="mt-0.5 shrink-0 text-red-600" />
+                          <span>{alert}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-text-muted">Tidak ada alert kritis yang menonjol.</p>
+                  )}
+                  <div className="flex flex-wrap gap-3 text-[11px] text-text-muted">
+                    <span>📋 {criticalClauses.mandatory_requirements.length} kebutuhan wajib</span>
+                    <span>⚠️ {criticalClauses.penalties_and_risks.length} penalti/risiko</span>
+                    <span>🔧 {criticalClauses.sla_and_maintenance.length} SLA/maintenance</span>
+                    <span>📜 {criticalClauses.certifications_and_legal.length} sertifikasi/legal</span>
+                  </div>
+                </div>
+              )}
+
+              {intelPanelOpen === "coverage" && coverageReport && (
+                <div className="border-b border-surface-border bg-surface px-6 py-3.5 space-y-2.5 animate-in fade-in slide-in-from-bottom-1 duration-150">
+                  <div className="h-1.5 w-full max-w-md overflow-hidden rounded-full border border-surface-border bg-surface-raised">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all duration-500 ease-out"
+                      style={{ width: `${coverageReport.overall_coverage_pct}%` }}
+                    />
+                  </div>
+                  {coverageReport.uncovered_items.length > 0 ? (
+                    <ul className="space-y-1.5">
+                      {coverageReport.uncovered_items.slice(0, 3).map((it, i) => (
+                        <li
+                          key={i}
+                          className="rounded-lg border border-amber-200/50 bg-amber-50/60 px-3 py-1.5 text-xs text-text-primary"
+                        >
+                          {it.requirement}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-emerald-700">Seluruh kebutuhan TOR sudah tercakup di draf.</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsCoverageModalOpen(true)}
+                    className="text-[11px] font-medium text-accent-ink hover:underline"
+                  >
+                    Lihat detail lengkap →
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
           {/* Real-time Drafting Progress Banner */}
           {isDraftingAll && draftingProgress && (
             <div className="border-b border-accent/40 bg-accent-soft px-6 py-2.5 shadow-subtle animate-in fade-in duration-200">
@@ -2281,6 +2410,40 @@ export default function DraftPage() {
                           </button>
                         );
                       })}
+
+                      {/* Custom win themes the user typed in — always active, removable */}
+                      {Array.from(selectedWinThemes)
+                        .filter((theme) => !WIN_THEME_PRESETS.includes(theme))
+                        .map((theme) => (
+                          <span
+                            key={theme}
+                            className="inline-flex items-center gap-1 rounded-full border border-accent bg-accent-soft px-2.5 py-1 text-[11px] font-medium text-accent-ink animate-in fade-in zoom-in duration-150"
+                          >
+                            {theme}
+                            <button
+                              type="button"
+                              onClick={() => removeWinTheme(theme)}
+                              className="rounded-full hover:bg-accent/30 transition-colors"
+                              title="Hapus"
+                            >
+                              <X size={11} />
+                            </button>
+                          </span>
+                        ))}
+
+                      <input
+                        type="text"
+                        value={customWinThemeInput}
+                        onChange={(e) => setCustomWinThemeInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addCustomWinTheme();
+                          }
+                        }}
+                        placeholder="+ Tambah keunggulan lain..."
+                        className="min-w-[160px] flex-1 rounded-full border border-dashed border-surface-border bg-transparent px-2.5 py-1 text-[11px] text-text-primary outline-none focus:border-accent placeholder:text-text-muted"
+                      />
                     </div>
 
                     {/* Textarea Editor */}
