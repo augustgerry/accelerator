@@ -99,6 +99,22 @@ def download_document(
     )
 
 
+@router.delete("/{doc_id}")
+def delete_document(
+    doc_id: str,
+    workspace_id: str = settings.default_workspace_id,
+    session: Session = Depends(get_session),
+):
+    """Remove a document and its chunks from the index. Does not touch Google Drive."""
+    doc = session.get(Document, doc_id)
+    if not doc or doc.workspace_id != workspace_id:
+        raise HTTPException(status_code=404, detail="Dokumen tidak ditemukan")
+    session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == doc_id))
+    session.delete(doc)
+    session.commit()
+    return {"deleted": doc_id}
+
+
 @router.get("/summary")
 def get_summary(
     workspace_id: str = settings.default_workspace_id,

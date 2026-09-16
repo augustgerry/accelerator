@@ -14,8 +14,40 @@ import {
   X,
   ChevronRight,
   SlidersHorizontal,
+  History,
+  Bookmark,
+  BookmarkCheck,
+  Copy,
+  Check,
+  Link2,
 } from "lucide-react";
 import { searchKnowledgeBase, type SearchResult } from "@/lib/api";
+import { CitationDrawer } from "@/components/search/citation-drawer";
+import { HighlightedText } from "@/components/search/highlighted-text";
+import { AnswerWithCitations } from "@/components/search/answer-with-citations";
+import { DOC_TYPE_COLORS } from "@/components/search/doc-type-colors";
+
+const LS_HISTORY_KEY = "synapse-search-history";
+const LS_BOOKMARKS_KEY = "synapse-search-bookmarks";
+const LS_FILTERS_KEY = "synapse-search-filters";
+
+type BookmarkEntry = { question: string; answer: string; savedAt: string };
+
+function loadHistory(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(LS_HISTORY_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+function loadBookmarks(): BookmarkEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem(LS_BOOKMARKS_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
 
 const SUGGESTED_QUERIES = [
   "SLA response time teknisi on-site SMBC",
@@ -25,42 +57,7 @@ const SUGGESTED_QUERIES = [
   "Sertifikasi Project Manager implementasi DC",
 ];
 
-const DOC_TYPE_COLORS: Record<string, string> = {
-  checklist: "bg-blue-50 border-blue-200 text-blue-700",
-  TOR: "bg-purple-50 border-purple-200 text-purple-700",
-  SoW: "bg-orange-50 border-orange-200 text-orange-700",
-  TCO: "bg-emerald-50 border-emerald-200 text-emerald-700",
-  deck: "bg-pink-50 border-pink-200 text-pink-700",
-  other: "bg-surface border-surface-border text-text-muted",
-};
-
 type ConversationMessage = { role: "user" | "assistant"; content: string };
-
-function highlightKeywords(text: string, query: string): string {
-  if (!query.trim()) return text;
-  const words = query.trim().split(/\s+/).filter((w) => w.length > 2);
-  if (words.length === 0) return text;
-  const pattern = new RegExp(`(${words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
-  return text.replace(pattern, "**$1**");
-}
-
-function HighlightedText({ text, query }: { text: string; query: string }) {
-  const highlighted = highlightKeywords(text, query);
-  const parts = highlighted.split(/\*\*(.*?)\*\*/g);
-  return (
-    <span>
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <mark key={i} className="bg-accent-soft text-accent-ink rounded px-0.5 font-medium">
-            {part}
-          </mark>
-        ) : (
-          <span key={i}>{part}</span>
-        )
-      )}
-    </span>
-  );
-}
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -73,12 +70,59 @@ function SearchContent() {
   const [error, setError] = useState<string | null>(null);
   const [selectedChunkIdx, setSelectedChunkIdx] = useState<number | null>(null);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
-  const [docTypeFilter, setDocTypeFilter] = useState("");
-  const [divisionFilter, setDivisionFilter] = useState("");
+  const [docTypeFilter, setDocTypeFilter] = useState(searchParams.get("docType") ?? "");
+  const [divisionFilter, setDivisionFilter] = useState(searchParams.get("division") ?? "");
+  const [history, setHistory] = useState<string[]>([]);
+  const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
+  const [answerCopied, setAnswerCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    setHistory(loadHistory());
+    setBookmarks(loadBookmarks());
+    // Fall back to the last-used filter only when the URL didn't already specify one
+    // (a shared/reloaded link always wins over a stale local preference).
+    if (!searchParams.get("docType") && !searchParams.get("division")) {
+      try {
+        const persisted = JSON.parse(localStorage.getItem(LS_FILTERS_KEY) ?? "{}");
+        if (persisted.docType) setDocTypeFilter(persisted.docType);
+        if (persisted.division) setDivisionFilter(persisted.division);
+      } catch { /* private mode */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const persistFilters = (nextDocType: string, nextDivision: string) => {
+    try {
+      localStorage.setItem(LS_FILTERS_KEY, JSON.stringify({ docType: nextDocType, division: nextDivision }));
+    } catch { /* private mode */ }
+  };
+
+  const isBookmarked = !!result && bookmarks.some((b) => b.question === query);
+
+  const toggleBookmark = () => {
+    if (!result) return;
+    const existing = loadBookmarks();
+    const already = existing.some((b) => b.question === query);
+    const updated = already
+      ? existing.filter((b) => b.question !== query)
+      : [{ question: query, answer: result.answer, savedAt: new Date().toISOString() }, ...existing].slice(0, 20);
+    localStorage.setItem(LS_BOOKMARKS_KEY, JSON.stringify(updated));
+    setBookmarks(updated);
+  };
+
+  const copyAnswer = () => {
+    if (!result) return;
+    navigator.clipboard.writeText(result.answer);
+    setAnswerCopied(true);
+    setTimeout(() => setAnswerCopied(false), 2000);
+  };
 
   const doSearch = async (q: string, nextDocType = docTypeFilter, nextDivision = divisionFilter) => {
     if (!q.trim()) return;
+    const myRequestId = ++requestIdRef.current;
     const previousConversation = conversation.slice(-6);
     setConversation((previous) => [...previous, { role: "user", content: q } as ConversationMessage].slice(-8));
     setQuery(q);
@@ -87,24 +131,29 @@ function SearchContent() {
     setError(null);
     setResult(null);
     setSelectedChunkIdx(null);
-    router.replace(`/search?q=${encodeURIComponent(q)}`, { scroll: false });
+    const urlParams = new URLSearchParams({ q });
+    if (nextDocType) urlParams.set("docType", nextDocType);
+    if (nextDivision) urlParams.set("division", nextDivision);
+    router.replace(`/search?${urlParams.toString()}`, { scroll: false });
 
     // Persist to search history (max 10, no duplicates)
     try {
-      const LS_HISTORY_KEY = "synapse-search-history";
-      const existing: string[] = JSON.parse(localStorage.getItem(LS_HISTORY_KEY) ?? "[]");
+      const existing = loadHistory();
       const updated = [q, ...existing.filter((h) => h !== q)].slice(0, 10);
       localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(updated));
+      setHistory(updated);
     } catch { /* private mode */ }
 
     try {
       const res = await searchKnowledgeBase(q, { docType: nextDocType, division: nextDivision }, previousConversation);
+      if (myRequestId !== requestIdRef.current) return; // a newer search superseded this one
       setResult(res);
       setConversation((previous) => [...previous, { role: "assistant", content: res.answer } as ConversationMessage].slice(-8));
     } catch (e) {
+      if (myRequestId !== requestIdRef.current) return;
       setError(e instanceof Error ? e.message : "Pencarian gagal. Pastikan server API aktif.");
     } finally {
-      setLoading(false);
+      if (myRequestId === requestIdRef.current) setLoading(false);
     }
   };
 
@@ -123,11 +172,19 @@ function SearchContent() {
   const handleFilterChange = (kind: "docType" | "division", value: string) => {
     if (kind === "docType") {
       setDocTypeFilter(value);
+      persistFilters(value, divisionFilter);
       if (query) doSearch(query, value, divisionFilter);
     } else {
       setDivisionFilter(value);
+      persistFilters(docTypeFilter, value);
       if (query) doSearch(query, docTypeFilter, value);
     }
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   };
 
   const selectedChunk = result && selectedChunkIdx !== null ? result.sources[selectedChunkIdx] : null;
@@ -164,6 +221,7 @@ function SearchContent() {
               <button
                 type="button"
                 onClick={() => { setInputValue(""); inputRef.current?.focus(); }}
+                aria-label="Hapus input"
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
               >
                 <X size={13} />
@@ -204,13 +262,69 @@ function SearchContent() {
             </select>
             {(docTypeFilter || divisionFilter) && (
               <button
-                onClick={() => { setDocTypeFilter(""); setDivisionFilter(""); if (query) doSearch(query, "", ""); }}
+                onClick={() => { setDocTypeFilter(""); setDivisionFilter(""); persistFilters("", ""); if (query) doSearch(query, "", ""); }}
                 className="text-[11px] font-medium text-secondary hover:underline"
               >
                 Reset filter
               </button>
             )}
           </div>
+
+        {/* Search history */}
+        {!query && history.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <History size={12} className="text-text-muted" />
+            {history.slice(0, 6).map((h, i) => (
+              <span
+                key={i}
+                className="group flex items-center gap-1 rounded-full border border-surface-border bg-surface pl-3 pr-1.5 py-1 text-xs text-text-secondary hover:border-accent hover:text-accent-ink transition-colors"
+              >
+                <button onClick={() => doSearch(h)} className="max-w-[220px] truncate">
+                  {h}
+                </button>
+                <button
+                  onClick={() => {
+                    const updated = history.filter((item) => item !== h);
+                    localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(updated));
+                    setHistory(updated);
+                  }}
+                  aria-label={`Hapus "${h}" dari riwayat`}
+                  className="rounded-full p-0.5 text-text-muted opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Bookmarks */}
+        {!query && bookmarks.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <Bookmark size={12} className="text-text-muted" />
+            {bookmarks.slice(0, 6).map((b, i) => (
+              <span
+                key={i}
+                className="group flex items-center gap-1 rounded-full border border-secondary/40 bg-secondary-soft pl-3 pr-1.5 py-1 text-xs text-secondary hover:border-secondary transition-colors"
+              >
+                <button onClick={() => doSearch(b.question)} className="max-w-[220px] truncate">
+                  {b.question}
+                </button>
+                <button
+                  onClick={() => {
+                    const updated = bookmarks.filter((item) => item.question !== b.question);
+                    localStorage.setItem(LS_BOOKMARKS_KEY, JSON.stringify(updated));
+                    setBookmarks(updated);
+                  }}
+                  aria-label={`Hapus "${b.question}" dari bookmark`}
+                  className="rounded-full p-0.5 text-secondary opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Quick chips */}
         {!query && (
@@ -229,20 +343,36 @@ function SearchContent() {
       </div>
 
       {/* ── Main Content ──────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
 
         {/* LEFT: Document Citation Cards */}
-        <div className="flex w-[420px] shrink-0 flex-col border-r border-surface-border bg-surface-raised overflow-y-auto">
+        <div className="flex max-h-[45vh] md:max-h-none w-full md:w-[420px] shrink-0 flex-col border-b md:border-b-0 md:border-r border-surface-border bg-surface-raised overflow-y-auto">
           {loading && (
-            <div className="flex flex-col items-center justify-center p-10 gap-3 text-text-muted">
-              <Loader2 size={28} className="animate-spin text-accent-ink" />
-              <p className="text-xs text-center">Mencari di seluruh arsip dokumen presales...</p>
+            <div className="animate-in fade-in duration-200">
+              <div className="flex flex-col items-center gap-2 p-4 text-text-muted">
+                <Loader2 size={20} className="animate-spin text-accent-ink" />
+                <p className="text-[11px] text-center">Mencari di seluruh arsip dokumen presales...</p>
+              </div>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="border-b border-surface-border p-4 space-y-2">
+                  <div className="h-3 w-2/3 rounded bg-surface-border/60 animate-pulse" />
+                  <div className="h-2.5 w-1/3 rounded bg-surface-border/40 animate-pulse" />
+                  <div className="h-2 w-full rounded bg-surface-border/40 animate-pulse" />
+                  <div className="h-2 w-5/6 rounded bg-surface-border/40 animate-pulse" />
+                </div>
+              ))}
             </div>
           )}
 
           {error && (
-            <div className="m-4 rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700">
-              {error}
+            <div className="m-4 rounded-lg border border-red-200 bg-red-50 p-4 text-xs text-red-700 space-y-2">
+              <p>{error}</p>
+              <button
+                onClick={() => doSearch(query || inputValue)}
+                className="rounded-md border border-red-300 bg-white px-2.5 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 transition-colors"
+              >
+                Coba lagi
+              </button>
             </div>
           )}
 
@@ -257,8 +387,9 @@ function SearchContent() {
               {result.sources.map((src, idx) => (
                 <div
                   key={`${src.id}-${idx}`}
-                  onClick={() => setSelectedChunkIdx(selectedChunkIdx === idx ? null : idx)}
-                  className={`cursor-pointer border-b border-surface-border p-4 transition-all ${
+                  onClick={() => setSelectedChunkIdx(idx)}
+                  style={{ animationDelay: `${Math.min(idx, 8) * 40}ms` }}
+                  className={`animate-in fade-in slide-in-from-bottom-1 fill-mode-both duration-300 cursor-pointer border-b border-surface-border p-4 transition-all ${
                     selectedChunkIdx === idx
                       ? "bg-accent-soft/50 border-l-4 border-l-accent"
                       : "hover:bg-surface/60 border-l-4 border-l-transparent"
@@ -267,6 +398,7 @@ function SearchContent() {
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <FileText size={13} className="text-secondary shrink-0" />
+                      <span className="shrink-0 rounded bg-surface px-1 text-[10px] font-bold text-accent-ink">[{idx + 1}]</span>
                       <span className="text-xs font-semibold text-text-primary truncate">{src.title}</span>
                     </div>
                     <span className={`shrink-0 text-[10px] font-semibold border rounded px-1.5 py-0.5 ${
@@ -294,8 +426,8 @@ function SearchContent() {
                     <HighlightedText text={src.chunk_text} query={query} />
                   </p>
                   <div className="mt-2 flex items-center gap-1 text-[10px] text-accent-ink font-medium">
-                    <span>{selectedChunkIdx === idx ? "Tutup" : "Lihat lengkap"}</span>
-                    <ChevronRight size={10} className={`transition-transform ${selectedChunkIdx === idx ? "rotate-90" : ""}`} />
+                    <span>Lihat detail</span>
+                    <ChevronRight size={10} />
                   </div>
                 </div>
               ))}
@@ -341,7 +473,7 @@ function SearchContent() {
               )}
 
               {/* AI Answer Card */}
-              <div className="rounded-xl border border-surface-border bg-surface-raised p-6 shadow-subtle">
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 rounded-xl border border-surface-border bg-surface-raised p-6 shadow-subtle">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft text-accent-ink">
                     <Sparkles size={16} />
@@ -353,46 +485,65 @@ function SearchContent() {
                 </div>
                 <div className="rounded-lg border-l-4 border-accent bg-surface p-4">
                   <p className="text-sm leading-relaxed text-text-primary whitespace-pre-wrap">
-                    {result.answer}
+                    <AnswerWithCitations
+                      text={result.answer}
+                      sourceCount={result.sources.length}
+                      onCitationClick={(idx) => setSelectedChunkIdx(idx)}
+                    />
                   </p>
                 </div>
-                <button
-                  onClick={createDocumentFromAnswer}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-primary transition-colors hover:border-accent hover:bg-accent-soft"
-                >
-                  <FileEdit size={14} className="text-accent-ink" />
-                  Buat dokumen dari jawaban
-                </button>
-              </div>
-
-              {/* Selected chunk detail */}
-              {selectedChunk && (
-                <div className="rounded-xl border border-accent/40 bg-accent-soft/20 p-5 shadow-subtle">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <FileText size={16} className="text-accent-ink" />
-                      <span className="text-sm font-bold text-text-primary">{selectedChunk.title}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {selectedChunk.division && (
-                        <span className="text-[10px] font-semibold text-secondary bg-secondary-soft rounded px-1.5 py-0.5">
-                          {selectedChunk.division}
-                        </span>
-                      )}
-                      <span className={`text-[10px] font-semibold border rounded px-1.5 py-0.5 ${
-                        DOC_TYPE_COLORS[selectedChunk.docType] ?? DOC_TYPE_COLORS.other
-                      }`}>
-                        {selectedChunk.docType}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="rounded-lg bg-surface border border-surface-border p-4">
-                    <p className="text-xs leading-relaxed text-text-primary whitespace-pre-wrap">
-                      <HighlightedText text={selectedChunk.chunk_text} query={query} />
-                    </p>
-                  </div>
+                {result.sources.length === 0 && (
+                  <p className="mt-2 flex items-center gap-1.5 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800">
+                    Tidak ditemukan dokumen relevan di knowledge base — jawaban di atas bersifat umum, bukan hasil grounding dokumen internal.
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={createDocumentFromAnswer}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-primary transition-colors hover:border-accent hover:bg-accent-soft"
+                  >
+                    <FileEdit size={14} className="text-accent-ink" />
+                    Buat dokumen dari jawaban
+                  </button>
+                  <button
+                    onClick={copyAnswer}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-primary transition-colors hover:border-accent hover:bg-accent-soft"
+                  >
+                    {answerCopied ? (
+                      <Check size={14} className="text-emerald-500 animate-in zoom-in duration-200" />
+                    ) : (
+                      <Copy size={14} />
+                    )}
+                    {answerCopied ? "Tersalin!" : "Salin Jawaban"}
+                  </button>
+                  <button
+                    onClick={toggleBookmark}
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
+                      isBookmarked
+                        ? "border-secondary bg-secondary-soft text-secondary"
+                        : "border-surface-border bg-surface text-text-primary hover:border-accent hover:bg-accent-soft"
+                    }`}
+                  >
+                    {isBookmarked ? (
+                      <BookmarkCheck size={14} className="animate-in zoom-in duration-200" />
+                    ) : (
+                      <Bookmark size={14} />
+                    )}
+                    {isBookmarked ? "Tersimpan" : "Bookmark"}
+                  </button>
+                  <button
+                    onClick={copyLink}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-primary transition-colors hover:border-accent hover:bg-accent-soft"
+                  >
+                    {linkCopied ? (
+                      <Check size={14} className="text-emerald-500 animate-in zoom-in duration-200" />
+                    ) : (
+                      <Link2 size={14} />
+                    )}
+                    {linkCopied ? "Link tersalin!" : "Copy Link"}
+                  </button>
                 </div>
-              )}
+              </div>
 
               {/* Source list summary */}
               {result.sources.length > 0 && (
@@ -404,7 +555,7 @@ function SearchContent() {
                     {result.sources.map((src, idx) => (
                       <button
                         key={`${src.id}-${idx}`}
-                        onClick={() => setSelectedChunkIdx(selectedChunkIdx === idx ? null : idx)}
+                        onClick={() => setSelectedChunkIdx(idx)}
                         className={`flex items-center justify-between rounded-lg border p-2.5 text-left transition-all ${
                           selectedChunkIdx === idx
                             ? "border-accent bg-accent-soft/30"
@@ -412,6 +563,7 @@ function SearchContent() {
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
+                          <span className="shrink-0 text-[10px] font-bold text-accent-ink">[{idx + 1}]</span>
                           <FileText size={13} className="text-secondary shrink-0" />
                           <span className="text-xs text-text-primary truncate">{src.title}</span>
                         </div>
@@ -451,6 +603,15 @@ function SearchContent() {
           )}
         </div>
       </div>
+
+      <CitationDrawer
+        chunk={selectedChunk}
+        index={selectedChunkIdx ?? 0}
+        total={result?.sources.length ?? 0}
+        query={query}
+        onClose={() => setSelectedChunkIdx(null)}
+        onNavigate={(nextIndex) => setSelectedChunkIdx(nextIndex)}
+      />
     </div>
   );
 }

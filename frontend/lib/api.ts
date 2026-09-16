@@ -50,6 +50,14 @@ export async function downloadDriveDocument(docId: string): Promise<Blob> {
 
 export const downloadTemplateDocument = downloadDriveDocument;
 
+export async function deleteDocument(docId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/documents/${encodeURIComponent(docId)}`, { method: "DELETE" });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal menghapus dokumen (${res.status}): ${detail}`);
+  }
+}
+
 export async function syncDocuments(): Promise<{ synced: string[]; skipped: string[]; unchanged: string[] }> {
   const res = await fetch(`${API_BASE}/documents/sync`, { method: "POST" });
   if (!res.ok) {
@@ -109,6 +117,7 @@ export type SearchResultChunk = {
   chunk_text: string;
   confidence: number;
   matched_terms: string[];
+  updated_at?: string | null;
 };
 
 export type SearchResult = {

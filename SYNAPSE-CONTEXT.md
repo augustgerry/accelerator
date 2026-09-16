@@ -122,6 +122,59 @@ Semua perubahan di atas: `npx tsc --noEmit` clean, backend `py_compile` clean, u
 
 ---
 
+## 🔍 SESI CLAUDE CODE — SEARCH MODE & CITATION UX (branch `feat/search-citation-drawer`)
+
+Kerja terisolasi di `frontend/app/search/`, `frontend/components/search/`, `frontend/app/documents/` — TIDAK menyentuh `frontend/app/draft/` atau `backend/app/routers/draft.py` (area Antigravity), jadi backend tetap 0 perubahan.
+
+1. **Interactive Citation Drawer:** `frontend/components/search/citation-drawer.tsx` (baru) — slide-over panel dari kanan (Tailwind transition, tanpa dependency baru). Diklik dari chip sitasi `[1]` di kartu kutipan (list kiri) maupun grid "Dokumen Referensi" (kanan). Menampilkan judul dokumen lengkap, badge ekstensi file (`.pdf/.docx/.pptx` — diparse dari `title` via `getFileExtension()` baru di `lib/utils.ts`, TANPA perlu field/migrasi backend baru), badge tipe dokumen, divisi, cuplikan chunk teks lengkap + tombol salin, serta tombol **Download Dokumen** (reuse `downloadDriveDocument()` yang sudah ada) dan **Buka di Drive** (`https://drive.google.com/file/d/{doc.id}/view` — valid karena `Document.id` di backend memang di-set sama dengan Drive file id saat sync, lihat `documents.py` `sync_from_drive()`).
+   - `frontend/app/search/page.tsx`: inline "Selected chunk detail" box lama dihapus (redundant, digantikan drawer). Klik kartu kutipan sekarang selalu membuka drawer (bukan toggle expand/collapse).
+2. **Search History & Bookmarking** (`frontend/app/search/page.tsx`):
+   - Riwayat pencarian (`localStorage` key `synapse-search-history`, sudah ada sebelumnya tapi belum pernah ditampilkan) sekarang dirender sebagai chip yang bisa diklik ulang di bawah search bar.
+   - Bookmark baru (`localStorage` key `synapse-search-bookmarks`, maks 20 entri) — tombol **Bookmark** di kartu jawaban AI, tersimpan tampil sebagai chip terpisah (bisa diklik ulang juga).
+   - Tombol **Salin Jawaban** (clipboard) ditambah di kartu jawaban AI.
+3. **Filter Lanjutan `/documents`** (`frontend/app/documents/page.tsx`): dropdown filter Ekstensi File (`.docx/.pdf/.pptx`, dll — di-derive dari `title` via `getFileExtension()`, bukan field DB baru) ditambahkan di samping filter Divisi yang sudah ada. Pencarian cepat lokal di tabel dokumen sudah ada sebelumnya (tidak diubah).
+- Verifikasi: `npx tsc --noEmit` di `frontend/` exit 0. Belum ditest manual lewat browser (`npm run dev`) — kalau mau validasi UI, jalankan dev server lalu coba klik chip sitasi di `/search` dan filter ekstensi di `/documents`.
+- Tidak ada perubahan backend/database sama sekali di sesi ini — seluruh fitur reuse endpoint & field yang sudah ada (`/documents/{id}/download`, `Document.id == source_drive_id`, `title` yang sudah menyimpan ekstensi asli).
+
+### Lanjutan (batch 2) — masih di branch `feat/search-citation-drawer`
+Enhancement lanjutan atas ide sendiri (disetujui user "gas aja semua"). Kali ini ADA sentuhan backend, tapi tetap sama sekali tidak menyentuh `backend/app/routers/draft.py` maupun `frontend/app/draft/`:
+- **Inline citation markers di jawaban AI:** `backend/app/services/llm_provider.py` — `_build_system_prompt(mode="qa")` sekarang instruksikan LLM sisipkan penanda `[1]`, `[2]` dst tepat di kalimat yang memakai potongan konteks tsb. Helper baru `_format_context_chunks()` menomori tiap chunk sebelum dikirim ke LLM (`[1] ...`, `[2] ...`) — HANYA untuk `mode="qa"` (dipanggil dari `query.py`); `mode="draft"` (dipakai `draft.py`) tetap format lama, tidak terpengaruh sama sekali. Frontend baru `components/search/answer-with-citations.tsx` mem-parse `[n]` di teks jawaban jadi chip yang bisa diklik → buka `CitationDrawer` ke sumber ke-n.
+- **Recency indicator di drawer:** `backend/app/services/retrieval.py` `retrieve_chunks_with_full_metadata()` dan `backend/app/routers/query.py` `ChunkResult` nambah field `updated_at` (dari `Document.updated_at`). `CitationDrawer` nampilin tanggal ini sebagai badge kecil.
+- **Keyboard nav di drawer:** Esc buat tutup, panah kiri/kanan buat pindah antar sitasi tanpa balik ke list kiri — plus tombol chevron prev/next di header drawer.
+- **Highlight keyword di snippet drawer:** snippet lengkap di drawer sekarang pakai `HighlightedText` yang sama (diekstrak ke `components/search/highlighted-text.tsx`, dipakai bareng oleh `search/page.tsx` dan `citation-drawer.tsx` — no duplication).
+- **Empty-grounding warning:** kalau `sources.length === 0` tapi tetap ada jawaban AI, tampil banner kuning kecil "jawaban ini bersifat umum, bukan hasil grounding dokumen internal" — mencegah user salah percaya jawaban itu grounded.
+- **Hapus item individual dari history/bookmark:** tombol X kecil per-chip (muncul on-hover) di `search/page.tsx`, tidak perlu reset semua lewat Settings lagi.
+- **Bulk delete dokumen di `/documents`:** endpoint baru `DELETE /documents/{doc_id}` (`backend/app/routers/documents.py`) — hapus dokumen + chunks dari index (TIDAK menghapus file aslinya di Google Drive). Frontend: checkbox per-baris + "Pilih Semua" + tombol "Hapus dari Index" dengan `confirm()` guard, plus `deleteDocument()` baru di `lib/api.ts`.
+- **Debounce local search `/documents`:** input pencarian di-debounce 250ms (`debouncedQuery` state) sebelum masuk filter `useMemo`, biar gak re-filter tiap keystroke kalau daftar dokumen sudah besar.
+- Verifikasi: `npx tsc --noEmit` (frontend) exit 0, `python -m py_compile` (backend, file yang diubah: `documents.py`, `query.py`, `retrieval.py`, `llm_provider.py`) OK. Belum ditest manual end-to-end lewat browser dengan LLM asli (citation marker `[n]` tergantung LLM benar-benar patuh instruksi — kalau kualitasnya kurang, snippet drawer + grid referensi tetap jadi fallback cara buka sitasi tanpa marker).
+
+### Lanjutan (batch 3) — simplify + animasi, masih di branch `feat/search-citation-drawer`
+Murni frontend, gak ada sentuhan backend sama sekali:
+- **Konsolidasi `DOC_TYPE_COLORS`:** dulu duplikat persis di `search/page.tsx` dan `citation-drawer.tsx`. Diekstrak ke `components/search/doc-type-colors.ts`, dua-duanya import dari situ.
+- **BUG FIX: `animate-in`/`fade-in`/`zoom-in`/`slide-in-from-*`/`fill-mode-both` ternyata dead class selama ini** — `tailwindcss-animate` plugin gak pernah ke-install (`tailwind.config.ts` `plugins: []`), jadi animasi drawer chunk di `/documents` yang udah lama ada (dan animasi baru yang saya tambahin) diam-diam gak pernah render. Fix: `frontend/app/globals.css` sekarang punya implementasi minimal manual (bukan install dependency baru) pakai `--tw-enter-*` CSS vars + satu `@keyframes enter`, cuma nyakup varian yang beneran dipakai di codebase (fade-in, zoom-in, slide-in-from-bottom-1/2, slide-in-from-right, fill-mode-both). Kalau butuh varian baru nanti, tambahin pola yang sama di situ.
+- **Anti race-condition di search:** `doSearch()` di `search/page.tsx` sekarang pakai `requestIdRef` counter — kalau user ganti filter cepat-cepat, response request lama yang telat datang gak akan nimpa response yang lebih baru.
+- **Retry button** di error banner search (dulu cuma teks merah tanpa aksi).
+- **Skeleton loading** ganti spinner polos di list kutipan kiri.
+- **Micro-animation:** stagger fade-in kartu kutipan & kartu jawaban AI pas muncul, scale-pop di ikon Copy/Bookmark/Check pas state berubah, pulse highlight di snippet drawer pas dibuka/pindah sitasi.
+- Verifikasi: `npx tsc --noEmit` exit 0. CSS custom di `globals.css` belum divisualkan langsung di browser (butuh `npm run dev`) — logikanya straightforward (dua custom property + satu keyframe) tapi worth di-eyeball sekali di browser kalau sempat.
+
+### Lanjutan (batch 4) — a11y + persist filter + copy link + responsive, dikerjakan di worktree terpisah
+Murni frontend, `search/page.tsx` dan `citation-drawer.tsx` doang:
+- **Accessibility drawer (`citation-drawer.tsx`):** focus trap manual (Tab/Shift+Tab siklus di dalam panel doang selama drawer terbuka — implementasi tangan pakai query `querySelectorAll` elemen focusable, bukan library), fokus otomatis pindah ke tombol Tutup pas drawer kebuka, dan balik ke elemen yang tadinya fokus pas drawer ditutup. Tambah `role="dialog"` `aria-modal="true"` `aria-label`, serta `aria-label` di semua icon-only button (Tutup, Prev, Next) yang sebelumnya cuma ada `title`.
+- **Aria-label di `search/page.tsx`:** tombol hapus input (X), hapus item history/bookmark per-chip — sebelumnya icon-only tanpa label sama sekali.
+- **Persist filter `docType`/`division`:** disimpan ke `localStorage` (`synapse-search-filters`) tiap kali user ganti filter. Kalau user buka `/search` polos (gak ada `?q=`) di sesi berikutnya, filter terakhir otomatis ke-restore ke dropdown. URL query (`?docType=`/`?division=`) tetap prioritas kalau ada (misal dari link yang di-share) — gak ketimpa localStorage.
+- **Copy Link:** tombol baru di kartu jawaban AI, nyalin `window.location.href` (sekarang beneran ngandung `q`+`docType`+`division` karena `router.replace` di `doSearch` diperluas buat include filter, sebelumnya cuma `q`).
+- **Responsive `/search`:** panel kiri (list kutipan) yang dulu `w-[420px]` fixed dan bakal kepotong di layar sempit sekarang `flex-col md:flex-row` — mobile: list kutipan di atas (capped `max-h-[45vh]`, scroll sendiri), jawaban AI di bawah; desktop (`md:` ke atas): layout side-by-side seperti semula.
+- Verifikasi: `npx tsc --noEmit` exit 0 (dijalankan di worktree `../accelerator-search-wt`). Belum dites manual di browser beneran (responsive breakpoint & focus trap logic-nya lurus tapi worth di-eyeball, terutama Tab-cycling di drawer pake keyboard beneran).
+
+### ✅ RESOLVED: shared working directory antara Claude Code & Antigravity (update dari user)
+Masalah `844b882` nyelip di branch search (dicatat di bawah, dibiarkan buat jejak histori) sudah dibereskan user + Antigravity: `844b882` di-cherry-pick bersih ke `main` (`c54b9ed`, sudah di-push), kerjaan Antigravity selanjutnya (Visual Hardware Search, HLD Diagram, PPTX 16:9) dipindah ke branch terpisah `feat/proposal-visual-engine` (dicabangkan dari `main`), dan auto-commit script katanya sudah dimatikan total.
+- Saya rebase `feat/search-citation-drawer` ke `main` — `git rebase main` otomatis SKIP `844b882` (patch-id sudah match `c54b9ed`), history jadi bersih murni kerjaan search. Force-push ke `origin/feat/search-citation-drawer` (dikonfirmasi user dulu sebelum force-push).
+- **Tapi:** setelah itu, working directory ini masih ke-checkout paksa ke `feat/proposal-visual-engine` 2x lagi di tengah sesi saya (bukan cuma sekali, bukan cuma sebelum auto-commit dimatikan) — file yang lagi saya edit (`search/page.tsx`, `citation-drawer.tsx`, dll) mendadak balik ke versi lama tiap kejadian. Jadi entah auto-commit-nya belum 100% mati, atau ada proses/tooling lain (dev script, IDE agent Antigravity manual checkout) yang masih switch branch di direktori bersama ini. **Belum ketauan root cause pastinya** — kalau kejadian lagi, ini clue-nya.
+- **Workaround yang saya pakai:** bikin git worktree terpisah (`../accelerator-search-wt`, branch sementara `feat/search-citation-drawer-wip` dari tip `feat/search-citation-drawer`) khusus buat kerjaan saya, biar checkout branch di direktori utama gak lagi ganggu file yang lagi saya edit. Kerjaan batch 4 di bawah dikerjain di worktree ini lalu di-merge fast-forward balik ke `feat/search-citation-drawer` via `git push` dari worktree tsb (dan worktree-nya dibuang setelah selesai). Kalau agent Antigravity/user mau setup serupa biar gak saling ganggu, ini pola yang kepake.
+
+---
+
 ## 🗂️ PROJECT OVERVIEW
 
 **Nama:** Synapse Knowledge Accelerator
