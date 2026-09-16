@@ -134,22 +134,6 @@ export function ProgressHeader({
           </Button>
 
           <Button
-            variant="secondary"
-            size="sm"
-            onClick={onCheckCoverage}
-            disabled={isCheckingCoverage || total === 0}
-            className="flex items-center gap-1.5 border-surface-border px-2.5 hover:border-accent sm:px-3"
-            title="Audit persentase kebutuhan TOR yang sudah terjawab di draf"
-          >
-            {isCheckingCoverage ? (
-              <Loader2 size={14} className="animate-spin text-accent-ink" />
-            ) : (
-              <BarChart3 size={14} className="text-accent-ink" />
-            )}
-            <span className="hidden sm:inline">Audit Kepatuhan</span>
-          </Button>
-
-          <Button
             variant="primary"
             size="sm"
             onClick={onOpenExport}
@@ -157,17 +141,6 @@ export function ProgressHeader({
           >
             <Download size={14} />
             <span className="hidden sm:inline">Export</span>
-          </Button>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onResetFile}
-            className="flex items-center gap-1.5 border-surface-border px-2.5 hover:border-accent sm:px-3 text-xs text-text-secondary"
-            title="Mulai dokumen baru atau ganti TOR/RFP acuan"
-          >
-            <RotateCcw size={13} />
-            <span className="hidden sm:inline">Ganti File</span>
           </Button>
 
           <div className="relative">
@@ -188,6 +161,19 @@ export function ProgressHeader({
                 >
                   <ShieldCheck size={14} />
                   <span>{isCheckingQuality ? "Memeriksa..." : qualityScore !== undefined ? `Quality check (${qualityScore})` : "Quality check"}</span>
+                </button>
+                <button
+                  onClick={() => { onCheckCoverage(); setMoreOpen(false); }}
+                  disabled={isCheckingCoverage || total === 0}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs text-text-secondary hover:bg-surface hover:text-text-primary disabled:opacity-50"
+                  title="Jalankan ulang audit kepatuhan kebutuhan TOR secara manual"
+                >
+                  {isCheckingCoverage ? (
+                    <Loader2 size={14} className="animate-spin text-accent-ink" />
+                  ) : (
+                    <BarChart3 size={14} />
+                  )}
+                  <span>Audit Kepatuhan</span>
                 </button>
                 <button
                   onClick={() => { onOpenSizing(); setMoreOpen(false); }}

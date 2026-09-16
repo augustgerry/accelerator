@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useMemo, useEffect, Fragment } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Topbar } from "@/components/topbar";
 import { ProgressHeader } from "@/components/draft/progress-header";
 import { ExportModal } from "@/components/draft/export-modal";
@@ -38,6 +40,8 @@ import {
   ChevronDown,
   BarChart3,
   Ruler,
+  Target,
+  Eye,
 } from "lucide-react";
 import {
   uploadTor,
@@ -117,6 +121,43 @@ function getGroundingBadge(item: RequirementItem): GroundingBadge | null {
     dotClassName: "bg-red-500",
   };
 }
+
+// Draft text is plain-ish markdown (bold, lists, BoQ tables from the Sizing
+// calculator) — style it with the app's own tokens instead of pulling in the
+// Tailwind typography plugin just for a preview toggle.
+const markdownPreviewComponents: Components = {
+  h1: ({ children }) => <h1 className="text-sm font-bold text-text-primary">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-sm font-bold text-text-primary">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-xs font-bold text-text-primary">{children}</h3>,
+  p: ({ children }) => <p className="text-xs leading-relaxed text-text-primary">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-text-primary">{children}</strong>,
+  ul: ({ children }) => <ul className="list-disc space-y-1 pl-5 text-xs text-text-primary">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5 text-xs text-text-primary">{children}</ol>,
+  li: ({ children }) => <li>{children}</li>,
+  a: ({ children, href }) => (
+    <a href={href} target="_blank" rel="noreferrer" className="text-accent-ink underline">
+      {children}
+    </a>
+  ),
+  code: ({ children }) => (
+    <code className="rounded bg-surface-raised px-1 py-0.5 font-mono text-[11px] text-text-primary">{children}</code>
+  ),
+  table: ({ children }) => (
+    <div className="overflow-x-auto rounded-lg border border-surface-border">
+      <table className="w-full border-collapse text-xs">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead className="bg-surface-raised">{children}</thead>,
+  tr: ({ children }) => <tr className="border-b border-surface-border last:border-0">{children}</tr>,
+  th: ({ children }) => (
+    <th className="border-r border-surface-border px-2.5 py-1.5 text-left font-semibold text-text-primary last:border-0">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="border-r border-surface-border px-2.5 py-1.5 text-text-secondary last:border-0">{children}</td>
+  ),
+};
 
 const WIN_THEME_PRESETS = [
   "🏷️ TCO Hemat",
@@ -198,8 +239,12 @@ export default function DraftPage() {
   const [checkingCoverage, setCheckingCoverage] = useState(false);
   const [isCoverageModalOpen, setIsCoverageModalOpen] = useState(false);
 
-  // Compact workspace intel strip (red-flag risk / coverage) — which panel is expanded
-  const [intelPanelOpen, setIntelPanelOpen] = useState<"clauses" | "coverage" | null>(null);
+  // Compact workspace intel strip (red-flag risk / coverage / win themes) — which panel is expanded
+  const [intelPanelOpen, setIntelPanelOpen] = useState<"clauses" | "coverage" | "winthemes" | null>(null);
+
+  // Editor panel: requirement box collapsed by default, markdown preview off by default
+  const [requirementExpanded, setRequirementExpanded] = useState(false);
+  const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
 
   // Infrastructure Sizing & BoQ Calculator — rarely used, kept behind the "more actions"
   // menu so it never competes with the main drafting workflow for attention.
@@ -443,6 +488,13 @@ export default function DraftPage() {
     setLocalDraftText(selectedItem?.draft_text ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedItem?.id, selectedItem?.draft_text]);
+
+  // Collapse the requirement box and drop out of markdown preview each time the
+  // user switches to a different sub-bab.
+  useEffect(() => {
+    setRequirementExpanded(false);
+    setShowMarkdownPreview(false);
+  }, [selectedItem?.id]);
 
   // Filtered requirements list
   const filteredItems = useMemo(() => {
@@ -1096,6 +1148,38 @@ export default function DraftPage() {
         title="Jawab Dokumen Tender (TOR / RFP)"
         subtitle="Pecah soal tender otomatis, cari referensi dari arsip internal, dan susun proposal siap cetak"
       />
+
+      {/* 3-Step Stepper — always visible, shows where the user is at a glance */}
+      <div className="flex items-center justify-center gap-2 border-b border-surface-border bg-surface-raised/60 px-4 py-2 text-xs">
+        {[
+          { n: 1, label: "Upload TOR" },
+          { n: 2, label: "Draf & Tinjau" },
+          { n: 3, label: "Ekspor Word/PPTX" },
+        ].map((step, idx, arr) => {
+          const currentStep = !fileName ? 1 : isExportOpen ? 3 : 2;
+          const done = currentStep > step.n;
+          const active = currentStep === step.n;
+          return (
+            <Fragment key={step.n}>
+              <div
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium transition-colors duration-200 ${
+                  active ? "bg-ink-900 text-white" : done ? "text-emerald-700" : "text-text-muted"
+                }`}
+              >
+                <span
+                  className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${
+                    active ? "bg-white/20" : done ? "bg-emerald-100" : "bg-surface-border/60"
+                  }`}
+                >
+                  {done ? "✓" : step.n}
+                </span>
+                {step.label}
+              </div>
+              {idx < arr.length - 1 && <span className="text-text-muted">───&gt;</span>}
+            </Fragment>
+          );
+        })}
+      </div>
 
       {/* STATE A: EMPTY / UPLOAD STATE */}
       {!fileName && (
@@ -1827,9 +1911,8 @@ export default function DraftPage() {
             onOpenSizing={() => setIsSizingOpen(true)}
           />
 
-          {/* Proposal Intelligence Strip — red-flag risk & coverage, always reachable in workspace */}
-          {(criticalClauses || coverageReport) && (
-            <>
+          {/* Proposal Intelligence Strip — red-flag risk, coverage & win themes, always reachable in workspace */}
+          <>
               <div className="flex flex-wrap items-center gap-2 border-b border-surface-border bg-surface-raised/60 px-6 py-2">
                 {criticalClauses && (
                   <button
@@ -1873,6 +1956,22 @@ export default function DraftPage() {
                     {checkingCoverage ? "Mengaudit coverage..." : "Jalankan audit coverage →"}
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => setIntelPanelOpen((p) => (p === "winthemes" ? null : "winthemes"))}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all active:scale-[0.98] ${
+                    selectedWinThemes.size > 0
+                      ? "border-accent bg-accent-soft text-accent-ink"
+                      : "border-surface-border bg-surface text-text-secondary hover:border-accent/50"
+                  }`}
+                >
+                  <Target size={12} /> Win Themes ({selectedWinThemes.size} aktif)
+                  <ChevronDown
+                    size={12}
+                    className={`transition-transform ${intelPanelOpen === "winthemes" ? "rotate-180" : ""}`}
+                  />
+                </button>
               </div>
 
               {intelPanelOpen === "clauses" && criticalClauses && (
@@ -1932,8 +2031,67 @@ export default function DraftPage() {
                   </button>
                 </div>
               )}
-            </>
-          )}
+
+              {intelPanelOpen === "winthemes" && (
+                <div className="border-b border-surface-border bg-surface px-6 py-3.5 space-y-2.5 animate-in fade-in slide-in-from-bottom-1 duration-150">
+                  <p className="text-[11px] text-text-muted">
+                    Dipilih di sini otomatis diinjeksi ke setiap panggilan Generate/Regenerate Draf.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {WIN_THEME_PRESETS.map((theme) => {
+                      const active = selectedWinThemes.has(theme);
+                      return (
+                        <button
+                          key={theme}
+                          type="button"
+                          onClick={() => toggleWinTheme(theme)}
+                          className={`rounded-full border px-2.5 py-1 text-[11px] transition-all active:scale-[0.98] ${
+                            active
+                              ? "border-accent bg-accent-soft text-accent-ink font-medium"
+                              : "border-surface-border/70 bg-surface text-text-secondary hover:border-accent/50 hover:text-text-primary"
+                          }`}
+                        >
+                          {theme}
+                        </button>
+                      );
+                    })}
+
+                    {Array.from(selectedWinThemes)
+                      .filter((theme) => !WIN_THEME_PRESETS.includes(theme))
+                      .map((theme) => (
+                        <span
+                          key={theme}
+                          className="inline-flex items-center gap-1 rounded-full border border-accent bg-accent-soft px-2.5 py-1 text-[11px] font-medium text-accent-ink animate-in fade-in zoom-in duration-150"
+                        >
+                          {theme}
+                          <button
+                            type="button"
+                            onClick={() => removeWinTheme(theme)}
+                            className="rounded-full hover:bg-accent/30 transition-colors"
+                            title="Hapus"
+                          >
+                            <X size={11} />
+                          </button>
+                        </span>
+                      ))}
+
+                    <input
+                      type="text"
+                      value={customWinThemeInput}
+                      onChange={(e) => setCustomWinThemeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addCustomWinTheme();
+                        }
+                      }}
+                      placeholder="+ Tambah keunggulan lain..."
+                      className="min-w-[160px] flex-1 rounded-full border border-dashed border-surface-border bg-transparent px-2.5 py-1 text-[11px] text-text-primary outline-none focus:border-accent placeholder:text-text-muted"
+                    />
+                  </div>
+                </div>
+              )}
+          </>
 
           {/* Real-time Drafting Progress Banner */}
           {isDraftingAll && draftingProgress && (
@@ -1962,7 +2120,7 @@ export default function DraftPage() {
           {/* Split Workspace */}
           <div className="flex flex-1 overflow-hidden">
             {/* LEFT COLUMN: REQUIREMENTS NAVIGATOR / CHECKLIST */}
-            <div className="flex w-full md:w-[420px] lg:w-[460px] flex-col border-r border-surface-border bg-surface-raised">
+            <div className="flex w-full md:w-[300px] lg:w-[340px] flex-col border-r border-surface-border bg-surface-raised">
               {/* Search & Filters */}
               <div className="border-b border-surface-border p-3 space-y-2.5">
                 <div className="relative">
@@ -2362,16 +2520,29 @@ export default function DraftPage() {
                     </div>
                   </div>
 
-                  {/* Requirement Blockquote */}
+                  {/* Requirement Blockquote — collapsed to 3 lines by default, keeps the editor from being crowded out */}
                   <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
                         Tujuan Bagian Ini
                       </span>
                     </div>
-                    <blockquote className="rounded-lg border-l-4 border-accent bg-surface p-4 text-xs font-normal leading-relaxed text-text-primary">
+                    <blockquote
+                      className={`rounded-lg border-l-4 border-accent bg-surface p-4 text-xs font-normal leading-relaxed text-text-primary transition-all duration-200 ${
+                        requirementExpanded ? "" : "line-clamp-3"
+                      }`}
+                    >
                       {selectedItem.requirement_text}
                     </blockquote>
+                    {selectedItem.requirement_text.length > 180 && (
+                      <button
+                        type="button"
+                        onClick={() => setRequirementExpanded((v) => !v)}
+                        className="mt-1.5 text-[11px] font-medium text-accent-ink hover:underline"
+                      >
+                        {requirementExpanded ? "Sembunyikan" : "Lihat selengkapnya"}
+                      </button>
+                    )}
                   </div>
 
                   {/* AI Draft Response Editor */}
@@ -2385,6 +2556,26 @@ export default function DraftPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleOpenStudio("search")}
+                          title="Asset Studio"
+                          className="h-7 w-7 justify-center px-0 text-xs"
+                        >
+                          <ImageIcon size={13} />
+                        </Button>
+                        {localDraftText && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setShowMarkdownPreview((v) => !v)}
+                            title={showMarkdownPreview ? "Kembali ke Edit" : "Preview Markdown"}
+                            className="h-7 w-7 justify-center px-0 text-xs"
+                          >
+                            {showMarkdownPreview ? <Pencil size={13} /> : <Eye size={13} />}
+                          </Button>
+                        )}
                         {localDraftText && (
                           <Button
                             variant="secondary"
@@ -2434,96 +2625,50 @@ export default function DraftPage() {
                       </div>
                     </div>
 
-                    {/* Win Themes — injected into the next Generate/Regenerate call */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="mr-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                        Sorot Keunggulan:
-                      </span>
-                      {WIN_THEME_PRESETS.map((theme) => {
-                        const active = selectedWinThemes.has(theme);
-                        return (
-                          <button
-                            key={theme}
-                            type="button"
-                            onClick={() => toggleWinTheme(theme)}
-                            className={`rounded-full border px-2.5 py-1 text-[11px] transition-all active:scale-[0.98] ${
-                              active
-                                ? "border-accent bg-accent-soft text-accent-ink font-medium"
-                                : "border-surface-border/70 bg-surface text-text-secondary hover:border-accent/50 hover:text-text-primary"
-                            }`}
-                          >
-                            {theme}
-                          </button>
-                        );
-                      })}
-
-                      {/* Custom win themes the user typed in — always active, removable */}
-                      {Array.from(selectedWinThemes)
-                        .filter((theme) => !WIN_THEME_PRESETS.includes(theme))
-                        .map((theme) => (
-                          <span
-                            key={theme}
-                            className="inline-flex items-center gap-1 rounded-full border border-accent bg-accent-soft px-2.5 py-1 text-[11px] font-medium text-accent-ink animate-in fade-in zoom-in duration-150"
-                          >
-                            {theme}
-                            <button
-                              type="button"
-                              onClick={() => removeWinTheme(theme)}
-                              className="rounded-full hover:bg-accent/30 transition-colors"
-                              title="Hapus"
-                            >
-                              <X size={11} />
-                            </button>
-                          </span>
-                        ))}
-
-                      <input
-                        type="text"
-                        value={customWinThemeInput}
-                        onChange={(e) => setCustomWinThemeInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addCustomWinTheme();
-                          }
-                        }}
-                        placeholder="+ Tambah keunggulan lain..."
-                        className="min-w-[160px] flex-1 rounded-full border border-dashed border-surface-border bg-transparent px-2.5 py-1 text-[11px] text-text-primary outline-none focus:border-accent placeholder:text-text-muted"
-                      />
-                    </div>
-
-                    {/* Textarea Editor */}
+                    {/* Textarea Editor / Markdown Preview */}
                     <div className="relative">
-                      <textarea
-                        value={localDraftText}
-                        onChange={(e) => {
-                          const text = e.target.value;
-                          setLocalDraftText(text);
-                          draftDebounceRef.current.itemId = selectedItem.id;
-                          draftDebounceRef.current.text = text;
-                          if (draftDebounceRef.current.timer) clearTimeout(draftDebounceRef.current.timer);
-                          draftDebounceRef.current.timer = setTimeout(() => {
-                            handleTextChange(selectedItem.id, text);
-                            draftDebounceRef.current.timer = null;
-                            draftDebounceRef.current.itemId = null;
-                          }, 200);
-                        }}
-                        onBlur={() => {
-                          if (draftDebounceRef.current.timer) {
-                            clearTimeout(draftDebounceRef.current.timer);
-                            draftDebounceRef.current.timer = null;
-                            draftDebounceRef.current.itemId = null;
-                            handleTextChange(selectedItem.id, localDraftText);
-                          }
-                        }}
-                        placeholder="Klik 'Buat Draf AI' atau ketik langsung konten bagian proposal di sini..."
-                        rows={8}
-                        className={`w-full rounded-lg border p-4 text-xs leading-relaxed text-text-primary outline-none focus:border-accent font-sans transition-colors duration-700 resize-y ${
-                          justGeneratedId === selectedItem.id
-                            ? "border-accent bg-accent-soft/30"
-                            : "border-surface-border bg-surface"
-                        }`}
-                      />
+                      {showMarkdownPreview ? (
+                        <div className="min-h-[13rem] w-full space-y-2.5 rounded-lg border border-surface-border bg-surface p-4 text-xs leading-relaxed text-text-primary animate-in fade-in duration-150">
+                          {localDraftText.trim() ? (
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
+                              {localDraftText}
+                            </ReactMarkdown>
+                          ) : (
+                            <p className="text-text-muted">Belum ada draf untuk dipratinjau.</p>
+                          )}
+                        </div>
+                      ) : (
+                        <textarea
+                          value={localDraftText}
+                          onChange={(e) => {
+                            const text = e.target.value;
+                            setLocalDraftText(text);
+                            draftDebounceRef.current.itemId = selectedItem.id;
+                            draftDebounceRef.current.text = text;
+                            if (draftDebounceRef.current.timer) clearTimeout(draftDebounceRef.current.timer);
+                            draftDebounceRef.current.timer = setTimeout(() => {
+                              handleTextChange(selectedItem.id, text);
+                              draftDebounceRef.current.timer = null;
+                              draftDebounceRef.current.itemId = null;
+                            }, 200);
+                          }}
+                          onBlur={() => {
+                            if (draftDebounceRef.current.timer) {
+                              clearTimeout(draftDebounceRef.current.timer);
+                              draftDebounceRef.current.timer = null;
+                              draftDebounceRef.current.itemId = null;
+                              handleTextChange(selectedItem.id, localDraftText);
+                            }
+                          }}
+                          placeholder="Klik 'Buat Draf AI' atau ketik langsung konten bagian proposal di sini..."
+                          rows={10}
+                          className={`w-full rounded-lg border p-4 text-xs leading-relaxed text-text-primary outline-none focus:border-accent font-sans transition-colors duration-700 resize-y ${
+                            justGeneratedId === selectedItem.id
+                              ? "border-accent bg-accent-soft/30"
+                              : "border-surface-border bg-surface"
+                          }`}
+                        />
+                      )}
                       {localDraftText && (
                         <div className="mt-1 flex justify-end text-[11px] text-text-muted">
                           {localDraftText.split(/\s+/).filter(Boolean).length} kata ·{" "}
