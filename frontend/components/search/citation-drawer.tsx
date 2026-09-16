@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Download, ExternalLink, Loader2, Copy, Check, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { downloadDriveDocument, type SearchResultChunk } from "@/lib/api";
 import { getFileExtension } from "@/lib/utils";
@@ -26,6 +26,9 @@ export function CitationDrawer({
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [pulse, setPulse] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   const open = !!chunk;
   const ext = chunk ? getFileExtension(chunk.title) : "";
@@ -33,14 +36,42 @@ export function CitationDrawer({
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      else if (e.key === "ArrowRight" && index < total - 1) onNavigate(index + 1);
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key === "ArrowRight" && index < total - 1) onNavigate(index + 1);
       else if (e.key === "ArrowLeft" && index > 0) onNavigate(index - 1);
+      else if (e.key === "Tab" && panelRef.current) {
+        const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, index, total]);
+
+  // Move focus into the drawer on open, restore it to whatever triggered it on close.
+  useEffect(() => {
+    if (open) {
+      previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+      closeButtonRef.current?.focus();
+    } else {
+      previouslyFocusedRef.current?.focus();
+    }
+  }, [open]);
 
   // Brief highlight pulse on the snippet each time the drawer opens on a new chunk
   useEffect(() => {
@@ -90,7 +121,11 @@ export function CitationDrawer({
       onClick={onClose}
     >
       <div
+        ref={panelRef}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={chunk ? `Detail kutipan: ${chunk.title}` : "Detail kutipan"}
         className={`h-full w-full max-w-md border-l border-surface-border bg-surface-base shadow-2xl flex flex-col transition-transform duration-200 ease-out ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
@@ -140,6 +175,7 @@ export function CitationDrawer({
                   onClick={() => onNavigate(index - 1)}
                   disabled={index <= 0}
                   title="Kutipan sebelumnya"
+                  aria-label="Kutipan sebelumnya"
                   className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-border hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
                 >
                   <ChevronLeft size={16} />
@@ -148,12 +184,15 @@ export function CitationDrawer({
                   onClick={() => onNavigate(index + 1)}
                   disabled={index >= total - 1}
                   title="Kutipan berikutnya"
+                  aria-label="Kutipan berikutnya"
                   className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-border hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
                 >
                   <ChevronRight size={16} />
                 </button>
                 <button
+                  ref={closeButtonRef}
                   onClick={onClose}
+                  aria-label="Tutup panel kutipan"
                   className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-border hover:text-text-primary"
                 >
                   <X size={18} />

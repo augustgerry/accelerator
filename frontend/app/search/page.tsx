@@ -19,6 +19,7 @@ import {
   BookmarkCheck,
   Copy,
   Check,
+  Link2,
 } from "lucide-react";
 import { searchKnowledgeBase, type SearchResult } from "@/lib/api";
 import { CitationDrawer } from "@/components/search/citation-drawer";
@@ -28,6 +29,7 @@ import { DOC_TYPE_COLORS } from "@/components/search/doc-type-colors";
 
 const LS_HISTORY_KEY = "synapse-search-history";
 const LS_BOOKMARKS_KEY = "synapse-search-bookmarks";
+const LS_FILTERS_KEY = "synapse-search-filters";
 
 type BookmarkEntry = { question: string; answer: string; savedAt: string };
 
@@ -68,18 +70,35 @@ function SearchContent() {
   const [error, setError] = useState<string | null>(null);
   const [selectedChunkIdx, setSelectedChunkIdx] = useState<number | null>(null);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
-  const [docTypeFilter, setDocTypeFilter] = useState("");
-  const [divisionFilter, setDivisionFilter] = useState("");
+  const [docTypeFilter, setDocTypeFilter] = useState(searchParams.get("docType") ?? "");
+  const [divisionFilter, setDivisionFilter] = useState(searchParams.get("division") ?? "");
   const [history, setHistory] = useState<string[]>([]);
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
   const [answerCopied, setAnswerCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const requestIdRef = useRef(0);
 
   useEffect(() => {
     setHistory(loadHistory());
     setBookmarks(loadBookmarks());
+    // Fall back to the last-used filter only when the URL didn't already specify one
+    // (a shared/reloaded link always wins over a stale local preference).
+    if (!searchParams.get("docType") && !searchParams.get("division")) {
+      try {
+        const persisted = JSON.parse(localStorage.getItem(LS_FILTERS_KEY) ?? "{}");
+        if (persisted.docType) setDocTypeFilter(persisted.docType);
+        if (persisted.division) setDivisionFilter(persisted.division);
+      } catch { /* private mode */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const persistFilters = (nextDocType: string, nextDivision: string) => {
+    try {
+      localStorage.setItem(LS_FILTERS_KEY, JSON.stringify({ docType: nextDocType, division: nextDivision }));
+    } catch { /* private mode */ }
+  };
 
   const isBookmarked = !!result && bookmarks.some((b) => b.question === query);
 
@@ -112,7 +131,10 @@ function SearchContent() {
     setError(null);
     setResult(null);
     setSelectedChunkIdx(null);
-    router.replace(`/search?q=${encodeURIComponent(q)}`, { scroll: false });
+    const urlParams = new URLSearchParams({ q });
+    if (nextDocType) urlParams.set("docType", nextDocType);
+    if (nextDivision) urlParams.set("division", nextDivision);
+    router.replace(`/search?${urlParams.toString()}`, { scroll: false });
 
     // Persist to search history (max 10, no duplicates)
     try {
@@ -150,11 +172,19 @@ function SearchContent() {
   const handleFilterChange = (kind: "docType" | "division", value: string) => {
     if (kind === "docType") {
       setDocTypeFilter(value);
+      persistFilters(value, divisionFilter);
       if (query) doSearch(query, value, divisionFilter);
     } else {
       setDivisionFilter(value);
+      persistFilters(docTypeFilter, value);
       if (query) doSearch(query, docTypeFilter, value);
     }
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   };
 
   const selectedChunk = result && selectedChunkIdx !== null ? result.sources[selectedChunkIdx] : null;
@@ -191,6 +221,7 @@ function SearchContent() {
               <button
                 type="button"
                 onClick={() => { setInputValue(""); inputRef.current?.focus(); }}
+                aria-label="Hapus input"
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
               >
                 <X size={13} />
@@ -231,7 +262,7 @@ function SearchContent() {
             </select>
             {(docTypeFilter || divisionFilter) && (
               <button
-                onClick={() => { setDocTypeFilter(""); setDivisionFilter(""); if (query) doSearch(query, "", ""); }}
+                onClick={() => { setDocTypeFilter(""); setDivisionFilter(""); persistFilters("", ""); if (query) doSearch(query, "", ""); }}
                 className="text-[11px] font-medium text-secondary hover:underline"
               >
                 Reset filter
@@ -257,6 +288,7 @@ function SearchContent() {
                     localStorage.setItem(LS_HISTORY_KEY, JSON.stringify(updated));
                     setHistory(updated);
                   }}
+                  aria-label={`Hapus "${h}" dari riwayat`}
                   className="rounded-full p-0.5 text-text-muted opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
                 >
                   <X size={10} />
@@ -284,6 +316,7 @@ function SearchContent() {
                     localStorage.setItem(LS_BOOKMARKS_KEY, JSON.stringify(updated));
                     setBookmarks(updated);
                   }}
+                  aria-label={`Hapus "${b.question}" dari bookmark`}
                   className="rounded-full p-0.5 text-secondary opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
                 >
                   <X size={10} />
@@ -310,10 +343,10 @@ function SearchContent() {
       </div>
 
       {/* ── Main Content ──────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
 
         {/* LEFT: Document Citation Cards */}
-        <div className="flex w-[420px] shrink-0 flex-col border-r border-surface-border bg-surface-raised overflow-y-auto">
+        <div className="flex max-h-[45vh] md:max-h-none w-full md:w-[420px] shrink-0 flex-col border-b md:border-b-0 md:border-r border-surface-border bg-surface-raised overflow-y-auto">
           {loading && (
             <div className="animate-in fade-in duration-200">
               <div className="flex flex-col items-center gap-2 p-4 text-text-muted">
@@ -497,6 +530,17 @@ function SearchContent() {
                       <Bookmark size={14} />
                     )}
                     {isBookmarked ? "Tersimpan" : "Bookmark"}
+                  </button>
+                  <button
+                    onClick={copyLink}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-primary transition-colors hover:border-accent hover:bg-accent-soft"
+                  >
+                    {linkCopied ? (
+                      <Check size={14} className="text-emerald-500 animate-in zoom-in duration-200" />
+                    ) : (
+                      <Link2 size={14} />
+                    )}
+                    {linkCopied ? "Link tersalin!" : "Copy Link"}
                   </button>
                 </div>
               </div>
