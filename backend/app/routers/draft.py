@@ -78,6 +78,8 @@ class DraftItemResponse(BaseModel):
     draft_text: str
     sources_used: int
     sources: list[SourceMeta] = []
+    grounding_status: str = "strong"  # "strong" | "moderate" | "sparse"
+    grounding_note: Optional[str] = None
     image_data_url: Optional[str] = None
     image_caption: Optional[str] = None
 
@@ -271,6 +273,41 @@ def segment_tor(payload: SegmentRequest):
     return SegmentResponse(items=items)
 
 
+def _evaluate_context_sufficiency(requirement_text: str, kb_chunks: list[str], tor_excerpt: str) -> tuple[str, str]:
+    """Reflect on whether retrieved knowledge base chunks and TOR excerpt provide sufficient grounding.
+    Returns (status: 'strong' | 'moderate' | 'sparse', note: str)."""
+    total_len = sum(len(c) for c in kb_chunks) + len(tor_excerpt)
+    if total_len < 180:
+        return "sparse", "Konteks referensi sangat minim (<180 karakter). Draf disusun mengandalkan pemahaman umum."
+
+    tokens = [t.lower() for t in re.findall(r"[a-zA-Z0-9]{3,}", requirement_text) if t.lower() not in (
+        "jelaskan", "buatkan", "rincian", "uraian", "tata", "kelola", "kebutuhan", "bagian", "dokumen", "terkait",
+        "dan", "yang", "untuk", "pada", "dari", "dalam", "dengan", "secara", "lengkap", "detail"
+    )]
+    all_context = (" ".join(kb_chunks) + " " + tor_excerpt).lower()
+    matches = sum(1 for t in tokens if t in all_context)
+    coverage = matches / max(1, len(tokens))
+
+    if coverage >= 0.45 and total_len >= 600:
+        return "strong", f"Grounding kuat: mencakup {matches}/{len(tokens)} kata kunci teknis utama dan {len(kb_chunks)} cuplikan referensi."
+    elif coverage >= 0.20 or total_len >= 300:
+        return "moderate", f"Grounding moderat: sebagian rujukan ({matches}/{len(tokens)} kata kunci) ditemukan dalam basis pengetahuan."
+    else:
+        return "sparse", "Grounding terbatas: istilah spesifik tidak banyak ditemukan di rujukan acuan."
+
+
+def _reformulate_query_for_expansion(requirement_text: str, instruction: Optional[str]) -> str:
+    """Extract core nouns and domain phrases to expand sparse search."""
+    combined = f"{requirement_text} {instruction or ''}"
+    words = re.findall(r"[a-zA-Z0-9_-]{3,}", combined)
+    stopwords = {
+        "jelaskan", "buatkan", "rincian", "uraian", "tata", "kelola", "kebutuhan", "bagian", "dokumen", "terkait",
+        "dan", "yang", "untuk", "pada", "dari", "dalam", "dengan", "secara", "lengkap", "detail", "mohon", "harap"
+    }
+    keywords = [w for w in words if w.lower() not in stopwords]
+    return " ".join(keywords[:6]) if keywords else requirement_text
+
+
 @router.post("/item", response_model=DraftItemResponse)
 def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session)):
     """Generate a grounded draft response for a single requirement item."""
@@ -285,11 +322,33 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
 
     from app.services.embeddings import semantic_select_tor_excerpt
 
+    relevant_tor = ""
     context = []
     if payload.tor_context and payload.tor_context.strip():
         relevant_tor = semantic_select_tor_excerpt(payload.tor_context, query, top_k=5, max_chars=6000)
         if relevant_tor:
             context.append(f"Konteks TOR/RFP Terkait:\n{relevant_tor}")
+
+    # Reflect-before-generate: check sufficiency of retrieved context
+    grounding_status, grounding_note = _evaluate_context_sufficiency(payload.requirement_text, kb_chunks, relevant_tor)
+
+    # If context is sparse, perform query expansion & broaden retrieval across entire KB
+    if grounding_status == "sparse":
+        expanded_query = _reformulate_query_for_expansion(payload.requirement_text, payload.instruction)
+        if expanded_query and expanded_query != query:
+            extra_chunks, extra_sources = retrieve_relevant_chunks_with_sources(
+                session, payload.workspace_id, expanded_query, top_k=3,
+                doc_ids=None,  # Search entire KB to supplement sparse query
+            )
+            existing_sources_ids = {s["id"] for s in sources}
+            for c, s in zip(extra_chunks, extra_sources):
+                if s["id"] not in existing_sources_ids:
+                    kb_chunks.append(c)
+                    sources.append(s)
+                    existing_sources_ids.add(s["id"])
+            # Re-evaluate with expanded context
+            grounding_status, grounding_note = _evaluate_context_sufficiency(payload.requirement_text, kb_chunks, relevant_tor)
+
     context.extend(kb_chunks)
 
     user_prompt = f"Brief/Tujuan Bagian Dokumen:\n{payload.requirement_text}"
@@ -366,6 +425,8 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
         draft_text=draft,
         sources_used=len(kb_chunks),
         sources=source_models,
+        grounding_status=grounding_status,
+        grounding_note=grounding_note,
         image_data_url=image_data_url,
         image_caption=image_caption,
     )
@@ -385,10 +446,9 @@ async def upload_tor(file: UploadFile):
     elif name.endswith(".docx") or file.content_type == (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ):
-        from docx import Document as DocxDocument
+        from app.services.drive_sync import _extract_docx_text_and_tables
 
-        doc = DocxDocument(io.BytesIO(data))
-        text = "\n".join(p.text for p in doc.paragraphs)
+        text = _extract_docx_text_and_tables(data)
     else:
         raise HTTPException(status_code=400, detail="Only PDF or DOCX files are supported")
 

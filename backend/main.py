@@ -12,8 +12,13 @@ app = FastAPI(
 
 
 @app.on_event("startup")
-def _warm_up_embedding_model():
+def _warm_up_models():
     warm_up()
+    try:
+        from app.services.retrieval import _get_reranker
+        _get_reranker()
+    except Exception:
+        pass
 
 app.add_middleware(
     CORSMiddleware,

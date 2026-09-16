@@ -6,9 +6,9 @@ Context: Sangfor demoed their Agent Builder platform (RAG + agentic workflow bui
 
 ## 1. Retrieval quality (Backend — Antigravity)
 
-- [ ] **Reranking pass** — currently Synapse likely returns top-k vector matches as-is. Add a reranking step after initial pgvector retrieval, before passing chunks to Claude. Options: a hosted cross-encoder reranker (e.g. Cohere Rerank) called as a second API step, or a lightweight local reranker — either works with pgvector, no need to migrate vector DB.
-- [ ] **Reflect-before-generate step** — before generating a draft answer/section, add a check: "is the retrieved context actually sufficient to answer this sub-section?" If not, re-query with a reformulated query (wider scope, different keywords, or pull an adjacent sub-section's sources) before falling back to generation. This directly targets hallucinated/thin drafts on sparse source material.
-- [ ] **Chunking strategy review** — confirm current chunking isn't naive fixed-length splitting. For TOR/SoW-style docs, chunk boundaries should respect section/sub-section headers and keep tables intact as single chunks rather than splitting mid-table.
+- [x] **Reranking pass** — ✅ **RESOLVED (Antigravity):** Implemented local cached Cross-Encoder (`cross-encoder/ms-marco-TinyBERT-L-2-v2`) in `backend/app/services/retrieval.py` (`_rerank_candidates`). Reranks top 20-25 hybrid vector/lexical candidates with cross-attention relevance before passing top-k to LLM. Pre-warmed on FastAPI startup (`main.py`).
+- [x] **Reflect-before-generate step** — ✅ **RESOLVED (Antigravity):** Added `_evaluate_context_sufficiency()` and `_reformulate_query_for_expansion()` in `backend/app/routers/draft.py` (`POST /draft/item`). If retrieved context is sparse (<180 chars or low token coverage), it automatically expands query terms, broadens search to the entire KB, and returns `grounding_status` ('strong' | 'moderate' | 'sparse') + `grounding_note` in `DraftItemResponse` for frontend display.
+- [x] **Chunking strategy review** — ✅ **RESOLVED (Antigravity):** Replaced naive sliding-window with structure-aware chunker in `backend/app/services/embeddings.py` (`chunk_text`). Respects markdown headers (`# `, `## `, `### `) as chunk boundaries, preserves Markdown tables intact, and slices giant tables row-by-row with repeated header rows (`_split_markdown_table`).
 
 **Priority:** High — these three directly affect answer/draft quality, which is the core value prop.
 
@@ -16,7 +16,7 @@ Context: Sangfor demoed their Agent Builder platform (RAG + agentic workflow bui
 
 ## 2. Document parsing (Backend — Antigravity)
 
-- [ ] **Tables spanning multiple pages** — check how the current parser (whatever library is being used to ingest PDFs/DOCX) handles a table that breaks across a page boundary. Today it may be silently split into two disconnected chunks. Needs either OCR/layout-aware table reconstruction or an explicit "continued table" merge step.
+- [x] **Tables spanning multiple pages / Ingestion table loss** — ✅ **RESOLVED (Antigravity):** Fixed major data-loss bug in `backend/app/services/drive_sync.py` & `backend/app/routers/draft.py` (`upload_tor`). Previously, DOCX parsing only extracted `doc.paragraphs` and completely lost all tables (`doc.tables`). Now extracts paragraphs and tables in sequential document order via `_extract_docx_text_and_tables()`, converting all tables into structured Markdown tables (`| Col 1 | Col 2 |`).
 - [ ] **Signature/stamp pages** — TOR and SoW documents usually end with signature blocks and company stamps. Decide explicitly: exclude these pages from embedding (they add noise, no retrievable value), but optionally keep a lightweight metadata flag like `has_signature_page: true` for provenance/citation purposes.
 - [ ] **Scanned/OCR fallback** — confirm there's a fallback path for scanned PDFs (some older TORs from customers may be scans, not native PDFs).
 

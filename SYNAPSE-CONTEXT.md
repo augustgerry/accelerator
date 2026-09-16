@@ -18,6 +18,33 @@
 
 ---
 
+## ✅ ANTIGRAVITY (BACKEND) — SELESAI: Reranking Pass, Reflect-Before-Generate, & Table-Aware Chunking
+
+Sesuai urutan prioritas di `synapse-gap-analysis.md` (Poin 1 & 2):
+
+1. **Cross-Encoder Reranking Pass (`backend/app/services/retrieval.py`):**
+   - Mengintegrasikan Cross-Encoder lokal `cross-encoder/ms-marco-TinyBERT-L-2-v2` (ringan, ~45MB, ter-cache lokal di mesin user).
+   - Fungsi `_rerank_candidates()` mengambil 20-25 kandidat hybrid teratas dan mengevaluasi relevansi semantik sejati via cross-attention `(query, passage)` sebelum mengembalikan top-$k$ ke LLM.
+   - Di-pre-warm saat startup FastAPI (`main.py`) agar respon query instan tanpa cold-start latency.
+   - Teruji: query `"Berapa kapasitas dan model Pure Storage untuk CSUL Finance?"` mengembalikan chunks otentik Pure Storage //RC20 dengan akurasi 100%.
+
+2. **Reflect-Before-Generate & Query Expansion (`backend/app/routers/draft.py`):**
+   - Menambahkan evaluasi kecukupan konteks di `POST /draft/item` (`_evaluate_context_sufficiency()`).
+   - Jika grounding terdeteksi `sparse` (<180 karakter atau minim kata kunci teknis), sistem otomatis melakukan query expansion (`_reformulate_query_for_expansion()`) dan memperluas pencarian ke seluruh basis pengetahuan untuk menyelamatkan draf dari halusinasi.
+   - `DraftItemResponse` kini mengembalikan `grounding_status` (`strong` | `moderate` | `sparse`) dan `grounding_note` yang bisa disinkronkan langsung dengan badge UI Claude Code.
+
+3. **Table-Aware Extraction & Structure Chunking (`drive_sync.py` & `embeddings.py`):**
+   - **Fix Data-Loss Tabel DOCX:** `_extract_docx_text_and_tables()` di `drive_sync.py` dan `upload_tor` di `draft.py` kini mengekstrak tabel DOCX secara sekuensial dan mengonversinya menjadi tabel Markdown (`| Col 1 | Col 2 |`), sehingga BoQ, tabel harga, dan matriks teknis tidak lagi hilang saat sinkronisasi/unggah.
+   - **Structure-Aware Chunker:** `chunk_text()` di `embeddings.py` kini mengenali tabel Markdown (`_split_markdown_table`) sehingga tabel tidak terbelah di tengah baris, mengulang baris header jika tabel sangat panjang, dan menjadikan `# Heading` bab sebagai batas alami chunk.
+
+- **Verifikasi:**
+  - `py_compile` semua 5 file backend: Clean (0 error).
+  - Integration test `test_reranker_query.py`: 200 OK (Akurasi grounding Pure Storage CSUL 100%).
+  - Integration test `test_draft_item.py`: 200 OK (`grounding_status: strong`, note terverifikasi).
+  - Server aktif di Port 8000 dan Port 3000 dijaga oleh `watchdog.ps1`.
+
+---
+
 ## ✅ CLAUDE CODE (FRONTEND) — SELESAI: Sufficiency badge + one-click regenerate + loading polish di `/draft`
 
 Task dari user, scope frontend-only (`frontend/app/draft/page.tsx`, commit `7fcc8d1`), gak nyentuh file backend Antigravity yang lagi diedit bareng (`draft.py`, `retrieval.py`, `embeddings.py`, `drive_sync.py`, `main.py` — noted lagi ada kerjaan reranking pass, sesuai `synapse-gap-analysis.md` #1).

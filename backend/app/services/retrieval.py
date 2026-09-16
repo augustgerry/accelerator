@@ -96,7 +96,62 @@ def _hybrid_ranked_chunks(
         key=lambda candidate: (candidate["score"], -candidate["vector_rank"]),
         reverse=True,
     )
-    return ranked[:top_k]
+    return _rerank_candidates(query, ranked, top_k)
+
+
+from functools import lru_cache
+
+@lru_cache(maxsize=1)
+def _get_reranker():
+    try:
+        from sentence_transformers import CrossEncoder
+        # Ultra-fast, lightweight CPU cross-encoder (cached locally)
+        return CrossEncoder("cross-encoder/ms-marco-TinyBERT-L-2-v2")
+    except Exception as e:
+        logger.warning("CrossEncoder reranker initialization skipped: %s", e)
+        return None
+
+
+def _rerank_candidates(query: str, ranked_candidates: list[dict], top_k: int) -> list[dict]:
+    """Rerank top initial candidates using Cross-Encoder cross-attention scoring.
+    Combines cross-encoder semantic precision with term matching and density."""
+    if not ranked_candidates:
+        return []
+
+    # Consider up to 20 top candidates for reranking
+    candidate_pool = ranked_candidates[:max(top_k * 3, 20)]
+    reranker = _get_reranker()
+
+    if reranker is None:
+        return ranked_candidates[:top_k]
+
+    try:
+        # Build (query, document_passage) pairs
+        pairs = []
+        for item in candidate_pool:
+            text = (item["chunk"].content or "").strip()[:1000]
+            title = item["chunk"].document.title if (item["chunk"] and item["chunk"].document) else ""
+            passage = f"{title}: {text}" if title else text
+            pairs.append((query, passage))
+
+        raw_scores = reranker.predict(pairs)
+
+        import math
+        for idx, item in enumerate(candidate_pool):
+            raw_s = float(raw_scores[idx])
+            # Sigmoid normalization
+            ce_score = 1.0 / (1.0 + math.exp(-raw_s))
+            initial_score = item.get("score", 0.0)
+            # 70% Cross-Encoder relevance, 30% initial hybrid/lexical score
+            blended = ce_score * 0.70 + initial_score * 0.30
+            item["rerank_score"] = blended
+            item["score"] = blended
+
+        reranked = sorted(candidate_pool, key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+        return reranked[:top_k]
+    except Exception as e:
+        logger.warning("Reranking pass failed, falling back to hybrid ranking: %s", e)
+        return ranked_candidates[:top_k]
 
 
 def _hybrid_chunks(

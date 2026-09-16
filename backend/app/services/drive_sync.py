@@ -114,6 +114,52 @@ def download_file_bytes(file_id: str) -> bytes:
     return _download_media(service, file_id)
 
 
+def _format_docx_table_markdown(table) -> str:
+    """Format a python-docx Table into clean Markdown table string."""
+    rows = []
+    for row in table.rows:
+        row_cells = [cell.text.strip().replace("\n", " ") for cell in row.cells]
+        if any(row_cells):
+            rows.append("| " + " | ".join(row_cells) + " |")
+    if not rows:
+        return ""
+    header_cols = len(table.columns) if table.columns else max(1, rows[0].count("|") - 1)
+    separator = "| " + " | ".join(["---"] * max(1, header_cols)) + " |"
+    if len(rows) > 1:
+        return "\n" + rows[0] + "\n" + separator + "\n" + "\n".join(rows[1:]) + "\n"
+    return "\n" + rows[0] + "\n" + separator + "\n"
+
+
+def _extract_docx_text_and_tables(file_bytes: bytes) -> str:
+    """Extract paragraphs with heading levels AND tables in sequential document order."""
+    from docx import Document as DocxDocument
+    from docx.text.paragraph import Paragraph
+    from docx.table import Table
+
+    doc = DocxDocument(io.BytesIO(file_bytes))
+    blocks = []
+    for child in doc.element.body:
+        if child.tag.endswith("p"):
+            p = Paragraph(child, doc)
+            text = p.text.strip()
+            if text:
+                style_name = (p.style.name or "").lower() if p.style else ""
+                if "heading 1" in style_name:
+                    blocks.append(f"# {text}")
+                elif "heading 2" in style_name:
+                    blocks.append(f"## {text}")
+                elif "heading 3" in style_name:
+                    blocks.append(f"### {text}")
+                else:
+                    blocks.append(text)
+        elif child.tag.endswith("tbl"):
+            tbl = Table(child, doc)
+            tbl_md = _format_docx_table_markdown(tbl)
+            if tbl_md:
+                blocks.append(tbl_md)
+    return "\n\n".join(blocks)
+
+
 def fetch_and_extract_text(file_id: str) -> str:
     """Download file `file_id` and extract plain text based on its mimeType."""
     service = _get_service()
@@ -135,10 +181,7 @@ def fetch_and_extract_text(file_id: str) -> str:
         return "\n".join(page.extract_text() or "" for page in reader.pages)
 
     if mime == DOCX_MIME:
-        from docx import Document as DocxDocument
-
-        doc = DocxDocument(io.BytesIO(_download_media(service, file_id)))
-        return "\n".join(p.text for p in doc.paragraphs)
+        return _extract_docx_text_and_tables(_download_media(service, file_id))
 
     if mime == PPTX_MIME:
         from pptx import Presentation
