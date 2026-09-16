@@ -46,12 +46,8 @@ export function VisualAssetStudio({
   const [hldRenderedUrl, setHldRenderedUrl] = useState<string | null>(null);
   const [isReRenderingMermaid, setIsReRenderingMermaid] = useState(false);
 
-  // Local caption for current attached asset
-  const [currentCaption, setCurrentCaption] = useState(item.image_caption || "");
-
   // Auto-suggest search query when item changes
   useEffect(() => {
-    setCurrentCaption(item.image_caption || "");
     if (!item.image_data_url) {
       // Create clean query suggestion from title & draft keywords
       const titleClean = item.title.replace(/^(bab|sub-bab|\d+(\.\d+)*)\s*[:.-]?\s*/i, "").trim();
@@ -68,13 +64,16 @@ export function VisualAssetStudio({
     }
   }, [item.id, item.title, item.image_caption, item.image_data_url, item.requirement_text]);
 
-  // Handle Image Search
-  const handleSearch = async (e?: React.FormEvent) => {
+  // Handle Image Search. Pass queryOverride for callers (e.g. quick presets) that
+  // search a specific string without waiting for setSearchQuery to re-render first.
+  const handleSearch = async (e?: React.FormEvent, queryOverride?: string) => {
     if (e) e.preventDefault();
-    if (!searchQuery.trim()) return;
+    const q = (queryOverride ?? searchQuery).trim();
+    if (!q) return;
+    setSearchQuery(q);
     setIsSearching(true);
     try {
-      const resp = await searchImages(searchQuery.trim(), 8);
+      const resp = await searchImages(q, 8);
       setSearchResults(resp.items || []);
     } catch (err: any) {
       console.error("Search images error:", err);
@@ -90,7 +89,6 @@ export function VisualAssetStudio({
     try {
       const downloaded = await downloadImage(imgUrl);
       const cap = `Gambar: ${title.slice(0, 65)}`;
-      setCurrentCaption(cap);
       onUpdateItem({
         ...item,
         image_data_url: downloaded.data_url,
@@ -141,7 +139,6 @@ export function VisualAssetStudio({
   const handleApplyHldToItem = () => {
     if (!hldRenderedUrl) return;
     const cap = hldCaption || `Gambar: Arsitektur High Level Design (HLD) ${item.title}`;
-    setCurrentCaption(cap);
     onUpdateItem({
       ...item,
       image_data_url: hldRenderedUrl,
@@ -156,12 +153,10 @@ export function VisualAssetStudio({
       image_data_url: undefined,
       image_caption: undefined,
     });
-    setCurrentCaption("");
   };
 
   // Update caption
   const handleUpdateCaption = (newCap: string) => {
-    setCurrentCaption(newCap);
     onUpdateItem({
       ...item,
       image_caption: newCap,
@@ -176,7 +171,6 @@ export function VisualAssetStudio({
     reader.onload = () => {
       const dataUrl = reader.result as string;
       const cap = `Gambar: ${file.name.replace(/\.[^/.]+$/, "")}`;
-      setCurrentCaption(cap);
       onUpdateItem({
         ...item,
         image_data_url: dataUrl,
@@ -261,7 +255,7 @@ export function VisualAssetStudio({
                 </label>
                 <input
                   type="text"
-                  value={currentCaption}
+                  value={item.image_caption || ""}
                   onChange={(e) => handleUpdateCaption(e.target.value)}
                   placeholder="Mis: Gambar 2.1: Server HPE ProLiant DL360 Gen10 Rackmount"
                   className="w-full px-2.5 py-1 text-xs border border-gray-200 rounded bg-white text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -349,14 +343,7 @@ export function VisualAssetStudio({
               <button
                 key={preset}
                 type="button"
-                onClick={() => {
-                  setSearchQuery(preset);
-                  setIsSearching(true);
-                  searchImages(preset, 8)
-                    .then((r) => setSearchResults(r.items || []))
-                    .catch((e) => alert(e?.message))
-                    .finally(() => setIsSearching(false));
-                }}
+                onClick={() => handleSearch(undefined, preset)}
                 className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 transition-colors"
               >
                 {preset}
@@ -393,7 +380,7 @@ export function VisualAssetStudio({
                         loading="lazy"
                       />
                       <span className="absolute top-1 left-1 bg-black/60 text-white text-[8.5px] px-1 py-0.2 rounded">
-                        {res.source === "wikimedia" ? "Wikimedia" : "Web"}
+                        {res.source === "Wikimedia Commons" ? "Wikimedia" : "Web"}
                       </span>
                     </div>
                     <div className="p-1.5 flex-1 flex flex-col justify-between">

@@ -215,10 +215,7 @@ class ClaudeProvider(LLMProvider):
                 messages=[{"role": "user", "content": prompt}],
             )
             raw = "".join(b.text for b in response.content if hasattr(b, "text")).strip()
-            if raw.startswith("```"):
-                raw = re.sub(r"^```(?:json)?\s*", "", raw)
-                raw = re.sub(r"\s*```$", "", raw)
-            data = json.loads(raw)
+            data = _parse_json_object(raw)
             if isinstance(data, list) and len(data) > 0:
                 items = []
                 for i, it in enumerate(data, start=1):
@@ -338,11 +335,7 @@ class GeminiProvider(LLMProvider):
                 generation_config={"response_mime_type": "application/json"},
             )
             response = model.generate_content(f"{prompt}\n\nTeks Dokumen Acuan:\n{truncated_text}")
-            cleaned = (response.text or "").strip()
-            if cleaned.startswith("```"):
-                cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-                cleaned = re.sub(r"\s*```$", "", cleaned)
-            data = json.loads(cleaned)
+            data = _parse_json_object(response.text or "")
             if isinstance(data, list) and len(data) > 0:
                 items = []
                 for i, it in enumerate(data, start=1):
@@ -454,15 +447,24 @@ def _build_system_prompt(mode: str) -> str:
             "4. Identitas Perusahaan: Selalu gunakan nama resmi perusahaan: 'PT Smartnet Magna Global' (SMG), dan jika relevan sebutkan sebagai 'Member of CTI Group'.\n"
             "5. Nilai Jual & Kepastian: Buat narasi yang meyakinkan, bernilai tambah (value proposition), dengan komitmen teknis spesifik tanpa kata tentatif (hindari kata 'akan diusahakan' atau 'sebisanya')."
         )
+    if mode == "qa":
+        return (
+            "Anda adalah asisten knowledge base internal PT Smartnet Magna Global (SMG). Jawab pertanyaan hanya "
+            "berdasarkan konteks yang diberikan, sebutkan jika informasi tidak "
+            "ditemukan. Jawab ringkas dan langsung ke inti — tanpa basa-basi. "
+            "Konteks diberikan sebagai potongan bernomor dipisah '---', urut sesuai "
+            "kemunculan (potongan pertama = [1], kedua = [2], dst). Setiap kali Anda "
+            "memakai sebuah potongan untuk menjawab, sisipkan penanda sitasi seperti "
+            "[1] atau [2] tepat setelah kalimat yang bersangkutan. Jangan sisipkan "
+            "penanda untuk potongan yang tidak benar-benar dipakai."
+        )
+    # Any other mode (e.g. "json"): grounded answers with no inline citation markers,
+    # so callers that need a clean machine-parseable response (JSON, etc.) aren't
+    # polluted by the [n] markers meant only for the interactive QA UI.
     return (
         "Anda adalah asisten knowledge base internal PT Smartnet Magna Global (SMG). Jawab pertanyaan hanya "
         "berdasarkan konteks yang diberikan, sebutkan jika informasi tidak "
-        "ditemukan. Jawab ringkas dan langsung ke inti — tanpa basa-basi. "
-        "Konteks diberikan sebagai potongan bernomor dipisah '---', urut sesuai "
-        "kemunculan (potongan pertama = [1], kedua = [2], dst). Setiap kali Anda "
-        "memakai sebuah potongan untuk menjawab, sisipkan penanda sitasi seperti "
-        "[1] atau [2] tepat setelah kalimat yang bersangkutan. Jangan sisipkan "
-        "penanda untuk potongan yang tidak benar-benar dipakai."
+        "ditemukan. Jawab ringkas dan langsung ke inti — tanpa basa-basi."
     )
 
 
@@ -526,7 +528,7 @@ _MAPPING_SYSTEM_PROMPT = (
 )
 
 
-def _parse_json_object(raw: str) -> dict:
+def _parse_json_object(raw: str) -> dict | list:
     cleaned = raw.strip()
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
@@ -648,211 +650,3 @@ def _fallback_segment_text(text: str) -> list[dict]:
             })
 
     return items
-
-
-def _fallback_recommend_structure(doc_type: str, text: str = "", document_title: str = "") -> list[dict]:
-    doc_label = document_title or "Tender Acuan"
-    base_skeletons = {
-        "narrative": [
-            {
-                "id": "sec-exec-summary",
-                "title": "Executive Summary & Pemahaman Kebutuhan",
-                "category": "Umum",
-                "requirement_text": "Ringkasan eksekutif pemahaman terhadap latar belakang, sasaran pengadaan, dan value proposition solusi.",
-                "rationale": f"Penting sebagai pengantar strategis untuk merangkum keselarasan solusi dengan sasaran {doc_label}.",
-            },
-            {
-                "id": "sec-arsitektur-teknis",
-                "title": "Solusi Teknis & Arsitektur Sistem",
-                "category": "Teknis",
-                "requirement_text": "Rancangan arsitektur, topologi, spesifikasi perangkat keras/lunak, dan kapabilitas sistem.",
-                "rationale": "Menjawab spesifikasi teknis utama, standar arsitektur, dan kompatibilitas yang disyaratkan dalam dokumen pengadaan.",
-            },
-            {
-                "id": "sec-metodologi-implementasi",
-                "title": "Metodologi & Rencana Implementasi",
-                "category": "Manajemen Proyek",
-                "requirement_text": "Tahapan pelaksanaan instalasi, konfigurasi, migrasi, dan pengujian sistem (UAT).",
-                "rationale": "Memberikan kepastian tata kelola implementasi terstruktur dari fase persiapan hingga serah terima.",
-            },
-            {
-                "id": "sec-maintenance-sla",
-                "title": "Service Level Agreement (SLA) & Maintenance Plan",
-                "category": "SLA & Support",
-                "requirement_text": "Layanan pemeliharaan Preventif (PM), Korektif (CM), SLA response time 24x7, dan skema eskalasi dukungan teknis.",
-                "rationale": "Memenuhi kepatuhan layanan purnajual dan ketersediaan suku cadang sesuai butir pemeliharaan operasional.",
-            },
-            {
-                "id": "sec-tim-ahli",
-                "title": "Kualifikasi Tim Ahli & Struktur Proyek",
-                "category": "Manajemen Proyek",
-                "requirement_text": "Susunan tim pelaksana, sertifikasi profesional, dan rekam jejak tenaga ahli terkait.",
-                "rationale": "Menjamin pemenuhan syarat administratif personel ahli yang disyaratkan dalam dokumen tender.",
-            },
-            {
-                "id": "sec-jadwal-milestone",
-                "title": "Jadwal Pelaksanaan & Deliverables",
-                "category": "Manajemen Proyek",
-                "requirement_text": "Timeline kerja, milestone pekerjaan, dan daftar deliverable serah terima (BAST).",
-                "rationale": "Menetapkan target waktu penyelesaian dan transparansi pelaporan kemajuan proyek.",
-            },
-            {
-                "id": "sec-penutup-komitmen",
-                "title": "Kesimpulan & Komitmen Kepatuhan",
-                "category": "Administrasi & Legal",
-                "requirement_text": "Pernyataan komitmen penyedia terhadap keberhasilan implementasi dan kepatuhan terhadap seluruh klausul pengadaan.",
-                "rationale": "Penutup formal yang menegaskan kesiapan dan kepatuhan penuh penyedia.",
-            },
-        ],
-        "sow": [
-            {
-                "id": "sec-ruang-lingkup",
-                "title": "Ruang Lingkup Pekerjaan (Scope of Work)",
-                "category": "Teknis",
-                "requirement_text": "Batasan dan rincian pekerjaan implementasi yang akan dilaksanakan.",
-                "rationale": f"Menetapkan batas tanggung jawab eksekusi proyek {doc_label} secara jelas dan mengikat.",
-            },
-            {
-                "id": "sec-deliverables",
-                "title": "Deliverables & Output Serah Terima",
-                "category": "Manajemen Proyek",
-                "requirement_text": "Daftar output konkret, dokumentasi teknis, dan laporan pengujian yang diserahkan.",
-                "rationale": "Menjadi acuan verifikasi pekerjaan saat penerbitan Berita Acara Serah Terima (BAST).",
-            },
-            {
-                "id": "sec-jadwal",
-                "title": "Jadwal Pelaksanaan & Milestone",
-                "category": "Manajemen Proyek",
-                "requirement_text": "Timeline tahapan kerja dan milestone utama.",
-                "rationale": "Memberikan estimasi waktu terukur bagi kedua belah pihak.",
-            },
-            {
-                "id": "sec-sla",
-                "title": "Service Level Agreement (SLA) & Dukungan Operasional",
-                "category": "SLA & Support",
-                "requirement_text": "Standar respon insiden, waktu perbaikan, dan ketersediaan layanan teknis.",
-                "rationale": "Memastikan standar kualitas operasional pasca-implementasi.",
-            },
-            {
-                "id": "sec-tanggung-jawab",
-                "title": "Tanggung Jawab & Asumsi Kerja Para Pihak",
-                "category": "Administrasi & Legal",
-                "requirement_text": "Hak, kewajiban, dan prasyarat lingkungan kerja antara penyedia dan klien.",
-                "rationale": "Mencegah terjadinya perselisihan lingkup operasional di luar kesepakatan.",
-            },
-        ],
-        "solution_brief": [
-            {
-                "id": "sec-challenge",
-                "title": "Tantangan Klien & Latar Belakang",
-                "category": "Umum",
-                "requirement_text": "Permasalahan operasional/bisnis yang dihadapi klien berdasarkan dokumen acuan.",
-                "rationale": "Menunjukkan pemahaman mendalam terhadap pain points klien.",
-            },
-            {
-                "id": "sec-solution",
-                "title": "Solusi yang Diusulkan & Value Proposition",
-                "category": "Teknis",
-                "requirement_text": "Konsep solusi, manfaat utama, dan nilai pembeda yang ditawarkan penyedia.",
-                "rationale": "Memberikan gambaran ringkas keunggulan solusi kepada pengambil keputusan.",
-            },
-            {
-                "id": "sec-arch",
-                "title": "Ringkasan Arsitektur & Spesifikasi",
-                "category": "Teknis",
-                "requirement_text": "Gambaran arsitektur sistem, integrasi, dan keamanan data.",
-                "rationale": "Memberikan kepastian kesesuaian teknis secara efisien.",
-            },
-            {
-                "id": "sec-implementation",
-                "title": "Pendekatan Implementasi & Roadmap",
-                "category": "Manajemen Proyek",
-                "requirement_text": "Tahapan implementasi cepat dan roadmap penyelesaian proyek.",
-                "rationale": "Memperlihatkan strategi eksekusi yang realistis dan terukur.",
-            },
-        ],
-        "mom": [
-            {
-                "id": "sec-agenda",
-                "title": "Agenda Pertemuan & Maksud Klarifikasi",
-                "category": "Umum",
-                "requirement_text": "Agenda dan tujuan pertemuan teknis pengadaan.",
-                "rationale": "Mencatat latar belakang diadakannya sesi klarifikasi teknis.",
-            },
-            {
-                "id": "sec-diskusi",
-                "title": "Poin Pembahasan & Klarifikasi Teknis",
-                "category": "Teknis",
-                "requirement_text": "Rincian tanya jawab dan kesepakatan teknis yang dibahas.",
-                "rationale": "Dokumentasi tertulis atas interpretasi butir-butir dalam dokumen acuan.",
-            },
-            {
-                "id": "sec-action-items",
-                "title": "Tindak Lanjut (Action Items) & PIC",
-                "category": "Manajemen Proyek",
-                "requirement_text": "Daftar tindak lanjut, pihak penanggung jawab (PIC), dan target waktu penyelesaian.",
-                "rationale": "Memastikan langkah konkret berikutnya terikat timeline.",
-            },
-        ],
-        "klarifikasi_teknis": [
-            {
-                "id": "sec-pertanyaan-teknis",
-                "title": "Daftar Pertanyaan & Klarifikasi Teknis",
-                "category": "Teknis",
-                "requirement_text": "Daftar klausul spesifikasi yang membutuhkan penegasan atau alternatif.",
-                "rationale": "Menghilangkan ambiguitas dalam dokumen pengadaan sebelum penawaran final.",
-            },
-            {
-                "id": "sec-usulan-alternatif",
-                "title": "Usulan Pendekatan Solusi SMG",
-                "category": "Teknis",
-                "requirement_text": "Alternatif teknologi dan pendekatan spesifikasi yang direkomendasikan.",
-                "rationale": "Memberikan opsi teknis yang lebih optimal atau hemat biaya bagi klien.",
-            },
-            {
-                "id": "sec-dampak-lingkup",
-                "title": "Dampak terhadap Jadwal & Ruang Lingkup",
-                "category": "Administrasi & Legal",
-                "requirement_text": "Dampak klarifikasi terhadap waktu pelaksanaan dan komitmen deliverables.",
-                "rationale": "Memastikan transparansi dampak kesepakatan teknis terhadap perjanjian.",
-            },
-        ],
-        "pitch_deck": [
-            {
-                "id": "sec-intro",
-                "title": "Executive Summary & Business Context",
-                "category": "Umum",
-                "requirement_text": "Latar belakang inisiatif proyek dan tujuan strategis klien.",
-                "rationale": "Membuka presentasi dengan menyelaraskan visi proyek dengan manajemen klien.",
-            },
-            {
-                "id": "sec-pain-points",
-                "title": "Tantangan Utama & Kebutuhan Kritis",
-                "category": "Umum",
-                "requirement_text": "Identifikasi kendala eksisting dan sasaran yang ingin dicapai melalui pengadaan ini.",
-                "rationale": "Menyoroti urgensi kebutuhan berdasarkan rincian dokumen pengadaan.",
-            },
-            {
-                "id": "sec-solution-overview",
-                "title": "Solusi Unggulan & Arsitektur Utama",
-                "category": "Teknis",
-                "requirement_text": "Arsitektur solusi, teknologi kunci, dan diferensiasi penawaran SMG.",
-                "rationale": "Menjadi inti presentasi yang membuktikan keunggulan kompetitif penawaran.",
-            },
-            {
-                "id": "sec-maintenance-support",
-                "title": "Komitmen SLA, Garansi & Dukungan Lokal",
-                "category": "SLA & Support",
-                "requirement_text": "Dukungan teknis 24/7, kesiapan suku cadang, dan SLA penanganan insiden.",
-                "rationale": "Memberikan rasa aman (peace of mind) bagi stakeholder operasional klien.",
-            },
-            {
-                "id": "sec-next-steps",
-                "title": "Rencana Implementasi & Next Steps",
-                "category": "Manajemen Proyek",
-                "requirement_text": "Timeline implementasi, alur PoC/demo, dan tindak lanjut kolaborasi.",
-                "rationale": "Call to action yang jelas untuk menggerakkan keputusan stakeholder.",
-            },
-        ],
-    }
-    return base_skeletons.get(doc_type, base_skeletons["narrative"])

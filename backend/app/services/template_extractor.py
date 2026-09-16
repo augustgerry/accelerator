@@ -10,6 +10,8 @@ import zipfile
 from typing import Optional
 from PIL import Image
 
+from app.services.image_utils import flatten_to_rgb
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,14 +43,7 @@ def extract_images_from_office_bytes(file_bytes: bytes, max_images: int = 12) ->
                         # Generate thumbnail/preview data URL
                         thumb = img.copy()
                         thumb.thumbnail((800, 600), Image.Resampling.LANCZOS)
-                        if thumb.mode in ("RGBA", "LA", "P"):
-                            bg = Image.new("RGB", thumb.size, (255, 255, 255))
-                            if thumb.mode == "P":
-                                thumb = thumb.convert("RGBA")
-                            bg.paste(thumb, mask=thumb.split()[-1] if "A" in thumb.getbands() else None)
-                            thumb = bg
-                        elif thumb.mode != "RGB":
-                            thumb = thumb.convert("RGB")
+                        thumb = flatten_to_rgb(thumb)
 
                         bio = io.BytesIO()
                         thumb.save(bio, format="JPEG", quality=85)

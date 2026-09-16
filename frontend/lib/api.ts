@@ -459,8 +459,8 @@ export async function renderMermaid(mermaidCode: string): Promise<{
 
 export async function extractTemplateImages(file: File): Promise<{
   images: Array<{
-    filename: string;
-    mime_type: string;
+    name: string;
+    size_bytes: number;
     width: number;
     height: number;
     data_url: string;

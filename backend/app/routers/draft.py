@@ -4,6 +4,7 @@ import re
 
 from typing import Optional
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -340,10 +341,14 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
                 hw_query = "Fortinet FortiGate Firewall"
             elif "poweredge" in lower_scope:
                 hw_query = "Dell PowerEdge Server"
-            elif "storage" in lower_scope:
+            elif "storage" in lower_scope or "san" in lower_scope or "nas" in lower_scope or "flash array" in lower_scope:
                 hw_query = "Enterprise Storage SAN NAS"
             elif "server" in lower_scope:
                 hw_query = "Rackmount Enterprise Server"
+            elif "switch" in lower_scope:
+                hw_query = "Enterprise Network Switch"
+            elif "firewall" in lower_scope:
+                hw_query = "Enterprise Network Firewall"
 
             if hw_query:
                 imgs = search_public_images(hw_query, limit=3)
@@ -506,7 +511,8 @@ def render_mermaid(payload: RenderMermaidRequest):
 async def extract_template_images(file: UploadFile):
     """Extract embedded images/diagrams from an uploaded .docx or .pptx template."""
     content = await file.read()
-    images = extract_images_from_office_bytes(content)
+    # CPU-bound (zip read + PIL thumbnailing) — offload so it doesn't block the event loop.
+    images = await run_in_threadpool(extract_images_from_office_bytes, content)
     return {"images": images}
 
 
@@ -562,6 +568,62 @@ def export_preflight(payload: ExportPreflightRequest):
     )
 
 
+def _fit_image_dimensions(
+    w_px: float, h_px: float, max_w: float, max_h: float, allow_upscale: bool = False
+) -> tuple[float, float]:
+    """Scale (w_px, h_px) to fit within (max_w, max_h) while preserving aspect ratio.
+    max_w/max_h and the returned (width, height) share whatever unit the caller uses
+    (Inches, mm, ...) — this only computes the fit ratio. allow_upscale=False caps the
+    ratio at 1.0 so small source images are never blown up past their native size."""
+    if w_px <= 0 or h_px <= 0:
+        return max_w, max_h
+    ratio = min(max_w / w_px, max_h / h_px)
+    if not allow_upscale:
+        ratio = min(ratio, 1.0)
+    return w_px * ratio, h_px * ratio
+
+
+def _insert_logo_header_table(doc, company_logo_bytes: bytes | None, customer_logo_bytes: bytes | None, space_after_pt: float | None = None):
+    """Insert a borderless 2-column table on the cover page: company logo left,
+    customer logo right. No-op if neither logo is present."""
+    if not (company_logo_bytes or customer_logo_bytes):
+        return
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+    from docx.shared import Inches, Pt
+
+    logo_table = doc.add_table(rows=1, cols=2)
+    logo_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    tbl_borders = parse_xml(
+        f'<w:tblBorders {nsdecls("w")}>'
+        f'<w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/>'
+        f'<w:insideH w:val="none"/><w:insideV w:val="none"/>'
+        f'</w:tblBorders>'
+    )
+    logo_table._tbl.tblPr.append(tbl_borders)
+    cell_left = logo_table.cell(0, 0)
+    cell_right = logo_table.cell(0, 1)
+    cell_left.width = Inches(3.25)
+    cell_right.width = Inches(3.25)
+
+    p_left = cell_left.paragraphs[0]
+    if space_after_pt is not None:
+        p_left.paragraph_format.space_after = Pt(space_after_pt)
+    if company_logo_bytes:
+        run_left = p_left.add_run()
+        run_left.add_picture(io.BytesIO(company_logo_bytes), height=Inches(0.65))
+
+    p_right = cell_right.paragraphs[0]
+    p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    if space_after_pt is not None:
+        p_right.paragraph_format.space_after = Pt(space_after_pt)
+    if customer_logo_bytes:
+        run_right = p_right.add_run()
+        run_right.add_picture(io.BytesIO(customer_logo_bytes), height=Inches(0.65))
+
+
 def _decode_logo_bytes(data_url: str) -> bytes | None:
     if not (data_url.startswith("data:image/") and ";base64," in data_url):
         return None
@@ -599,6 +661,23 @@ def add_formatted_text(paragraph, text: str, base_color=None):
             run = paragraph.add_run(token)
         if base_color:
             run.font.color.rgb = base_color
+
+
+def _add_item_heading(doc, idx: int, title_clean: str):
+    """Add a section heading, using the item's own numbering (e.g. '1.2 Judul') to pick
+    the heading level when present, falling back to a flat 'idx. title' at level 2."""
+    from docx.shared import RGBColor
+
+    num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
+    if num_match:
+        parts = [p for p in num_match.group(1).split('.') if p]
+        level = min(max(len(parts), 1), 4)
+        h = doc.add_heading(level=level)
+        base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
+        add_formatted_text(h, title_clean, base_color=base_color)
+    else:
+        h = doc.add_heading(level=2)
+        add_formatted_text(h, f"{idx}. {title_clean}", base_color=RGBColor(0x4A, 0x86, 0xE8))
 
 
 def render_markdown_to_docx(doc, markdown_text: str, heading_offset: int = 2):
@@ -787,11 +866,7 @@ def _insert_item_image_docx(doc, item, prefix: str = "Gambar"):
         with Image.open(io.BytesIO(img_bytes)) as pil_img:
             w_px, h_px = pil_img.size
 
-        w_in = 5.2
-        h_in = (h_px / w_px) * w_in if w_px > 0 else 3.0
-        if h_in > 4.0:
-            h_in = 4.0
-            w_in = (w_px / h_px) * h_in if h_px > 0 else 5.2
+        w_in, h_in = _fit_image_dimensions(w_px, h_px, 5.2, 4.0, allow_upscale=True)
 
         p_img = doc.add_paragraph()
         p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -849,6 +924,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
     font = style.font
     font.name = payload.font_name
     font.size = Pt(10)
+    font.color.rgb = RGBColor(0x1F, 0x24, 0x30)
 
     # Configure running header & footer across all enterprise document templates
     if doc.sections:
@@ -891,29 +967,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
     customer_logo_bytes = _decode_logo_bytes(payload.customer_logo_data_url)
 
     if payload.template_type == "narrative":
-        if company_logo_bytes or customer_logo_bytes:
-            logo_table = doc.add_table(rows=1, cols=2)
-            logo_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-            tbl_borders = parse_xml(
-                f'<w:tblBorders {nsdecls("w")}>'
-                f'<w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/>'
-                f'<w:insideH w:val="none"/><w:insideV w:val="none"/>'
-                f'</w:tblBorders>'
-            )
-            logo_table._tbl.tblPr.append(tbl_borders)
-            cell_left = logo_table.cell(0, 0)
-            cell_right = logo_table.cell(0, 1)
-            cell_left.width = Inches(3.25)
-            cell_right.width = Inches(3.25)
-            p_left = cell_left.paragraphs[0]
-            if company_logo_bytes:
-                run_left = p_left.add_run()
-                run_left.add_picture(io.BytesIO(company_logo_bytes), height=Inches(0.65))
-            p_right = cell_right.paragraphs[0]
-            p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            if customer_logo_bytes:
-                run_right = p_right.add_run()
-                run_right.add_picture(io.BytesIO(customer_logo_bytes), height=Inches(0.65))
+        _insert_logo_header_table(doc, company_logo_bytes, customer_logo_bytes)
 
         title_p = doc.add_paragraph()
         title_p.paragraph_format.space_before = Pt(28)
@@ -1120,34 +1174,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
         doc.add_page_break()
 
     else:
-        if company_logo_bytes or customer_logo_bytes:
-            logo_table = doc.add_table(rows=1, cols=2)
-            logo_table.alignment = WD_TABLE_ALIGNMENT.CENTER
-            tbl_borders = parse_xml(
-                f'<w:tblBorders {nsdecls("w")}>'
-                f'<w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/>'
-                f'<w:insideH w:val="none"/><w:insideV w:val="none"/>'
-                f'</w:tblBorders>'
-            )
-            logo_table._tbl.tblPr.append(tbl_borders)
-
-            cell_left = logo_table.cell(0, 0)
-            cell_right = logo_table.cell(0, 1)
-            cell_left.width = Inches(3.25)
-            cell_right.width = Inches(3.25)
-
-            p_left = cell_left.paragraphs[0]
-            p_left.paragraph_format.space_after = Pt(10)
-            if company_logo_bytes:
-                run_left = p_left.add_run()
-                run_left.add_picture(io.BytesIO(company_logo_bytes), height=Inches(0.65))
-
-            p_right = cell_right.paragraphs[0]
-            p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            p_right.paragraph_format.space_after = Pt(10)
-            if customer_logo_bytes:
-                run_right = p_right.add_run()
-                run_right.add_picture(io.BytesIO(customer_logo_bytes), height=Inches(0.65))
+        _insert_logo_header_table(doc, company_logo_bytes, customer_logo_bytes, space_after_pt=10)
 
         title_p = doc.add_paragraph()
         title_run = title_p.add_run("TANGGAPAN TEKNIS & PROPOSAL SOLUSI")
@@ -1206,6 +1233,14 @@ def export_proposal_docx(payload: ExportDocxRequest):
                     for r in p.runs:
                         r.font.size = Pt(9)
 
+        items_with_images = [it for it in payload.items if getattr(it, "image_data_url", None)]
+        if items_with_images:
+            doc.add_paragraph()
+            h_visual = doc.add_heading(level=2)
+            add_formatted_text(h_visual, "Lampiran Visual Pendukung", base_color=RGBColor(0x1F, 0x49, 0x7D))
+            for idx, item in enumerate(items_with_images, start=1):
+                _insert_item_image_docx(doc, item, prefix=f"Gambar {idx}")
+
     elif payload.template_type == "sow":
         # Format Dokumen Statement of Work (SoW) Standar SMBC / Hitachi SMG
         p_title = doc.add_paragraph()
@@ -1249,17 +1284,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
         # Render sections
         for idx, item in enumerate(payload.items, start=1):
             title_clean = (item.title or f"Scope {idx}").strip()
-            num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
-            if num_match:
-                num_str = num_match.group(1)
-                parts = [p for p in num_str.split('.') if p]
-                level = min(max(len(parts), 1), 4)
-                h = doc.add_heading(level=level)
-                base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
-                add_formatted_text(h, title_clean, base_color=base_color)
-            else:
-                h = doc.add_heading(level=2)
-                add_formatted_text(h, f"{idx}. {title_clean}", base_color=RGBColor(0x4A, 0x86, 0xE8))
+            _add_item_heading(doc, idx, title_clean)
 
             if item.requirement_text and item.requirement_text.strip():
                 req_p = doc.add_paragraph()
@@ -1388,17 +1413,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
         # Render sections
         for idx, item in enumerate(payload.items, start=1):
             title_clean = (item.title or f"Bagian {idx}").strip()
-            num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
-            if num_match:
-                num_str = num_match.group(1)
-                parts = [p for p in num_str.split('.') if p]
-                level = min(max(len(parts), 1), 4)
-                h = doc.add_heading(level=level)
-                base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
-                add_formatted_text(h, title_clean, base_color=base_color)
-            else:
-                h = doc.add_heading(level=2)
-                add_formatted_text(h, f"{idx}. {title_clean}", base_color=RGBColor(0x4A, 0x86, 0xE8))
+            _add_item_heading(doc, idx, title_clean)
 
             if item.requirement_text and item.requirement_text.strip():
                 req_p = doc.add_paragraph()
@@ -1515,17 +1530,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
         # Discussion Sections
         for idx, item in enumerate(payload.items, start=1):
             title_clean = (item.title or f"Topik {idx}").strip()
-            num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
-            if num_match:
-                num_str = num_match.group(1)
-                parts = [p for p in num_str.split('.') if p]
-                level = min(max(len(parts), 1), 4)
-                h = doc.add_heading(level=level)
-                base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
-                add_formatted_text(h, title_clean, base_color=base_color)
-            else:
-                h = doc.add_heading(level=2)
-                add_formatted_text(h, f"{idx}. {title_clean}", base_color=RGBColor(0x4A, 0x86, 0xE8))
+            _add_item_heading(doc, idx, title_clean)
 
             if item.requirement_text and item.requirement_text.strip():
                 req_p = doc.add_paragraph()
@@ -1645,17 +1650,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
         # Render sections
         for idx, item in enumerate(payload.items, start=1):
             title_clean = (item.title or f"Bagian {idx}").strip()
-            num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
-            if num_match:
-                num_str = num_match.group(1)
-                parts = [p for p in num_str.split('.') if p]
-                level = min(max(len(parts), 1), 4)
-                h = doc.add_heading(level=level)
-                base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
-                add_formatted_text(h, title_clean, base_color=base_color)
-            else:
-                h = doc.add_heading(level=2)
-                add_formatted_text(h, f"{idx}. {title_clean}", base_color=RGBColor(0x4A, 0x86, 0xE8))
+            _add_item_heading(doc, idx, title_clean)
 
             if item.requirement_text and item.requirement_text.strip():
                 req_p = doc.add_paragraph()
@@ -1752,17 +1747,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
         # Format Proposal Naratif Bertingkat (Bab & Sub-bab Standar CSUL PT Smartnet Magna Global)
         for idx, item in enumerate(payload.items, start=1):
             title_clean = (item.title or f"Bagian {idx}").strip()
-            num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
-            if num_match:
-                num_str = num_match.group(1)
-                parts = [p for p in num_str.split('.') if p]
-                level = min(max(len(parts), 1), 4)
-                h = doc.add_heading(level=level)
-                base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
-                add_formatted_text(h, title_clean, base_color=base_color)
-            else:
-                h = doc.add_heading(level=2)
-                add_formatted_text(h, f"{idx}. {title_clean}", base_color=RGBColor(0x4A, 0x86, 0xE8))
+            _add_item_heading(doc, idx, title_clean)
 
             if item.requirement_text and item.requirement_text.strip():
                 req_p = doc.add_paragraph()
@@ -1904,11 +1889,7 @@ def export_proposal_pdf(payload: ExportPdfRequest):
             with Image.open(io.BytesIO(img_bytes)) as pil_img:
                 w_px, h_px = pil_img.size
 
-            max_w = 160 * mm
-            max_h = 95 * mm
-            ratio = min(max_w / max(w_px, 1), max_h / max(h_px, 1), 1.0)
-            target_w = w_px * ratio
-            target_h = h_px * ratio
+            target_w, target_h = _fit_image_dimensions(w_px, h_px, 160 * mm, 95 * mm)
 
             cap_style = ParagraphStyle(
                 f"ImgCap_{getattr(item, 'id', 'item')}",
@@ -1973,6 +1954,12 @@ def export_proposal_pdf(payload: ExportPdfRequest):
             ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ]))
         story.append(table)
+        items_with_images = [it for it in payload.items if getattr(it, "image_data_url", None)]
+        if items_with_images:
+            story.append(Spacer(1, 10))
+            story.append(paragraph("Lampiran Visual Pendukung", heading_style))
+            for index, item in enumerate(items_with_images, start=1):
+                story.extend(_build_item_image_story(item, f"Gambar {index}"))
     elif payload.template_type == "pitch_deck":
         story.append(paragraph("Executive Summary & Presentation Blueprint", heading_style))
         story.append(paragraph(
@@ -2320,9 +2307,7 @@ def export_proposal_pptx(payload: ExportPptxRequest):
 
                 max_w_in = 5.7
                 max_h_in = 4.2
-                ratio = min(max_w_in / max(w_px, 1), max_h_in / max(h_px, 1))
-                w_in = w_px * ratio
-                h_in = h_px * ratio
+                w_in, h_in = _fit_image_dimensions(w_px, h_px, max_w_in, max_h_in, allow_upscale=True)
                 left_in = 7.0 + (max_w_in - w_in) / 2
                 top_in = 1.8 + (max_h_in - h_in) / 2
 

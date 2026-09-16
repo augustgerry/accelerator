@@ -3,6 +3,40 @@
 
 ---
 
+## 🩹 SESI CLAUDE CODE — FULL CODEBASE BUG SWEEP & DEDUP (branch `feat/proposal-visual-engine`)
+
+User minta: cek seluruh codebase, benerin semua bug, efisienkan kode yang duplikat/berulang, sampai "perfect tanpa issue", baru mau ditest manual. Prosesnya: jalanin `/code-review` (8 agent paralel, angle correctness/reuse/efficiency/removed-behavior/cross-file) atas diff `main..feat/proposal-visual-engine`, lalu semua temuan di-cross-verify manual satu-satu sebelum di-fix (bukan asal apply).
+
+**Bug korektnes yang diperbaiki (9 item):**
+1. **`_fallback_recommend_structure` didefinisikan 2x** di `llm_provider.py` (baris 372 & 653) — Python cuma pakai definisi terakhir, jadi versi kaya/otentik CSUL (baris 372, hasil kerja commit `f7456df`) SELALU KETIMPA sama versi generik lama tiap kali LLM call gagal dan jatuh ke fallback. Definisi kedua (dead code) dihapus. **Verified:** `_fallback_recommend_structure("sow", ...)` sekarang balikin "1. Latar Belakang & Deskripsi Pekerjaan" (bukan "Ruang Lingkup Pekerjaan (Scope of Work)" generik).
+2. **Citation-marker `[1]`/`[2]` bocor ke `diagram_generator.py`** — instruksi sitasi yang saya tambahin sesi lalu di `_build_system_prompt(mode="qa")` (buat `/search`) ternyata ikut kepake sama `generate_hld_mermaid()` (fitur HLD Antigravity, sama-sama panggil `.answer(..., mode="qa")`) yang butuh JSON murni tanpa markup — beresiko break `json.loads()` dan leak `[1]` ke narasi arsitektur di dokumen customer. Fix: `diagram_generator.py` sekarang pakai `mode="json"` (prompt grounded biasa, tanpa instruksi sitasi); `_build_system_prompt`/`_format_context_chunks` di-3-way branch (`draft` / `qa` / lainnya).
+3. **Template `matrix` (docx & PDF) gak pernah nyisipin gambar** — semua template_type lain (sow/mom/solution_brief/klarifikasi_teknis/pitch_deck/narrative) manggil `_insert_item_image_docx`/`_build_item_image_story`, cuma matrix yang kelewat. UI janji "🖼️ Aset" ke-attach tapi hasil export matrix gambarnya hilang diam-diam. Fix: tambah section "Lampiran Visual Pendukung" setelah tabel matriks (docx & PDF) buat item yang punya `image_data_url`.
+4. **Badge "Wikimedia" di Visual Asset Studio gak pernah muncul** — frontend cek `res.source === "wikimedia"`, backend kirim `"Wikimedia Commons"` — perbandingan string gak pernah match, semua hasil Wikimedia ke-label "Web". Fix string compare-nya.
+5. **SQL LIKE wildcard gak di-escape** di filter `doc_type`/`division` (`retrieval.py` `_hybrid_ranked_chunks`) — pakai `.ilike(value)` mentah, kalau divisi ada karakter `%`/`_` bisa match salah divisi. Ganti ke `func.lower(...) == value.lower()` (exact match case-insensitive, sesuai maksud aslinya).
+6. **`extract_template_images` (`async def`) blocking event loop** — manggil `extract_images_from_office_bytes` (CPU-bound: baca zip + PIL thumbnail) langsung di event loop, beda pola dari endpoint image lain di file ini yang semua `def` biasa (auto lari ke threadpool FastAPI). Fix: `await run_in_threadpool(extract_images_from_office_bytes, content)`.
+7. **`extractTemplateImages()` frontend type gak match response backend** — TS declare `filename`/`mime_type`, backend beneran balikin `name`/`size_bytes`. Belum ada UI yang makai fungsi ini (dead code), tapi trap buat siapa pun yang wire nanti. Fix type-nya biar sesuai realita.
+8. **Regresi warna font default docx hilang** — `doc.styles["Normal"].font` di `export_proposal_docx` cuma set `name`+`size`, `color.rgb = RGBColor(0x1F,0x24,0x30)` (dark-slate) ke-drop entah di commit mana → paragraf polos jatuh ke hitam default Word. Ditambahin balik.
+9. **Filter divisi `/search` gak ada fallback kalau `listDocuments()` gagal** — `.catch(() => {})` kosong, dropdown divisi permanen cuma "Semua divisi" sepanjang sesi kalau fetch awal gagal. Ditambah fallback ke daftar divisi baseline (presales/infrastructure/security/application).
+- **Bonus (semi-bug, robustness):** deteksi keyword hardware di `draft_item()` (buat auto-attach gambar) trigger dari kata `switch`/`firewall` tapi gak punya bucket generik sendiri — vendor selain Cisco/Fortinet (Juniper, Palo Alto, dst) silently gagal dapet gambar. Ditambah 2 bucket generik.
+- **Cleanup:** CORS di `main.py` hapus `allow_origins` list eksplisit (redundant, `allow_origin_regex` udah superset-nya).
+
+**Duplikasi/reuse yang dibereskan (backend, semua diverifikasi jalan via smoke test nyata, bukan cuma compile):**
+- `draft.py`: 6× blok penomoran-heading identik (5 branch template_type) → helper `_add_item_heading(doc, idx, title_clean)`.
+- `draft.py`: 2× blok tabel logo 2-kolom (narrative vs fallback cover) → helper `_insert_logo_header_table(doc, company_bytes, customer_bytes, space_after_pt=None)`.
+- `draft.py`: 3× matematika fit-image (docx/pdf/pptx, beda unit & beda allow-upscale) → helper `_fit_image_dimensions(w_px, h_px, max_w, max_h, allow_upscale=False)` — matematis identik di ketiga tempat (dibuktikan lewat manual derivation sebelum extract, bukan asumsi).
+- `llm_provider.py`: `recommend_structure()` di `ClaudeProvider`+`GeminiProvider` masing-masing re-implement fence-stripping JSON manual → reuse `_parse_json_object()` yang udah ada (dipakai `map_items_to_sections`).
+- `image_search.py` vs `template_extractor.py`: logic flatten RGBA/P→RGB (buat JPEG encode) diketik ulang identik di 2 file → diekstrak ke modul baru `backend/app/services/image_utils.py` (`flatten_to_rgb()`).
+- **Verifikasi khusus:** karena refactor helper docx sempat introduce bug baru (helper baru pakai `Pt`/`RGBColor`/`WD_TABLE_ALIGNMENT` dkk yang di file ini SEMUA di-import lokal per-fungsi, bukan module-level — helper pertama sempat lupa import ini, lolos `py_compile`/`import main` karena keduanya cuma cek syntax, gak nge-run function body), dibikin smoke test yang BENERAN MANGGIL `export_proposal_docx`/`export_proposal_pdf`/`export_proposal_pptx` buat semua `template_type` dengan gambar dummy terlampir, drain `StreamingResponse` via asyncio, dan re-parse hasilnya pakai `python-docx`/`python-pptx`/cek magic bytes PDF. Semua lolos (7 tipe docx, 4 tipe PDF, PPTX).
+
+**Duplikasi/reuse yang dibereskan (frontend, `npx tsc --noEmit` + `npm run build` full 7 route clean):**
+- `visual-asset-studio.tsx`: state `currentCaption` + `useEffect` sync-nya dihapus (semua handler yang mutasi caption udah manggil `onUpdateItem` juga — 2 sumber kebenaran buat 1 value). Input caption sekarang baca `item.image_caption` langsung.
+- `visual-asset-studio.tsx`: tombol preset "Contoh Hardware" re-implement flow search inline (bukan reuse `handleSearch`, kemungkinan karena `setSearchQuery` async gak langsung ke-baca `handleSearch`) → `handleSearch` sekarang terima param `queryOverride` opsional, preset button tinggal `handleSearch(undefined, preset)`.
+- `draft/page.tsx`: `filteredReferenceDocs` & `filteredLibrarySourceDocs` (2 `useMemo` identik, beda query state doang) → fungsi module-level `filterDocsByQuery(docs, query)` dipanggil dari keduanya.
+
+**Yang SENGAJA gak disentuh (dicatat, bukan lupa):** temuan efficiency-angle soal blocking sequential network call (Kroki→mermaid.ink di `diagram_generator.py`, Wikimedia→Bing di `image_search.py`, sampai ~22 detik worst-case di request handler sync) gak difix — butuh konversi ke async/concurrent fetch atau caching yang gak bisa divalidasi tanpa hit endpoint eksternal beneran, dan gak ada test suite buat nangkep regresi. Juga gak nyeragamkan `urllib` (diagram_generator) vs `httpx` (image_search) — stylistic doang, resiko lebih besar dari manfaatnya buat kondisi sekarang.
+
+---
+
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
 - **Sesi terakhir (Antigravity):** PERBAIKAN 3 BUG UTAMA LAPORAN USER + FIX NEXT.JS DEVSERVER CACHE (`./682.js`) TELAH SELESAI, DIKOMPILASI, DAN DI-PUSH KE GITHUB.
 - **Branch Aktif:** `feat/proposal-visual-engine` (commit terbaru sudah di-push ke `origin/feat/proposal-visual-engine`).

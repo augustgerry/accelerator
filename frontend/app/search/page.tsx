@@ -106,7 +106,11 @@ function SearchContent() {
           } catch { /* private mode */ }
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        // Backend unreachable on mount — fall back to the known baseline divisions
+        // instead of leaving the filter dropdown permanently empty for the session.
+        setAvailableDivisions(["presales", "infrastructure", "security", "application"]);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -62,6 +62,17 @@ function pickRelevantTorExcerpt(torText: string, _sectionTitle?: string, maxLen 
   return torText.slice(0, maxLen);
 }
 
+function filterDocsByQuery(docs: IndexedDocument[], query: string): IndexedDocument[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return docs;
+  return docs.filter(
+    (d) =>
+      d.title.toLowerCase().includes(q) ||
+      d.division?.toLowerCase().includes(q) ||
+      d.docType?.toLowerCase().includes(q)
+  );
+}
+
 const LS_KEY = "synapse-draft-session";
 const LS_SESSION_ID_KEY = "synapse-proposal-session-id";
 
@@ -193,27 +204,15 @@ export default function DraftPage() {
     });
   };
 
-  const filteredReferenceDocs = useMemo(() => {
-    const q = referenceSearch.trim().toLowerCase();
-    if (!q) return referenceDocs;
-    return referenceDocs.filter(
-      (d) =>
-        d.title.toLowerCase().includes(q) ||
-        d.division?.toLowerCase().includes(q) ||
-        d.docType?.toLowerCase().includes(q)
-    );
-  }, [referenceDocs, referenceSearch]);
+  const filteredReferenceDocs = useMemo(
+    () => filterDocsByQuery(referenceDocs, referenceSearch),
+    [referenceDocs, referenceSearch]
+  );
 
-  const filteredLibrarySourceDocs = useMemo(() => {
-    const q = librarySourceSearch.trim().toLowerCase();
-    if (!q) return referenceDocs;
-    return referenceDocs.filter(
-      (d) =>
-        d.title.toLowerCase().includes(q) ||
-        d.division?.toLowerCase().includes(q) ||
-        d.docType?.toLowerCase().includes(q)
-    );
-  }, [referenceDocs, librarySourceSearch]);
+  const filteredLibrarySourceDocs = useMemo(
+    () => filterDocsByQuery(referenceDocs, librarySourceSearch),
+    [referenceDocs, librarySourceSearch]
+  );
 
   useEffect(() => {
     const rawBrief = sessionStorage.getItem("synapse-search-brief");

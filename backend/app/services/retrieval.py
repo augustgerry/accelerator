@@ -7,7 +7,7 @@ Add those later only if query quality genuinely needs it.
 import logging
 import re
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 from app.models import Document, DocumentChunk
 from app.services.embeddings import embed_text
@@ -32,9 +32,9 @@ def _hybrid_ranked_chunks(
     candidate_limit = max(top_k * 4, 20)
     filters = [DocumentChunk.workspace_id == workspace_id]
     if doc_type and doc_type.strip():
-        filters.append(DocumentChunk.document.has(Document.doc_type.ilike(doc_type.strip())))
+        filters.append(DocumentChunk.document.has(func.lower(Document.doc_type) == doc_type.strip().lower()))
     if division and division.strip():
-        filters.append(DocumentChunk.document.has(Document.division.ilike(division.strip())))
+        filters.append(DocumentChunk.document.has(func.lower(Document.division) == division.strip().lower()))
     if doc_ids:
         filters.append(DocumentChunk.document_id.in_(doc_ids))
 

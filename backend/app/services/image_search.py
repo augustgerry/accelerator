@@ -15,6 +15,8 @@ from typing import Optional
 import httpx
 from PIL import Image
 
+from app.services.image_utils import flatten_to_rgb
+
 logger = logging.getLogger(__name__)
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
@@ -167,14 +169,7 @@ def download_and_optimize_image(image_url: str, max_dimension: int = 1200) -> Op
                 w, h = new_w, new_h
 
             # Convert to RGB (white background) if RGBA for clean DOCX/PDF rendering
-            if img.mode in ("RGBA", "LA", "P"):
-                background = Image.new("RGB", img.size, (255, 255, 255))
-                if img.mode == "P":
-                    img = img.convert("RGBA")
-                background.paste(img, mask=img.split()[-1] if "A" in img.getbands() else None)
-                img = background
-            elif img.mode != "RGB":
-                img = img.convert("RGB")
+            img = flatten_to_rgb(img)
 
             output_bio = io.BytesIO()
             img.save(output_bio, format="JPEG", quality=85, optimize=True)

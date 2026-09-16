@@ -54,7 +54,7 @@ KEMBALIKAN HANYA JSON MURNI dengan format:
 """
     provider = get_llm_provider()
     try:
-        raw_resp = provider.answer(prompt, [tor_text[:4000]], mode="qa")
+        raw_resp = provider.answer(prompt, [tor_text[:4000]], mode="json")
         clean_json = raw_resp.strip()
         if clean_json.startswith("```json"):
             clean_json = clean_json[7:]
