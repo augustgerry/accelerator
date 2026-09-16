@@ -18,6 +18,38 @@
 
 ---
 
+## ✅ CLAUDE CODE — SELESAI: REDESIGN UI `/draft` (DECLUTTER, INTEL PILLS, TYPOGRAFI) & EXPORT MODAL DISEDERHANAKAN
+
+Rangkaian task berurutan dari user di sesi ini (branch `feat/proposal-visual-engine`), semua commit sudah **di-push ke origin**:
+
+1. **Redesign total UI `/draft`** (respons ke feedback "keramean, belum user-friendly") — commit `ad5aea8`, `78b7965`:
+   - Stepper 3-langkah persisten (`Upload TOR → Draf & Tinjau → Ekspor`) di bawah Topbar.
+   - Sidebar sub-bab dipersempit 420-460px → 300-340px, nomor hierarkis (1.1/3.2.1) di-parse dari title, status jadi dot minimalis (hijau/kuning/abu), panah reorder+regenerate cuma muncul on-hover.
+   - Panel Red-Flag Scanner / Coverage Audit / Win Themes (fitur baru dari Antigravity, lihat poin 2) diringkas jadi **1 baris pill collapsible** di bawah ProgressHeader — bukan kotak besar permanen.
+   - `CHIP_BASE`/`CHIP_SM` (tinggi fix h-6/h-5) buat nyeragamkan semua badge/tombol kecil di header item & sidebar — root cause "tombol naik-turun" adalah campur `rounded` vs `rounded-full` + padding-only height tanpa fixed height.
+   - Textarea draf: local state + debounce 200ms (bukan `setItems` tiap keystroke) biar sidebar 20+ item gak lag pas ngetik cepat.
+   - Sticky toolbar Generate/Salin/Asset Studio di editor kanan.
+
+2. **Wiring 3 fitur backend baru Antigravity ke UI** — commit `ac66db4`, `fbb49b6`, `3a573d6`:
+   - `scanCriticalClauses` (red-flag/klausul kritis TOR) → auto-jalan pas upload, badge risiko + alert.
+   - `checkRequirementCoverage` (audit kepatuhan TOR) → pill coverage % + modal detail uncovered items.
+   - `win_themes` param di `generateItemDraft` → chip preset + custom-add (bebas ketik keunggulan sendiri, bukan cuma 4 preset).
+   - `calculateSizing` (Sizing/BoQ calculator) → **sengaja disembunyiin** di menu "•••" ProgressHeader (bukan toolbar utama) sesuai catatan presales "jarang dipakai, jangan menonjol".
+
+3. **5 perbaikan UI final** — commit `756a913`:
+   - Typografi draf & jawaban search: `text-justify` + `leading-relaxed` + `mb-4` antar paragraf, tabel markdown render beneran (border, zebra-stripe) via `react-markdown` + `remark-gfm` (dependency baru, di-style pakai token app sendiri, bukan Tailwind typography plugin).
+   - **Rendered rich view jadi default** di editor draf (dulu textarea mentah default) — toggle `✏️ Edit Teks Mentah` / `👁️ Selesai Edit`. Draf kosong tetap force textarea biar user bisa mulai ngetik.
+   - Gambar HLD/arsitektur click-to-zoom (lightbox fullscreen, `backdrop-blur-md`, tombol unduh PNG) — di kartu draf & di Visual Asset Studio (lightbox lokal sendiri di situ, gak prop-drilling ke page.tsx).
+   - Preview export di-restyle jadi lembar A4 (putih, shadow, min-h 70-75vh), ganti list sempit `max-h-[300px]`.
+   - **⚠️ Fitur "Ikuti Gaya File Lain" (Template Cloner/Style Extractor) DIHAPUS TOTAL dari UI** atas instruksi eksplisit user ("membingungkan, gak kepake") — ~450 baris JSX+handler di `export-modal.tsx` (upload template, pilih dari Drive library, mode clone vs structure, clone PPTX) dihapus. Export sekarang cuma 3 kartu preset: Proposal Teknis (.docx), SoW (.docx), Pitch Deck (.pptx). **Endpoint backend `cloneTemplate`/`exportFromTemplate`/`cloneTemplatePptx`/`uploadTemplate` TIDAK disentuh/dihapus** — cuma udah gak ada call site dari frontend lagi. Kalau Antigravity mau deprecate endpoint-nya juga, itu keputusan terpisah.
+
+4. **Custom subagent baru**: `.claude/agents/frontend-verifier.md` — watchdog verify-only (tsc/build/restart dev server bersih), dipanggil manual di sesi ini karena baru dibuat mid-session (agent list Claude Code gak hot-reload); sesi depan akan otomatis dipanggil.
+
+- **Catatan collision (bukan bug kode, histori kerja)**: commit `1552ad1` (Antigravity, "red-flag clause scanner...") sempat ke-bundle sama 522 baris in-progress frontend UI refactor punya Claude Code karena staging luas (`git add -A`-ish) di checkout yang sama — user minta dibiarin gabung aja (gak di-reset), Antigravity udah diingetin gak pake staging luas lagi. Kalau nemu commit message yang gak match sama diff-nya, ini penyebabnya.
+- Verifikasi keseluruhan sesi: `npx tsc --noEmit` + `npm run build` clean di setiap commit. Dev server sempat 2x kena stale `.next` cache (chunk JS/CSS 404 → semua tombol gak responsif) — fix-nya selalu sama: kill process port 3000, `rm -rf .next`, restart fresh.
+
+---
+
 ## ✅ ANTIGRAVITY — SELESAI: PEMBERSIHAN DIVISI, NOISE EXCLUSION, OCR FALLBACK, BENCHMARK SUITE & MCP SERVER
 
 Sesuai instruksi user ("opsi 3 gue udah bilang gak pake divisi2an, diilangin ya soal divisinya. fokus enhancement aja. lanjut semua sisanya gas"):
