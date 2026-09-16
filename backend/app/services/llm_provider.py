@@ -249,6 +249,54 @@ class GeminiProvider(LLMProvider):
             logger.warning("Gemini section mapping failed, using keyword fallback: %s", e)
             return _fallback_map_items_to_sections(headings, items)
 
+    def recommend_structure(
+        self,
+        tor_text: str,
+        doc_type: str = "narrative",
+        document_title: str = "",
+        instruction: str = "",
+    ) -> list[dict]:
+        truncated_text = (tor_text or "")[:35000]
+        prompt = (
+            f"Anda adalah Senior Enterprise Solution Architect dan Presales Specialist di PT Smartnet Magna Global (SMG).\n"
+            f"Tugas: Analisis dokumen acuan tender (TOR / RKS / KAK / RFP) berikut dan rancang rekomendasi "
+            f"struktur bab dan sub-bab terbaik untuk menyusun dokumen tanggapan resmi '{doc_type}'.\n\n"
+            f"Judul Dokumen Tender: {document_title or 'Tender Pengadaan IT'}\n"
+            f"Instruksi Tambahan User: {instruction or 'Buat struktur bab dan sub-bab hierarkis standar proposal teknis enterprise (seperti format CSUL: Latar Belakang, Tujuan, Proposed Solution dengan HLD & Sizing, Compliance Matrix, Implementation Plan, Maintenance Plan & SLA, Penutup).'}\n\n"
+            f"Syarat output:\n"
+            f"1. Gunakan penomoran hierarkis standar proposal profesional: misalnya '1. Latar Belakang', '1.1 Kondisi Existing & Analisis Kebutuhan', '2. Tujuan & Sasaran Solusi', '3. Proposed Solution & Arsitektur Sistem', '3.1 Solution Overview & Rekomendasi Hardware', '3.2 High Level Design (HLD) Topologi Sistem', '4. Compliance Matrix', '5. Implementation Plan & Scope of Work', '6. Maintenance Plan & SLA Dukungan 24x7', '7. Penutup & Tim Tenaga Ahli'.\n"
+            f"2. Untuk SETIAP bagian, sertakan 'rationale' (alasan konkret) yang menjelaskan relevansinya terhadap klausul dokumen acuan.\n"
+            f"3. Format JSON HARUS valid berupa array objek:\n"
+            f"[\n"
+            f'  {{"id": "sec-1", "title": "1.1 Judul Sub-Bab", "category": "Teknis | Umum | SLA & Support | Manajemen Proyek | Administrasi & Legal", "requirement_text": "Cakupan detail yang harus dijawab di sub-bab ini", "rationale": "Alasan rekomendasi berdasarkan dokumen sumber"}}\n'
+            f"]"
+        )
+        try:
+            model = self.genai.GenerativeModel(
+                model_name=self.model_name,
+                generation_config={"response_mime_type": "application/json"},
+            )
+            response = model.generate_content(f"{prompt}\n\nTeks Dokumen Acuan:\n{truncated_text}")
+            cleaned = (response.text or "").strip()
+            if cleaned.startswith("```"):
+                cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+                cleaned = re.sub(r"\s*```$", "", cleaned)
+            data = json.loads(cleaned)
+            if isinstance(data, list) and len(data) > 0:
+                items = []
+                for i, it in enumerate(data, start=1):
+                    items.append({
+                        "id": str(it.get("id") or f"sec-{i}"),
+                        "title": str(it.get("title") or f"Bagian {i}"),
+                        "category": str(it.get("category") or "Teknis"),
+                        "requirement_text": str(it.get("requirement_text") or ""),
+                        "rationale": str(it.get("rationale") or f"Rekomendasi berdasarkan analisis kebutuhan tender {document_title}."),
+                    })
+                return items
+        except Exception as e:
+            logger.warning("Gemini structure recommendation failed, using fallback: %s", e)
+
+        return _fallback_recommend_structure(doc_type, tor_text, document_title)
 
 class OpenAIProvider(LLMProvider):
     def __init__(self):
@@ -263,13 +311,19 @@ class OpenAIProvider(LLMProvider):
 def _build_system_prompt(mode: str) -> str:
     if mode == "draft":
         return (
-            "Anda adalah asisten drafting internal presales. Jawab dengan teks "
-            "siap-copas dalam Bahasa Indonesia formal, berdasarkan konteks yang "
-            "diberikan. Jangan mengarang detail yang tidak ada di konteks. "
-            "Jawab ringkas dan langsung ke inti — tanpa basa-basi."
+            "Anda adalah Senior Enterprise Solution Architect di PT Smartnet Magna Global (SMG). "
+            "Tugas Anda adalah menyusun tanggapan teknis dan proposal solusi resmi dalam Bahasa Indonesia formal "
+            "berdasarkan konteks dokumen tender (TOR) dan knowledge base internal SMG.\n\n"
+            "Aturan Penulisan Proposal Standar Enterprise:\n"
+            "1. Format penomoran sub-bab terstruktur (misal: 1.1, 2.1, 2.1.1, 3.1.2) sesuai hirarki topik.\n"
+            "2. Jangan gunakan simbol markdown liar yang mengotori dokumen; jika menggunakan sub-judul, sertakan nomor sub-bab bertingkat (misal: '3.1.1 Spesifikasi Server DL360').\n"
+            "3. Untuk rincian spesifikasi, komparasi fitur, konfigurasi hardware, atau SLA, WAJIB gunakan format tabel markdown (| Parameter | Spesifikasi | Komitmen SMG |) agar otomatis diekspor menjadi tabel Word resmi bergaris rapi.\n"
+            "4. Gunakan poin peluru bertanda '- ' untuk rincian fitur atau deliverables.\n"
+            "5. Selalu gunakan nama resmi perusahaan: 'PT Smartnet Magna Global' atau 'SMG'.\n"
+            "6. Jawab secara lugas, meyakinkan, bernilai jual tinggi (value proposition), dengan komitmen teknis spesifik tanpa kata tentatif (hindari kata 'akan diusahakan')."
         )
     return (
-        "Anda adalah asisten knowledge base internal. Jawab pertanyaan hanya "
+        "Anda adalah asisten knowledge base internal PT Smartnet Magna Global (SMG). Jawab pertanyaan hanya "
         "berdasarkan konteks yang diberikan, sebutkan jika informasi tidak "
         "ditemukan. Jawab ringkas dan langsung ke inti — tanpa basa-basi."
     )

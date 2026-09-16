@@ -130,10 +130,10 @@ Semua perubahan di atas: `npx tsc --noEmit` clean, backend `py_compile` clean, u
 **LLM:** Claude (Anthropic) atau Gemini (Google) — configurable via `.env`
 
 **Tujuan Produk:**
-Platform presales internal untuk tim Solution Architect di PT Solusi Mitra Gemilang (SMG) agar bisa:
+Platform presales internal untuk tim Solution Architect di PT Smartnet Magna Global (SMG) agar bisa:
 1. **Search internal** — Glean-style: cari di arsip proposal/checklist dengan AI synthesis + sitasi
 2. **Draft Tender (Loopio-style)** — Upload TOR/RFP, AI pecah jadi checklist klausul, susun draf per butir, ekspor ke Word
-3. **Generator Proposal dari Template** — User upload template Word (.docx), AI ikuti struktur & font template, isi otomatis dari draft yang sudah dibuat
+3. **Generator Proposal dari Template** — User upload template Word (.docx), AI ikuti struktur & font template, isi otomatis dari draft yang sudah dibuat (termasuk alignment dengan standar proposal CSUL dan enterprise tender lainnya).
 
 ---
 
@@ -466,5 +466,48 @@ npm run dev
 
 ---
 
-*Last updated: sesi Claude Code (redesign alur Draft/Export), lanjutan dari sesi Antigravity di atas.*
-*Agent sebelumnya: Antigravity (Google Deepmind). User pindah balik ke Antigravity setelah sesi ini.*
+## 🎨 SESI ANTIGRAVITY: PROPOSAL VISUAL ENGINE & CSUL FORMAT ALIGNMENT (16 Sep 2026)
+
+### 1. Koreksi Nama Perusahaan Global
+- Nama resmi: **PT Smartnet Magna Global (SMG)**.
+- Diperbarui di seluruh backend (`draft.py`, `diagram_generator.py`, prompt `llm_provider.py`) dan frontend (`export-modal.tsx`, `settings/page.tsx`, `sidebar.tsx`, `page.tsx`, `api.ts`).
+
+### 2. Eliminasi Kebocoran Markdown (Zero Markdown Leakage)
+- Dibuat parser `render_markdown_to_docx(doc, markdown_text)` di `backend/app/routers/draft.py`.
+- Menghilangkan seluruh simbol `###`, `**`, dan `|---|` dari hasil export:
+  - Heading `###` diubah menjadi native docx headings dengan hierarki warna `#4A86E8` dan `#1F497D`.
+  - Tabel markdown `|---|` diubah menjadi native Word Table bergaris rapi dengan header biru `#4A86E8` dan baris belang (zebra shading `#F8FAFC`).
+  - Bullet point `- ` diubah menjadi paragraf native `List Bullet`.
+  - Inline bold `**...**` dan italic `*...*` diubah menjadi runs berformat.
+
+### 3. Hierarki Sub-Bab Resmi CSUL
+- `SKELETONS.narrative` dan `export_proposal_docx` diselaraskan dengan struktur proposal asli:
+  - 1. Latar Belakang & Analisis Kebutuhan
+  - 2. Tujuan & Sasaran Implementasi
+  - 3. Proposed Solution & Arsitektur Solusi
+    - 3.1 Solution Overview & Rekomendasi Hardware
+    - 3.2 Proposed High Level Design (HLD) & Topologi Sistem
+  - 4. Compliance Matrix Spesifikasi Teknis
+  - 5. Implementation Plan, Scope of Work & Deliverables
+  - 6. Maintenance Plan (PM/CM) & Service Level Agreement (SLA)
+  - 7. Penutup, Tim Tenaga Ahli & Profil PT Smartnet Magna Global
+
+### 4. Layout Cover & Document Release CSUL
+- Cover Proposal Teknis dengan 2 tabel resmi:
+  - Table 0: Prepared by `PT. Smartnet Magna Global` (kiri) | Prepared for `[Customer Name]` (kanan), borderless.
+  - Heading 1: `Document Release` dengan Table 1 (Version, Date Release, Change Information, Related Page, Change) ber-header `#4A86E8`.
+  - Font default standar: `Google Sans`.
+
+### 5. Otomasi Lampiran Visual Hardware & Diagram HLD
+- Di endpoint `POST /draft/item` (`draft_item`):
+  - Terdeteksi otomatis kata kunci hardware (Server DL360, Storage All-Flash, Switch, Firewall): langsung mencari gambar publik via `search_public_images` dan melampirkan `image_data_url` serta caption `Gambar: ...`.
+  - Terdeteksi otomatis kata kunci HLD/topologi/arsitektur: langsung memanggil `generate_hld_mermaid` dan me-render PNG diagram via Kroki engine.
+  - Gambar langsung tersemat di item draf dan diekspor otomatis ke file `.docx`.
+
+### 6. Harmonisasi Alur Export Modal
+- Step 1 ("Format & Generate") menampilkan banner konfirmasi standar Proposal Teknis CSUL PT Smartnet Magna Global, dengan tombol quick-action ke Step 2 ("Ikuti Gaya File Lain") untuk mengkloning langsung file acuan yang diunggah.
+
+---
+
+*Branch aktif: `feat/proposal-visual-engine`*
+*Branch Claude (`feat/search-citation-drawer`) tetap terisolasi dan tidak tersentuh.*

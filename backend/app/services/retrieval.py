@@ -4,12 +4,15 @@ a flat top-k similarity search, no reranking or agentic multi-hop retrieval.
 Add those later only if query quality genuinely needs it.
 """
 
+import logging
 import re
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 from app.models import Document, DocumentChunk
 from app.services.embeddings import embed_text
+
+logger = logging.getLogger(__name__)
 
 
 def _query_tokens(query: str) -> list[str]:
@@ -26,7 +29,6 @@ def _hybrid_ranked_chunks(
     doc_ids: list[str] | None = None,
 ) -> list[DocumentChunk]:
     """Blend vector candidates with exact-term candidates before returning top-k."""
-    query_embedding = embed_text(query)
     candidate_limit = max(top_k * 4, 20)
     filters = [DocumentChunk.workspace_id == workspace_id]
     if doc_type:
@@ -35,14 +37,20 @@ def _hybrid_ranked_chunks(
         filters.append(DocumentChunk.document.has(Document.division == division))
     if doc_ids:
         filters.append(DocumentChunk.document_id.in_(doc_ids))
-    distance = DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
-    vector_rows = session.execute(
-        select(DocumentChunk, distance)
-        .options(joinedload(DocumentChunk.document))
-        .where(*filters)
-        .order_by(distance)
-        .limit(candidate_limit)
-    ).all()
+
+    vector_rows = []
+    try:
+        query_embedding = embed_text(query)
+        distance = DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
+        vector_rows = session.execute(
+            select(DocumentChunk, distance)
+            .options(joinedload(DocumentChunk.document))
+            .where(*filters)
+            .order_by(distance)
+            .limit(candidate_limit)
+        ).all()
+    except Exception as e:
+        logger.warning("Vector embedding failed, falling back to keyword retrieval: %s", e)
 
     tokens = _query_tokens(query)
     keyword_rows = []

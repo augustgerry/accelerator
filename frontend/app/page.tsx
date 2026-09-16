@@ -53,7 +53,7 @@ export default function DashboardPage() {
     <div className="flex min-h-screen flex-col bg-surface font-sans text-text-primary">
       <Topbar
         title="Dasbor Presales"
-        subtitle="Knowledge accelerator & RFP response assistant — Solusi Mitra Gemilang"
+        subtitle="Knowledge accelerator & RFP response assistant — Smartnet Magna Global"
       />
 
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center px-6 py-10">

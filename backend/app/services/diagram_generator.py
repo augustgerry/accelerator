@@ -240,7 +240,7 @@ def _render_local_diagram_pillow(mermaid_code: str) -> dict:
     draw.text((545, 495), "10 Gbps (RPO=0)", fill=(180, 83, 9))
 
     # Footer note
-    draw.text((50, 620), "Diagram arsitektur resmi di-generate oleh Synapse Architecture Engine · PT Solusi Mitra Gemilang", fill=(107, 114, 128))
+    draw.text((50, 620), "Diagram arsitektur resmi di-generate oleh Synapse Architecture Engine · PT Smartnet Magna Global", fill=(107, 114, 128))
 
     bio = io.BytesIO()
     img.save(bio, format="PNG", optimize=True)

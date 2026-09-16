@@ -542,7 +542,7 @@ export async function cloneTemplate(payload: {
   form.append("template", payload.templateFile);
   form.append("items_json", JSON.stringify(payload.items));
   form.append("document_title", payload.document_title);
-  form.append("company_name", payload.company_name ?? "PT Solusi Mitra Gemilang (SMG)");
+  form.append("company_name", payload.company_name ?? "PT Smartnet Magna Global (SMG)");
   form.append("document_type", payload.document_type ?? "proposal");
 
   const res = await fetch(`${API_BASE}/draft/clone-template`, {
@@ -573,7 +573,7 @@ export async function cloneTemplatePptx(payload: {
   form.append("template", payload.templateFile);
   form.append("items_json", JSON.stringify(payload.items));
   form.append("document_title", payload.document_title);
-  form.append("company_name", payload.company_name ?? "PT Solusi Mitra Gemilang (SMG)");
+  form.append("company_name", payload.company_name ?? "PT Smartnet Magna Global (SMG)");
 
   const res = await fetch(`${API_BASE}/draft/clone-template-pptx`, {
     method: "POST",

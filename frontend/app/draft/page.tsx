@@ -319,6 +319,8 @@ export default function DraftPage() {
             draft_text: generatedItem.result.draft_text,
             status: "draft",
             sources: generatedItem.result.sources,
+            image_data_url: generatedItem.result.image_data_url || item.image_data_url,
+            image_caption: generatedItem.result.image_caption || item.image_caption,
           };
         })
       );
@@ -523,6 +525,8 @@ export default function DraftPage() {
             draft_text: result.draft_text,
             status: it.status === "final" ? "final" : "draft",
             sources: result.sources,
+            image_data_url: result.image_data_url || it.image_data_url,
+            image_caption: result.image_caption || it.image_caption,
             isGenerating: false,
           };
         })

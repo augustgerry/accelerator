@@ -142,7 +142,7 @@ export function Sidebar() {
       <div className="border-t border-surface-border bg-surface/40 px-5 py-3.5 flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold text-text-primary">Gerry August</p>
-          <p className="text-[10px] text-text-muted">Presales · Solusi Mitra Gemilang</p>
+          <p className="text-[10px] text-text-muted">Presales · Smartnet Magna Global</p>
         </div>
         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-soft text-accent-ink text-[10px] font-bold">
           GA

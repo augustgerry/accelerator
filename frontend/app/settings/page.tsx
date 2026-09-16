@@ -59,10 +59,10 @@ type CorporateBranding = {
 };
 
 const DEFAULT_BRANDING: CorporateBranding = {
-  companyName: "PT Solusi Mitra Gemilang (SMG)",
+  companyName: "PT Smartnet Magna Global (SMG)",
   primaryColor: "#111827",
   accentColor: "#2F5FE0",
-  footerText: "PT Solusi Mitra Gemilang (SMG)",
+  footerText: "PT Smartnet Magna Global (SMG)",
   logoDataUrl: "",
 };
 

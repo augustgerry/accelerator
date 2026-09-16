@@ -77,6 +77,8 @@ class DraftItemResponse(BaseModel):
     draft_text: str
     sources_used: int
     sources: list[SourceMeta] = []
+    image_data_url: Optional[str] = None
+    image_caption: Optional[str] = None
 
 
 class QualityCheckInput(BaseModel):
@@ -304,11 +306,63 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
         )
 
     source_models = [SourceMeta(**s) for s in sources]
+
+    # Auto-detect visual intent if item involves architecture or enterprise hardware
+    image_data_url = None
+    image_caption = None
+    lower_scope = f"{payload.requirement_text} {payload.instruction or ''} {draft[:300]}".lower()
+
+    if any(k in lower_scope for k in ("hld", "high level design", "arsitektur", "topologi", "architecture diagram")):
+        try:
+            hld_res = generate_hld_mermaid(
+                tor_text=payload.tor_context or payload.requirement_text,
+                solution_text=draft,
+                title=f"Arsitektur Solusi {payload.requirement_text[:40]}"
+            )
+            code = hld_res.get("mermaid_code", "")
+            rendered = render_mermaid_to_image(code)
+            if rendered and rendered.get("data_url"):
+                image_data_url = rendered.get("data_url")
+                image_caption = hld_res.get("caption", f"Gambar: Arsitektur High Level Design (HLD) Solusi {payload.requirement_text[:40]}")
+        except Exception as err:
+            logger.warning("Auto HLD visual generation failed for item %s: %s", payload.item_id, err)
+
+    elif any(k in lower_scope for k in ("server", "storage", "switch", "firewall", "dl360", "pure storage", "cisco", "fortinet", "san", "nas", "flash array", "poweredge")):
+        try:
+            hw_query = None
+            if "dl360" in lower_scope:
+                hw_query = "HPE ProLiant DL360 Server"
+            elif "pure storage" in lower_scope or "flasharray" in lower_scope or "rc20" in lower_scope:
+                hw_query = "Pure Storage FlashArray"
+            elif "cisco" in lower_scope:
+                hw_query = "Cisco Catalyst Switch"
+            elif "fortinet" in lower_scope or "fortigate" in lower_scope:
+                hw_query = "Fortinet FortiGate Firewall"
+            elif "poweredge" in lower_scope:
+                hw_query = "Dell PowerEdge Server"
+            elif "storage" in lower_scope:
+                hw_query = "Enterprise Storage SAN NAS"
+            elif "server" in lower_scope:
+                hw_query = "Rackmount Enterprise Server"
+
+            if hw_query:
+                imgs = search_public_images(hw_query, limit=3)
+                for img in imgs:
+                    opt = download_and_optimize_image(img.get("image_url", ""))
+                    if opt and opt.get("data_url"):
+                        image_data_url = opt.get("data_url")
+                        image_caption = f"Gambar: Ilustrasi Perangkat {hw_query}"
+                        break
+        except Exception as err:
+            logger.warning("Auto hardware visual search failed for item %s: %s", payload.item_id, err)
+
     return DraftItemResponse(
         item_id=payload.item_id,
         draft_text=draft,
         sources_used=len(kb_chunks),
         sources=source_models,
+        image_data_url=image_data_url,
+        image_caption=image_caption,
     )
 
 
@@ -524,6 +578,157 @@ def _decode_logo_bytes(data_url: str) -> bytes | None:
         return None
 
 
+def add_formatted_text(paragraph, text: str, base_color=None):
+    """Parse inline **bold**, *italic*, and `code` into styled docx runs."""
+    tokens = re.split(r'(\*\*.*?\*\*|\*.*?\*|`.*?`)', text)
+    from docx.shared import Pt
+    for token in tokens:
+        if not token:
+            continue
+        if token.startswith('**') and token.endswith('**') and len(token) >= 4:
+            run = paragraph.add_run(token[2:-2])
+            run.bold = True
+        elif token.startswith('*') and token.endswith('*') and len(token) >= 2:
+            run = paragraph.add_run(token[1:-1])
+            run.italic = True
+        elif token.startswith('`') and token.endswith('`') and len(token) >= 2:
+            run = paragraph.add_run(token[1:-1])
+            run.font.name = 'Consolas'
+            run.font.size = Pt(9)
+        else:
+            run = paragraph.add_run(token)
+        if base_color:
+            run.font.color.rgb = base_color
+
+
+def render_markdown_to_docx(doc, markdown_text: str, heading_offset: int = 2):
+    """Convert raw markdown text with tables, headings, bullets into native DOCX elements."""
+    if not markdown_text or not markdown_text.strip():
+        return
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+
+    lines = markdown_text.split('\n')
+    i = 0
+    table_lines = []
+
+    while i < len(lines):
+        line = lines[i].rstrip()
+        stripped = line.strip()
+
+        # 1. Check for Table block
+        if stripped.startswith('|') and stripped.endswith('|'):
+            table_lines.append(stripped)
+            i += 1
+            while i < len(lines) and lines[i].strip().startswith('|') and lines[i].strip().endswith('|'):
+                table_lines.append(lines[i].strip())
+                i += 1
+
+            if len(table_lines) >= 2:
+                data_rows = []
+                for t_line in table_lines:
+                    if re.match(r'^\|[\s\-:|]+\|$', t_line):
+                        continue
+                    cells = [c.strip() for c in t_line.strip('|').split('|')]
+                    data_rows.append(cells)
+
+                if data_rows:
+                    num_cols = max(len(r) for r in data_rows)
+                    tbl = doc.add_table(rows=len(data_rows), cols=num_cols)
+                    tbl.autofit = False
+                    for r_idx, row in enumerate(data_rows):
+                        for c_idx in range(num_cols):
+                            cell_val = row[c_idx] if c_idx < len(row) else ""
+                            cell = tbl.cell(r_idx, c_idx)
+                            cell.text = ""
+                            p = cell.paragraphs[0]
+                            p.paragraph_format.space_before = Pt(3)
+                            p.paragraph_format.space_after = Pt(3)
+                            if r_idx == 0:
+                                add_formatted_text(p, cell_val)
+                                for r in p.runs:
+                                    r.bold = True
+                                    r.font.size = Pt(9.5)
+                                    r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                                shading = parse_xml(r'<w:shd {} w:fill="4A86E8"/>'.format(nsdecls('w')))
+                                cell._tc.get_or_add_tcPr().append(shading)
+                            else:
+                                add_formatted_text(p, cell_val)
+                                for r in p.runs:
+                                    r.font.size = Pt(9)
+                                if r_idx % 2 == 1:
+                                    shading = parse_xml(r'<w:shd {} w:fill="F8FAFC"/>'.format(nsdecls('w')))
+                                    cell._tc.get_or_add_tcPr().append(shading)
+                    p_spacer = doc.add_paragraph()
+                    p_spacer.paragraph_format.space_after = Pt(4)
+
+            table_lines = []
+            continue
+
+        # 2. Check for Headings: ### or ## or #
+        heading_match = re.match(r'^(#{1,4})\s+(.*)$', stripped)
+        if heading_match:
+            hashes, h_text = heading_match.groups()
+            level = len(hashes) + (heading_offset - 1)
+            level = min(max(level, 1), 4)
+            h = doc.add_heading(level=level)
+            base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
+            add_formatted_text(h, h_text, base_color=base_color)
+            i += 1
+            continue
+
+        # 3. Check for Bullet Points
+        bullet_match = re.match(r'^[-*]\s+(.*)$', stripped)
+        if bullet_match:
+            b_text = bullet_match.group(1)
+            try:
+                p = doc.add_paragraph(style='List Bullet')
+            except Exception:
+                p = doc.add_paragraph()
+                p.paragraph_format.left_indent = Inches(0.25)
+            p.paragraph_format.space_after = Pt(2.5)
+            add_formatted_text(p, b_text)
+            i += 1
+            continue
+
+        # 4. Check for Numbered Points
+        num_match = re.match(r'^(\d+\.)\s+(.*)$', stripped)
+        if num_match:
+            num_prefix, n_text = num_match.groups()
+            p = doc.add_paragraph()
+            p.paragraph_format.left_indent = Inches(0.25)
+            p.paragraph_format.space_after = Pt(2.5)
+            r_num = p.add_run(num_prefix + " ")
+            r_num.bold = True
+            add_formatted_text(p, n_text)
+            i += 1
+            continue
+
+        # 5. Check for Blockquote
+        if stripped.startswith('>'):
+            q_text = stripped[1:].strip()
+            p = doc.add_paragraph()
+            p.paragraph_format.left_indent = Inches(0.3)
+            p.paragraph_format.space_after = Pt(3)
+            add_formatted_text(p, q_text, base_color=RGBColor(0x4B, 0x55, 0x63))
+            for r in p.runs:
+                r.italic = True
+            i += 1
+            continue
+
+        # 6. Empty line
+        if not stripped:
+            i += 1
+            continue
+
+        # 7. Normal paragraph
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(5)
+        add_formatted_text(p, stripped)
+        i += 1
+
+
 def _insert_item_image_docx(doc, item, prefix: str = "Gambar"):
     if not getattr(item, "image_data_url", None):
         return
@@ -556,21 +761,22 @@ def _insert_item_image_docx(doc, item, prefix: str = "Gambar"):
         p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_cap.paragraph_format.space_after = Pt(12)
         r_cap = p_cap.add_run(caption)
-        r_cap.font.size = Pt(8.5)
+        r_cap.font.size = Pt(9)
         r_cap.italic = True
-        r_cap.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+        r_cap.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
     except Exception as exc:
         logger.warning(f"Failed to insert image for item '{item.title}' in DOCX: {exc}")
 
 
 class ExportDocxRequest(BaseModel):
     document_title: str
-    template_type: str = "matrix"  # "matrix" | "narrative"
-    font_name: str = "Calibri"
-    company_name: str = "PT Solusi Mitra Gemilang (SMG)"
+    template_type: str = "narrative"  # "narrative" (Proposal Teknis CSUL) | "matrix" | "sow" etc.
+    font_name: str = "Google Sans"
+    company_name: str = "PT Smartnet Magna Global (SMG)"
     logo_data_url: str = ""
     customer_logo_data_url: str = ""
     items: list[ExportDocxItem]
+
 
 
 @router.post("/export-docx")
@@ -599,62 +805,179 @@ def export_proposal_docx(payload: ExportDocxRequest):
     font = style.font
     font.name = payload.font_name
     font.size = Pt(10)
-    font.color.rgb = RGBColor(0x1F, 0x24, 0x30)
-
-    # Header logos (company logo on left, customer logo on right)
+    # Header logos and Cover structure
     company_logo_bytes = _decode_logo_bytes(payload.logo_data_url)
     customer_logo_bytes = _decode_logo_bytes(payload.customer_logo_data_url)
 
-    if company_logo_bytes or customer_logo_bytes:
-        logo_table = doc.add_table(rows=1, cols=2)
-        logo_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    if payload.template_type == "narrative":
+        if company_logo_bytes or customer_logo_bytes:
+            logo_table = doc.add_table(rows=1, cols=2)
+            logo_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+            tbl_borders = parse_xml(
+                f'<w:tblBorders {nsdecls("w")}>'
+                f'<w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/>'
+                f'<w:insideH w:val="none"/><w:insideV w:val="none"/>'
+                f'</w:tblBorders>'
+            )
+            logo_table._tbl.tblPr.append(tbl_borders)
+            cell_left = logo_table.cell(0, 0)
+            cell_right = logo_table.cell(0, 1)
+            cell_left.width = Inches(3.25)
+            cell_right.width = Inches(3.25)
+            p_left = cell_left.paragraphs[0]
+            if company_logo_bytes:
+                run_left = p_left.add_run()
+                run_left.add_picture(io.BytesIO(company_logo_bytes), height=Inches(0.65))
+            p_right = cell_right.paragraphs[0]
+            p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            if customer_logo_bytes:
+                run_right = p_right.add_run()
+                run_right.add_picture(io.BytesIO(customer_logo_bytes), height=Inches(0.65))
+
+        title_p = doc.add_paragraph()
+        title_p.paragraph_format.space_before = Pt(28)
+        title_p.paragraph_format.space_after = Pt(8)
+        title_run = title_p.add_run("Proposal Teknis")
+        title_run.bold = True
+        title_run.font.size = Pt(22)
+        title_run.font.color.rgb = RGBColor(0x4A, 0x86, 0xE8)
+
+        sub_p = doc.add_paragraph()
+        sub_p.paragraph_format.space_after = Pt(36)
+        sub_run = sub_p.add_run(payload.document_title or "Tanggapan Teknis & Usulan Solusi Enterprise")
+        sub_run.bold = True
+        sub_run.font.size = Pt(14)
+        sub_run.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
+
+        t0 = doc.add_table(rows=3, cols=2)
+        t0.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t0.autofit = False
+        col_w = Inches(3.25)
+        for row in t0.rows:
+            row.cells[0].width = col_w
+            row.cells[1].width = col_w
+
+        p = t0.cell(0, 0).paragraphs[0]
+        r = p.add_run("Prepared by")
+        r.bold = True
+        r.font.size = Pt(10)
+        r.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+
+        p = t0.cell(0, 1).paragraphs[0]
+        r = p.add_run("Prepared for")
+        r.bold = True
+        r.font.size = Pt(10)
+        r.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+
+        p = t0.cell(2, 0).paragraphs[0]
+        r = p.add_run(payload.company_name or "PT. Smartnet Magna Global")
+        r.bold = True
+        r.font.size = Pt(11)
+        r.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
+        p.add_run("\nSolution Architect & Presales Division")
+
+        p = t0.cell(2, 1).paragraphs[0]
+        r = p.add_run(payload.document_title or "Panitia Pengadaan / Klien")
+        r.bold = True
+        r.font.size = Pt(11)
+        r.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
+        p.add_run("\nTim Evaluator Teknis & Komite Pengadaan")
+
         tbl_borders = parse_xml(
             f'<w:tblBorders {nsdecls("w")}>'
             f'<w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/>'
             f'<w:insideH w:val="none"/><w:insideV w:val="none"/>'
             f'</w:tblBorders>'
         )
-        logo_table._tbl.tblPr.append(tbl_borders)
+        t0._tbl.tblPr.append(tbl_borders)
 
-        cell_left = logo_table.cell(0, 0)
-        cell_right = logo_table.cell(0, 1)
-        cell_left.width = Inches(3.25)
-        cell_right.width = Inches(3.25)
+        date_p = doc.add_paragraph()
+        date_p.paragraph_format.space_before = Pt(36)
+        date_p.paragraph_format.space_after = Pt(20)
+        r_date = date_p.add_run(f"{datetime.now().strftime('%d %B %Y')} · Proposal Teknis Resmi")
+        r_date.font.size = Pt(9.5)
+        r_date.font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
 
-        p_left = cell_left.paragraphs[0]
-        p_left.paragraph_format.space_after = Pt(10)
-        if company_logo_bytes:
-            run_left = p_left.add_run()
-            run_left.add_picture(io.BytesIO(company_logo_bytes), height=Inches(0.65))
+        doc.add_page_break()
 
-        p_right = cell_right.paragraphs[0]
-        p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        p_right.paragraph_format.space_after = Pt(10)
-        if customer_logo_bytes:
-            run_right = p_right.add_run()
-            run_right.add_picture(io.BytesIO(customer_logo_bytes), height=Inches(0.65))
+        # Document Release
+        h_rel = doc.add_heading(level=1)
+        r_rel = h_rel.add_run("Document Release")
+        r_rel.font.color.rgb = RGBColor(0x4A, 0x86, 0xE8)
 
-    # Header title block
-    title_p = doc.add_paragraph()
-    title_run = title_p.add_run("TANGGAPAN TEKNIS & PROPOSAL SOLUSI")
-    title_run.bold = True
-    title_run.font.size = Pt(16)
-    title_run.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
-    title_p.paragraph_format.space_after = Pt(2)
+        t1 = doc.add_table(rows=2, cols=5)
+        t1.alignment = WD_TABLE_ALIGNMENT.CENTER
+        t1.autofit = False
+        headers_rel = ['Version', 'Date Release', 'Change Information', 'Related Page', 'Change']
+        for idx_rel, text_rel in enumerate(headers_rel):
+            cell_rel = t1.cell(0, idx_rel)
+            p_rel = cell_rel.paragraphs[0]
+            r_rel_hdr = p_rel.add_run(text_rel)
+            r_rel_hdr.bold = True
+            r_rel_hdr.font.size = Pt(9.5)
+            r_rel_hdr.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            shd = parse_xml(r'<w:shd {} w:fill="4A86E8"/>'.format(nsdecls('w')))
+            cell_rel._tc.get_or_add_tcPr().append(shd)
 
-    sub_p = doc.add_paragraph()
-    sub_run = sub_p.add_run(f"Dokumen Acuan: {payload.document_title}\n")
-    sub_run.font.size = Pt(11)
-    sub_run.bold = True
-    sub_run.font.color.rgb = RGBColor(0x2F, 0x5F, 0xE0)
+        row1_data = ['1.0', datetime.now().strftime('%d-%b-%Y'), 'N/A', 'N/A', '1st Draft Proposal Teknis']
+        for idx_rel, text_rel in enumerate(row1_data):
+            cell_rel = t1.cell(1, idx_rel)
+            p_rel = cell_rel.paragraphs[0]
+            p_rel.add_run(text_rel).font.size = Pt(9)
 
-    meta_run = sub_p.add_run(
-        f"Penyusun: {payload.company_name} · Tanggal: {datetime.now().strftime('%d %B %Y')}\n"
-        f"Total Bagian Tersusun: {len(payload.items)} bagian"
-    )
-    meta_run.font.size = Pt(9.5)
-    meta_run.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
-    sub_p.paragraph_format.space_after = Pt(16)
+        doc.add_page_break()
+
+    else:
+        if company_logo_bytes or customer_logo_bytes:
+            logo_table = doc.add_table(rows=1, cols=2)
+            logo_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+            tbl_borders = parse_xml(
+                f'<w:tblBorders {nsdecls("w")}>'
+                f'<w:top w:val="none"/><w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/>'
+                f'<w:insideH w:val="none"/><w:insideV w:val="none"/>'
+                f'</w:tblBorders>'
+            )
+            logo_table._tbl.tblPr.append(tbl_borders)
+
+            cell_left = logo_table.cell(0, 0)
+            cell_right = logo_table.cell(0, 1)
+            cell_left.width = Inches(3.25)
+            cell_right.width = Inches(3.25)
+
+            p_left = cell_left.paragraphs[0]
+            p_left.paragraph_format.space_after = Pt(10)
+            if company_logo_bytes:
+                run_left = p_left.add_run()
+                run_left.add_picture(io.BytesIO(company_logo_bytes), height=Inches(0.65))
+
+            p_right = cell_right.paragraphs[0]
+            p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            p_right.paragraph_format.space_after = Pt(10)
+            if customer_logo_bytes:
+                run_right = p_right.add_run()
+                run_right.add_picture(io.BytesIO(customer_logo_bytes), height=Inches(0.65))
+
+        title_p = doc.add_paragraph()
+        title_run = title_p.add_run("TANGGAPAN TEKNIS & PROPOSAL SOLUSI")
+        title_run.bold = True
+        title_run.font.size = Pt(16)
+        title_run.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
+        title_p.paragraph_format.space_after = Pt(2)
+
+        sub_p = doc.add_paragraph()
+        sub_run = sub_p.add_run(f"Dokumen Acuan: {payload.document_title}\n")
+        sub_run.font.size = Pt(11)
+        sub_run.bold = True
+        sub_run.font.color.rgb = RGBColor(0x2F, 0x5F, 0xE0)
+
+        meta_run = sub_p.add_run(
+            f"Penyusun: {payload.company_name} · Tanggal: {datetime.now().strftime('%d %B %Y')}\n"
+            f"Total Bagian Tersusun: {len(payload.items)} bagian"
+        )
+        meta_run.font.size = Pt(9.5)
+        meta_run.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+        sub_p.paragraph_format.space_after = Pt(16)
+
 
     if payload.template_type == "matrix":
         # Format Matriks Tender Resmi (Table)
@@ -841,36 +1164,35 @@ def export_proposal_docx(payload: ExportDocxRequest):
         )
 
     else:
-        # Format Proposal Naratif Bertingkat (Bab & Sub-bab)
-        doc.add_heading("1. Ringkasan Eksekutif & Metodologi", level=1)
-        doc.add_paragraph(
-            f"Dokumen ini menyajikan tanggapan teknis dan penawaran solusi resmi dari {payload.company_name} "
-            f"atas dokumen tender {payload.document_title}. Seluruh usulan spesifikasi telah diselaraskan dengan "
-            "standar arsitektur dan praktik terbaik industri presales."
-        )
-
-        doc.add_heading("2. Rincian Tanggapan Teknis & Spesifikasi", level=1)
+        # Format Proposal Naratif Bertingkat (Bab & Sub-bab Standar CSUL PT Smartnet Magna Global)
         for idx, item in enumerate(payload.items, start=1):
-            doc.add_heading(f"2.{idx} {item.title} [{item.category}]", level=2)
+            title_clean = (item.title or f"Bagian {idx}").strip()
+            num_match = re.match(r"^(\d+(\.\d+)*)\s*(.*)$", title_clean)
+            if num_match:
+                num_str = num_match.group(1)
+                parts = [p for p in num_str.split('.') if p]
+                level = min(max(len(parts), 1), 4)
+                h = doc.add_heading(level=level)
+                base_color = RGBColor(0x4A, 0x86, 0xE8) if level <= 2 else RGBColor(0x1F, 0x49, 0x7D)
+                add_formatted_text(h, title_clean, base_color=base_color)
+            else:
+                h = doc.add_heading(level=2)
+                add_formatted_text(h, f"{idx}. {title_clean}", base_color=RGBColor(0x4A, 0x86, 0xE8))
 
-            req_p = doc.add_paragraph()
-            req_run = req_p.add_run(f"Cakupan Bagian Ini:\n{item.requirement_text}")
-            req_run.italic = True
-            req_run.font.color.rgb = RGBColor(0x4B, 0x55, 0x63)
-            req_p.paragraph_format.left_indent = Inches(0.25)
+            if item.requirement_text and item.requirement_text.strip():
+                req_p = doc.add_paragraph()
+                req_p.paragraph_format.left_indent = Inches(0.2)
+                req_p.paragraph_format.space_after = Pt(4)
+                req_run = req_p.add_run(f"Klausul Kebutuhan: {item.requirement_text.strip()}")
+                req_run.italic = True
+                req_run.font.size = Pt(9)
+                req_run.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
 
-            resp_p = doc.add_paragraph()
-            resp_p.add_run("Tanggapan Solusi SMG:\n").bold = True
             resp_text = item.draft_text if item.draft_text.strip() else "[Tanggapan belum disusun]"
-            resp_p.add_run(resp_text)
-            resp_p.paragraph_format.space_after = Pt(12)
-            _insert_item_image_docx(doc, item, prefix=f"Gambar 2.{idx}")
+            render_markdown_to_docx(doc, resp_text, heading_offset=3)
 
-        doc.add_heading("3. Status Kepatuhan & Penutup", level=1)
-        doc.add_paragraph(
-            f"Demikian tanggapan teknis ini kami sampaikan dengan penuh komitmen untuk mendukung "
-            f"keberhasilan implementasi proyek pada pihak pemberi kerja."
-        )
+            _insert_item_image_docx(doc, item, prefix=f"Gambar {idx}")
+
 
     bio = io.BytesIO()
     doc.save(bio)
@@ -900,7 +1222,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
 class ExportPdfRequest(BaseModel):
     document_title: str
     template_type: str = "narrative"
-    company_name: str = "PT Solusi Mitra Gemilang (SMG)"
+    company_name: str = "PT Smartnet Magna Global (SMG)"
     primary_color: str = "#111827"
     accent_color: str = "#2F5FE0"
     footer_text: str = ""
@@ -1199,7 +1521,7 @@ def export_proposal_pdf(payload: ExportPdfRequest):
 
 class ExportPptxRequest(BaseModel):
     document_title: str
-    company_name: str = "PT Solusi Mitra Gemilang (SMG)"
+    company_name: str = "PT Smartnet Magna Global (SMG)"
     items: list[ExportDocxItem]
 
 
@@ -1623,7 +1945,7 @@ class ExportFromTemplateItem(BaseModel):
 
 class ExportFromTemplateRequest(BaseModel):
     document_title: str
-    company_name: str = "PT Solusi Mitra Gemilang (SMG)"
+    company_name: str = "PT Smartnet Magna Global (SMG)"
     items: list[ExportFromTemplateItem]
     # Template metadata returned by /upload-template
     template_default_font: str = "Calibri"
@@ -1847,7 +2169,7 @@ async def clone_template(
     template: UploadFile,
     items_json: str = Form(""),
     document_title: str = Form(""),
-    company_name: str = Form("PT Solusi Mitra Gemilang (SMG)"),
+    company_name: str = Form("PT Smartnet Magna Global (SMG)"),
     document_type: str = Form("proposal"),
 ):
     """
@@ -2065,7 +2387,7 @@ async def clone_template_pptx(
     template: UploadFile,
     items_json: str = Form(""),
     document_title: str = Form(""),
-    company_name: str = Form("PT Solusi Mitra Gemilang (SMG)"),
+    company_name: str = Form("PT Smartnet Magna Global (SMG)"),
 ):
     """
     In-place PPTX template cloning. Form fields:

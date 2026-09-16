@@ -78,6 +78,8 @@ export type DraftItemApiResponse = {
   draft_text: string;
   sources_used: number;
   sources: SourceCitation[];
+  image_data_url?: string;
+  image_caption?: string;
 };
 
 export type TemplateSection = {

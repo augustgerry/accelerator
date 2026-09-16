@@ -6,3 +6,4 @@ venv/
 .next/
 backend/credentials.json
 backend/token.json
+backend/*.docx

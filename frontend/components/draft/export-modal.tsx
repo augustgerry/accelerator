@@ -59,10 +59,10 @@ type CorporateBranding = {
 };
 
 const DEFAULT_BRANDING: CorporateBranding = {
-  companyName: "PT Solusi Mitra Gemilang (SMG)",
+  companyName: "PT Smartnet Magna Global (SMG)",
   primaryColor: "#111827",
   accentColor: "#2F5FE0",
-  footerText: "PT Solusi Mitra Gemilang (SMG)",
+  footerText: "PT Smartnet Magna Global (SMG)",
   logoDataUrl: "",
 };
 
@@ -93,7 +93,7 @@ export function ExportModal({
   const [onlyFinal, setOnlyFinal] = useState(false);
   const [docTypeId, setDocTypeId] = useState<DraftDocTypeId>("narrative");
   const [format, setFormat] = useState<DraftFormat>("docx");
-  const [fontName, setFontName] = useState<string>("Calibri");
+  const [fontName, setFontName] = useState<string>("Google Sans");
   const [customerLogoDataUrl, setCustomerLogoDataUrl] = useState<string>("");
   const [previewedOnce, setPreviewedOnce] = useState(false);
   const [agreedToExport, setAgreedToExport] = useState(false);
@@ -282,7 +282,7 @@ export function ExportModal({
       document_title: documentTitle,
       template_type: docType.backendType,
       font_name: fontName,
-      company_name: branding.companyName || "PT Solusi Mitra Gemilang (SMG)",
+      company_name: branding.companyName || "PT Smartnet Magna Global (SMG)",
       logo_data_url: branding.logoDataUrl,
       customer_logo_data_url: customerLogoDataUrl,
       items: mappedItems,
@@ -393,7 +393,7 @@ export function ExportModal({
         blob = await cloneTemplate({
           templateFile,
           document_title: documentTitle,
-          company_name: "PT Solusi Mitra Gemilang (SMG)",
+          company_name: "PT Smartnet Magna Global (SMG)",
           document_type: TEMPLATE_BACKEND_TYPE[templateDocType],
           items: templateTargetItems.map((it) => ({
             id: it.id, title: it.title, requirement_text: it.requirement_text,
@@ -403,7 +403,7 @@ export function ExportModal({
       } else {
         blob = await exportFromTemplate({
           document_title: documentTitle,
-          company_name: "PT Solusi Mitra Gemilang (SMG)",
+          company_name: "PT Smartnet Magna Global (SMG)",
           template_type: TEMPLATE_BACKEND_TYPE[templateDocType],
           items: templateTargetItems.map((it) => ({
             id: it.id, title: it.title, requirement_text: it.requirement_text,
@@ -499,7 +499,7 @@ export function ExportModal({
       const blob = await cloneTemplatePptx({
         templateFile: pptxTemplateFile,
         document_title: documentTitle,
-        company_name: "PT Solusi Mitra Gemilang (SMG)",
+        company_name: "PT Smartnet Magna Global (SMG)",
         items: templateTargetItems.map((it) => ({
           id: it.id, title: it.title, requirement_text: it.requirement_text,
           category: it.category, draft_text: it.draft_text, status: it.status,
@@ -700,6 +700,37 @@ export function ExportModal({
                 <span>Hanya Final ({items.filter((i) => i.status === "final").length})</span>
               </label>
             </div>
+
+            {docTypeId === "narrative" && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border bg-accent/5 px-6 py-2.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-ink text-[11px] font-bold">
+                    ✓
+                  </span>
+                  <div>
+                    <span className="font-semibold text-text-primary">
+                      Format Standar Terpilih:
+                    </span>{" "}
+                    <span className="text-text-secondary">
+                      Proposal Teknis Enterprise PT Smartnet Magna Global (Layout Cover CSUL, Penomoran Bab/Sub-bab Hierarkis, Font Google Sans, Gambar &amp; Tabel Otomatis)
+                    </span>
+                  </div>
+                </div>
+                {referenceDocxList.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTemplateDocxDoc(referenceDocxList[0]);
+                      setExportStep(2);
+                    }}
+                    className="flex items-center gap-1 rounded border border-accent/30 bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-accent-ink hover:bg-accent-soft transition-colors shadow-xs shrink-0"
+                  >
+                    <Wand2 size={12} />
+                    <span>Kloning Persis Acuan: {referenceDocxList[0].title.slice(0, 26)}...</span>
+                  </button>
+                )}
+              </div>
+            )}
 
             {preflightLoading && (
               <div className="border-b border-surface-border bg-surface px-6 py-2 text-[11px] text-text-muted">
