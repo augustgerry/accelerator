@@ -73,6 +73,34 @@ function filterDocsByQuery(docs: IndexedDocument[], query: string): IndexedDocum
   );
 }
 
+// Sufficiency/grounding signal for a drafted section, derived from the citation
+// count the last generation actually returned — no extra API call needed.
+type GroundingBadge = { label: string; className: string; dotClassName: string };
+
+function getGroundingBadge(item: RequirementItem): GroundingBadge | null {
+  if (!item.draft_text?.trim()) return null;
+  const sourceCount = item.sources?.length ?? 0;
+  if (sourceCount >= 3) {
+    return {
+      label: "Grounding Kuat",
+      className: "bg-emerald-50 border-emerald-200 text-emerald-700",
+      dotClassName: "bg-emerald-500",
+    };
+  }
+  if (sourceCount >= 1) {
+    return {
+      label: "Grounding Sedang",
+      className: "bg-amber-50 border-amber-200 text-amber-700",
+      dotClassName: "bg-amber-500",
+    };
+  }
+  return {
+    label: "Perlu Tambahan Referensi",
+    className: "bg-red-50 border-red-200 text-red-700",
+    dotClassName: "bg-red-500",
+  };
+}
+
 const LS_KEY = "synapse-draft-session";
 const LS_SESSION_ID_KEY = "synapse-proposal-session-id";
 
@@ -109,6 +137,7 @@ export default function DraftPage() {
   const [isDraftingAll, setIsDraftingAll] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [copiedItem, setCopiedItem] = useState(false);
+  const [justGeneratedId, setJustGeneratedId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
@@ -603,6 +632,8 @@ export default function DraftPage() {
         })
       );
       if (instruction) setCustomPrompt("");
+      setJustGeneratedId(itemId);
+      setTimeout(() => setJustGeneratedId((cur) => (cur === itemId ? null : cur)), 900);
     } catch (err) {
       setItems((prev) =>
         prev.map((it) =>
@@ -1327,12 +1358,25 @@ export default function DraftPage() {
               </div>
 
               {isRecommendingStructure ? (
-                <div className="flex flex-col items-center justify-center p-12 rounded-xl border border-surface-border bg-surface-raised text-center space-y-3">
-                  <Loader2 size={32} className="animate-spin text-accent-ink" />
-                  <p className="text-sm font-semibold text-text-primary">Merumuskan Rekomendasi Sub-Bab dari Dokumen Sumber...</p>
-                  <p className="text-xs text-text-muted max-w-sm">
-                    Menganalisis kebutuhan teknis, SLA, arsitektur, dan kepatuhan dalam TOR Anda.
-                  </p>
+                <div className="animate-in fade-in duration-200 space-y-4">
+                  <div className="flex flex-col items-center justify-center p-6 rounded-xl border border-surface-border bg-surface-raised text-center space-y-2">
+                    <Loader2 size={28} className="animate-spin text-accent-ink" />
+                    <p className="text-sm font-semibold text-text-primary">Merumuskan Rekomendasi Sub-Bab dari Dokumen Sumber...</p>
+                    <p className="text-xs text-text-muted max-w-sm">
+                      Menganalisis kebutuhan teknis, SLA, arsitektur, dan kepatuhan dalam TOR Anda.
+                    </p>
+                  </div>
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      style={{ animationDelay: `${i * 80}ms` }}
+                      className="animate-in fade-in duration-300 fill-mode-both rounded-xl border border-surface-border bg-surface-raised p-4 space-y-2"
+                    >
+                      <div className="h-3 w-1/3 rounded bg-surface-border/60 animate-pulse" />
+                      <div className="h-2.5 w-2/3 rounded bg-surface-border/40 animate-pulse" />
+                      <div className="h-2 w-full rounded bg-surface-border/40 animate-pulse" />
+                    </div>
+                  ))}
                 </div>
               ) : curationItems.length === 0 ? (
                 <div className="rounded-xl border border-surface-border bg-surface-raised p-8 text-center text-xs text-text-muted">
@@ -1343,7 +1387,8 @@ export default function DraftPage() {
                   {curationItems.map((item, idx) => (
                     <div
                       key={item.id}
-                      className="rounded-xl border border-surface-border bg-surface-raised p-4 shadow-subtle transition-all hover:border-surface-border/80"
+                      style={{ animationDelay: `${Math.min(idx, 8) * 60}ms` }}
+                      className="animate-in fade-in slide-in-from-bottom-1 fill-mode-both duration-300 rounded-xl border border-surface-border bg-surface-raised p-4 shadow-subtle transition-all hover:border-surface-border/80"
                     >
                       <div className="flex items-start gap-3">
                         {/* Reorder Controls & Index */}
@@ -1688,6 +1733,18 @@ export default function DraftPage() {
                               >
                                 <ArrowDown size={11} />
                               </button>
+                              <button
+                                type="button"
+                                disabled={item.isGenerating}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleGenerateItemDraft(item.id);
+                                }}
+                                className="rounded p-0.5 text-text-muted hover:bg-surface hover:text-accent-ink disabled:opacity-40"
+                                title="Regenerate Bagian Ini"
+                              >
+                                <RefreshCw size={11} className={item.isGenerating ? "animate-spin" : ""} />
+                              </button>
                             </div>
                             <span className="text-[11px] font-mono font-medium text-text-muted">
                               #{idx + 1}
@@ -1729,11 +1786,28 @@ export default function DraftPage() {
                         </p>
 
                         {/* Generation spinner indicator */}
-                        {item.isGenerating && (
-                          <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-accent-ink">
+                        {item.isGenerating ? (
+                          <div className="animate-in fade-in duration-200 mt-2 flex items-center gap-1.5 text-[11px] font-medium text-accent-ink">
                             <Loader2 size={12} className="animate-spin" />
                             <span>Menyusun draf AI...</span>
                           </div>
+                        ) : (
+                          (() => {
+                            const badge = getGroundingBadge(item);
+                            return badge ? (
+                              <div
+                                key={item.sources?.length ?? 0}
+                                className="animate-in fade-in duration-300 mt-2"
+                              >
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}
+                                >
+                                  <span className={`h-1.5 w-1.5 rounded-full ${badge.dotClassName}`} />
+                                  {badge.label}
+                                </span>
+                              </div>
+                            ) : null;
+                          })()
                         )}
                       </div>
                     );
@@ -1768,6 +1842,19 @@ export default function DraftPage() {
                         <span className="rounded bg-surface border border-surface-border px-2 py-0.5 text-xs font-medium text-text-secondary">
                           {selectedItem.category}
                         </span>
+                        {(() => {
+                          const badge = getGroundingBadge(selectedItem);
+                          return badge ? (
+                            <span
+                              key={selectedItem.sources?.length ?? 0}
+                              className={`animate-in fade-in duration-300 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${badge.className}`}
+                              title={`${selectedItem.sources?.length ?? 0} sumber referensi dipakai saat generate`}
+                            >
+                              <span className={`h-1.5 w-1.5 rounded-full ${badge.dotClassName}`} />
+                              {badge.label}
+                            </span>
+                          ) : null;
+                        })()}
                         <button
                           type="button"
                           onClick={handleOpenEditSection}
@@ -1903,7 +1990,11 @@ export default function DraftPage() {
                         onChange={(e) => handleTextChange(e.target.value)}
                         placeholder="Klik 'Buat Draf AI' atau ketik langsung konten bagian proposal di sini..."
                         rows={8}
-                        className="w-full rounded-lg border border-surface-border bg-surface p-4 text-xs leading-relaxed text-text-primary outline-none focus:border-accent font-sans transition-colors resize-y"
+                        className={`w-full rounded-lg border p-4 text-xs leading-relaxed text-text-primary outline-none focus:border-accent font-sans transition-colors duration-700 resize-y ${
+                          justGeneratedId === selectedItem.id
+                            ? "border-accent bg-accent-soft/30"
+                            : "border-surface-border bg-surface"
+                        }`}
                       />
                       {selectedItem.draft_text && (
                         <div className="mt-1 flex justify-end text-[11px] text-text-muted">
