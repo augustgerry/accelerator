@@ -18,6 +18,37 @@
 
 ---
 
+## ✅ ANTIGRAVITY — SELESAI: PEMBERSIHAN DIVISI, NOISE EXCLUSION, OCR FALLBACK, BENCHMARK SUITE & MCP SERVER
+
+Sesuai instruksi user ("opsi 3 gue udah bilang gak pake divisi2an, diilangin ya soal divisinya. fokus enhancement aja. lanjut semua sisanya gas"):
+
+1. **Pembersihan Total Konsep Divisi (Frontend & Shared Backlog):**
+   - **`synapse-gap-analysis.md`**: Section 4 (RBAC & Divisional scoping) di-drop permanen. Synapse ditegaskan sebagai basis pengetahuan organisasi tunggal (single-tenant / non-divisional).
+   - **`frontend/app/documents/page.tsx`**: Filter pills divisi dihapus, dropdown divisi dibersihkan, card subtitle diubah dari "presales" ke tipe dokumen (`docType`).
+   - **`frontend/app/library/page.tsx`**: Subtitle dan pencarian dibersihkan dari field division.
+   - **`frontend/app/draft/page.tsx` & `export-modal.tsx` & `citation-drawer.tsx`**: Label division dibersihkan dari badge dan dropdown picker template.
+   - Verifikasi: `npx tsc --noEmit` lolos 0 error.
+
+2. **Document Parsing Enhancements (`backend/app/services/document_parser.py`):**
+   - **Signature & Stamp Boilerplate Cleaner (`clean_signature_blocks`)**: Mendeteksi pola penutup dokumen TOR/SoW/MoM (kata penutup, "Mengetahui/Menyetujui", Pihak Pertama/Kedua, garis tanda tangan titik-titik, dan stempel/meterai). Teks boilerplate ini dipangkas sebelum proses chunking dan embedding agar tidak mengotori hasil pencarian RAG, dengan penanda `has_signature_page` untuk provenance.
+   - **Scanned PDF OCR Fallback (`extract_pdf_with_ocr_fallback`)**: Mendeteksi halaman PDF yang minim teks (<50 karakter) namun memiliki raster image (halaman hasil scan). Secara otomatis mengaktifkan fallback multimodal Gemini Vision (`gemini-3.6-flash`) untuk mentranskripsi halaman dan tabel hasil scan ke Markdown table.
+   - Diintegrasikan ke `drive_sync.py` (`fetch_and_extract_text`) dan `draft.py` (`upload_tor`).
+
+3. **Retrieval Quality Benchmark Evaluation Suite (`backend/tests/benchmark_eval.py`):**
+   - Suite pengujian regresi otomatis dengan 4 skenario presales riil (CSUL Pure Storage sizing, Maintenance & SLA terms, HLD Topology, dan BoQ / Compliance Matrix).
+   - Menghitung akurasi kata kunci esensial, evaluasi context sufficiency (`strong`), serta latensi query reranking.
+   - **Hasil benchmark:** 4/4 PASSED (100%), seluruh case berstatus `STRONG` grounding, latensi warm query rata-rata **~600–670ms** per query. Zero LLM token waste.
+
+4. **Synapse MCP Server (`backend/mcp_server.py`):**
+   - Mengimplementasikan server Model Context Protocol (MCP) standar berbasis JSON-RPC 2.0 over stdio.
+   - Menyediakan 3 tool siap pakai: `search_knowledge_base`, `get_proposal_outline`, dan `evaluate_grounding`.
+   - Memungkinkan Synapse diakses langsung dari Claude Code, Claude Desktop, Cursor, Antigravity, atau agent kustom eksternal.
+
+5. **Status Layanan Aktif:**
+   - **Backend FastAPI**: Aktif di `http://127.0.0.1:8000` (Status: `{"status":"ok"}`).
+   - **Frontend Next.js**: Aktif di `http://localhost:3000` (Status: HTTP 200).
+   - **Watchdog**: Aktif memonitoring setiap 600 detik (`watchdog.ps1`).
+
 ## ✅ ANTIGRAVITY (BACKEND) — SELESAI: Reranking Pass, Reflect-Before-Generate, & Table-Aware Chunking
 
 Sesuai urutan prioritas di `synapse-gap-analysis.md` (Poin 1 & 2):

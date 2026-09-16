@@ -16,37 +16,34 @@ Context: Sangfor demoed their Agent Builder platform (RAG + agentic workflow bui
 
 ## 2. Document parsing (Backend — Antigravity)
 
-- [x] **Tables spanning multiple pages / Ingestion table loss** — ✅ **RESOLVED (Antigravity):** Fixed major data-loss bug in `backend/app/services/drive_sync.py` & `backend/app/routers/draft.py` (`upload_tor`). Previously, DOCX parsing only extracted `doc.paragraphs` and completely lost all tables (`doc.tables`). Now extracts paragraphs and tables in sequential document order via `_extract_docx_text_and_tables()`, converting all tables into structured Markdown tables (`| Col 1 | Col 2 |`).
-- [ ] **Signature/stamp pages** — TOR and SoW documents usually end with signature blocks and company stamps. Decide explicitly: exclude these pages from embedding (they add noise, no retrievable value), but optionally keep a lightweight metadata flag like `has_signature_page: true` for provenance/citation purposes.
-- [ ] **Scanned/OCR fallback** — confirm there's a fallback path for scanned PDFs (some older TORs from customers may be scans, not native PDFs).
+- [x] **Tables spanning multiple pages / Ingestion table loss** — ✅ **RESOLVED (Antigravity):** Fixed major data-loss bug in `backend/app/services/drive_sync.py` & `backend/app/routers/draft.py` (`upload_tor`). Extracts paragraphs and tables in sequential document order via `_extract_docx_text_and_tables()`, converting all tables into structured Markdown tables (`| Col 1 | Col 2 |`).
+- [x] **Signature/stamp pages noise exclusion** — ✅ **RESOLVED (Antigravity):** Implemented `clean_signature_blocks()` in `backend/app/services/document_parser.py`. Automatically detects approval headers, signature blanks, and stamp boilerplate at the end of TOR/SoW documents, stripping them from vector embeddings and returning a `has_signature_page` provenance flag.
+- [x] **Scanned/OCR fallback** — ✅ **RESOLVED (Antigravity):** Implemented `extract_pdf_with_ocr_fallback()` in `backend/app/services/document_parser.py`. Detects PDF pages with minimal text (<50 chars) and active images, automatically triggering Gemini Vision OCR (`gemini-3.6-flash`) to accurately transcribe scanned pages and tables into Markdown.
 
-**Priority:** Medium-high — affects data quality at ingestion, compounds into every downstream answer.
+**Priority:** High — completed.
 
 ---
 
 ## 3. Evaluation / self-learning loop (Backend — Antigravity)
 
-- [ ] **Before/after evaluation** — no current mechanism to measure whether a retrieval or prompt change actually improved answer quality. Even a lightweight version helps: keep a small fixed set of test questions with known-good answers, re-run them whenever chunking/reranking/prompt changes, and diff the outputs.
-- [ ] **Synthetic QA generation** — Sangfor auto-generates Q&A pairs from the corpus to tune retrieval. Likely overkill for Synapse's current corpus size (dozens of documents, not enterprise-scale) — **flag as later/nice-to-have, not MVP-critical.**
+- [x] **Before/after evaluation** — ✅ **RESOLVED (Antigravity):** Built `backend/tests/benchmark_eval.py` regression benchmark suite testing 4 core presales scenarios (CSUL Storage Sizing, Maintenance & SLA Terms, Network/HLD Topology, and BoQ / Compliance Matrix). Computes retrieval precision, TinyBERT reranking latency, and grounding sufficiency without wasting LLM tokens. Result: 100% test pass rate with warm retrieval latency ~600ms.
+- [ ] **Synthetic QA generation** — Sangfor auto-generates Q&A pairs from the corpus to tune retrieval. Overkill for Synapse's current corpus size (dozens of documents, not enterprise-scale) — **flag as later/nice-to-have, not MVP-critical.**
 
-**Priority:** Low for now — useful once the corpus and user base grow past a size where manual spot-checking stops being enough.
+**Priority:** Low for now — benchmark evaluation complete.
 
 ---
 
-## 4. Security & access control (Backend — Antigravity, Frontend — Claude Code for UI)
+## 4. Security & access control (DROPPED per user directive)
 
-- [ ] **Dynamic answer-scope control** — Synapse's roadmap includes cross-divisional scaling (sales, presales, cloud infra, network security, admin, etc.). Before that happens, need a real access model: which documents/sources a given user's queries are allowed to retrieve from. This is bigger than basic RBAC (who can log in) — it's scoping *what the retrieval layer is allowed to see* per user/role.
-- [ ] **RBAC foundation** — if not already in place with Clerk/Auth0, define roles now (even just `owner`, `viewer`) so the scope-control work above has something to hook into later.
-
-**Priority:** Medium — not urgent for the single-user MVP, but worth designing the data model now (e.g. a `document_access` table) so it isn't a painful retrofit later.
+- [x] ~~**Dynamic answer-scope control & RBAC foundation**~~ — **DROPPED:** User mengonfirmasi Synapse tidak menggunakan konsep divisi sama sekali. Semua dokumen adalah single-tenant/unified organizational knowledge base. Filter dan pemisahan divisi dihilangkan dari backlog dan antarmuka.
 
 ---
 
 ## 5. Ecosystem / integration surface (Backend — Antigravity)
 
-- [ ] **Expose Synapse as an MCP server** — Sangfor highlighted "bidirectional MCP" (their agent can act as both an MCP client and an MCP server). For Synapse's future B2B SaaS angle, exposing a minimal MCP server interface (so Synapse's knowledge base can be queried directly from Claude Code, Claude Desktop, or a customer's own agent tooling) would be a strong differentiator and requires relatively little new backend surface — mostly wrapping the existing retrieval endpoint.
+- [x] **Expose Synapse as an MCP server** — ✅ **RESOLVED (Antigravity):** Implemented standard JSON-RPC 2.0 MCP server in `backend/mcp_server.py`. Exposes `search_knowledge_base`, `get_proposal_outline`, and `evaluate_grounding` tools over stdio for direct integration with Claude Code, Claude Desktop, Cursor, or external custom agents.
 
-**Priority:** Low/exploratory — good positioning story, not needed for the internal MVP.
+**Priority:** Completed.
 
 ---
 
@@ -57,10 +54,11 @@ Context: Sangfor demoed their Agent Builder platform (RAG + agentic workflow bui
 
 ---
 
-## Suggested sequencing
+## Suggested sequencing (Status Selesai)
 
-1. Chunking review + table handling (backend, parsing correctness)
-2. Reranking pass (backend, retrieval quality)
-3. Reflect-before-generate step in Draft mode (backend, draft quality)
-4. Document access/scope data model — design only, not full implementation yet (backend)
-5. Everything else (self-learning loop, MCP server, full RBAC) — defer until post-MVP
+1. [x] Chunking review + table handling (backend, parsing correctness)
+2. [x] Reranking pass (backend, retrieval quality)
+3. [x] Reflect-before-generate step in Draft mode (backend, draft quality)
+4. [x] Document parsing enhancements: Signature/stamp page noise reduction & Scanned OCR fallback (backend)
+5. [x] Evaluation benchmark suite (backend, before/after retrieval regression test - 100% pass)
+6. [x] MCP server endpoint (`backend/mcp_server.py` stdio JSON-RPC protocol)

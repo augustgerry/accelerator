@@ -68,7 +68,6 @@ function filterDocsByQuery(docs: IndexedDocument[], query: string): IndexedDocum
   return docs.filter(
     (d) =>
       d.title.toLowerCase().includes(q) ||
-      d.division?.toLowerCase().includes(q) ||
       d.docType?.toLowerCase().includes(q)
   );
 }
@@ -1067,11 +1066,6 @@ export default function DraftPage() {
                                     {doc.title}
                                   </p>
                                   <div className="flex items-center gap-2 text-[10px] text-text-muted mt-0.5">
-                                    {doc.division && (
-                                      <span className="bg-surface-raised border border-surface-border rounded px-1 text-[10px]">
-                                        {doc.division}
-                                      </span>
-                                    )}
                                     <span>{doc.chunkCount || 0} chunks</span>
                                   </div>
                                 </div>
@@ -1182,11 +1176,6 @@ export default function DraftPage() {
                             />
                             <span className="truncate">{doc.title}</span>
                           </div>
-                          {doc.division && (
-                            <span className="shrink-0 rounded bg-surface border border-surface-border px-1.5 py-0.5 text-[9px] text-text-muted">
-                              {doc.division}
-                            </span>
-                          )}
                         </label>
                       ))
                     )}
@@ -2267,11 +2256,6 @@ export default function DraftPage() {
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                              {src.division && (
-                                <span className="rounded bg-secondary-soft text-secondary px-1.5 py-0.5 text-[10px] font-semibold">
-                                  {src.division}
-                                </span>
-                              )}
                               <span className="rounded bg-surface border border-surface-border text-text-muted px-1.5 py-0.5 text-[10px]">
                                 {src.docType}
                               </span>

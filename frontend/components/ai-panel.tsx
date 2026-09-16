@@ -172,7 +172,6 @@ export function AiPanel({
                       <FileText size={12} />
                     )}
                     <span className="truncate">{c.title}</span>
-                    {c.division && <span className="text-text-muted">· {c.division}</span>}
                     {c.source === "external" && (
                       <span className="text-text-muted">· web publik</span>
                     )}

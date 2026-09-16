@@ -154,11 +154,6 @@ export function CitationDrawer({
                   >
                     {chunk.docType}
                   </span>
-                  {chunk.division && (
-                    <span className="rounded bg-secondary-soft px-1.5 py-0.5 text-[10px] font-medium text-secondary">
-                      {chunk.division}
-                    </span>
-                  )}
                   <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                     Relevansi {chunk.confidence}%
                   </span>

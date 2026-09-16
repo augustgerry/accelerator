@@ -69,7 +69,10 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 150) -> list[st
     if not text or not text.strip():
         return []
 
-    clean_text = text.strip()
+    from app.services.document_parser import clean_signature_blocks
+
+    cleaned_input, _ = clean_signature_blocks(text.strip())
+    clean_text = cleaned_input.strip()
     if len(clean_text) <= chunk_size:
         return [clean_text]
 

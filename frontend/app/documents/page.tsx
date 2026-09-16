@@ -43,7 +43,6 @@ export default function DocumentsPage() {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [selectedDivision, setSelectedDivision] = useState<string>("all");
   const [selectedExt, setSelectedExt] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"updated" | "title" | "chunks">("updated");
 
@@ -119,15 +118,6 @@ export default function DocumentsPage() {
     setTimeout(() => setCopiedChunkId(null), 2000);
   };
 
-  // Divisions list
-  const divisions = useMemo(() => {
-    const set = new Set<string>();
-    documents.forEach((d) => {
-      if (d.division) set.add(d.division);
-    });
-    return ["all", ...Array.from(set)];
-  }, [documents]);
-
   // Extensions list (derived from filenames)
   const extensions = useMemo(() => {
     const set = new Set<string>();
@@ -144,20 +134,17 @@ export default function DocumentsPage() {
       .filter((d) => {
         const matchesSearch =
           d.title.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
-          d.division?.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
           d.docType?.toLowerCase().includes(debouncedQuery.toLowerCase());
-        const matchesDivision =
-          selectedDivision === "all" || d.division === selectedDivision;
         const matchesExt =
           selectedExt === "all" || getFileExtension(d.title) === selectedExt;
-        return matchesSearch && matchesDivision && matchesExt;
+        return matchesSearch && matchesExt;
       })
       .sort((a, b) => {
         if (sortBy === "title") return a.title.localeCompare(b.title);
         if (sortBy === "chunks") return (b.chunkCount || 0) - (a.chunkCount || 0);
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
-  }, [documents, debouncedQuery, selectedDivision, selectedExt, sortBy]);
+  }, [documents, debouncedQuery, selectedExt, sortBy]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -309,30 +296,12 @@ export default function DocumentsPage() {
               )}
             </div>
 
-            {/* Division Filter Pills & Sort Selector */}
+            {/* Filter & Sort Controls */}
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-                {divisions.map((div) => (
-                  <button
-                    key={div}
-                    onClick={() => setSelectedDivision(div)}
-                    className={`px-2.5 py-1 text-xs rounded-full border transition-all ${
-                      selectedDivision === div
-                        ? "bg-accent text-accent-text border-accent font-medium shadow-sm"
-                        : "bg-surface-base text-text-muted border-surface-border hover:border-text-secondary"
-                    }`}
-                  >
-                    {div === "all" ? "Semua Divisi" : div}
-                  </button>
-                ))}
-              </div>
-
-              <div className="h-4 w-px bg-surface-border hidden sm:block" />
-
               <select
                 value={selectedExt}
                 onChange={(e) => setSelectedExt(e.target.value)}
-                className="bg-transparent text-xs text-text-secondary border border-surface-border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
+                className="bg-transparent text-xs text-text-secondary border border-surface-border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
               >
                 {extensions.map((ext) => (
                   <option key={ext} value={ext}>
@@ -399,13 +368,13 @@ export default function DocumentsPage() {
               <div className="p-12 text-center text-text-muted">
                 <FileText size={32} className="mx-auto mb-3 opacity-40" />
                 <p className="text-sm font-medium text-text-primary">
-                  {searchQuery || selectedDivision !== "all" || selectedExt !== "all"
+                  {searchQuery || selectedExt !== "all"
                     ? "Tidak ada dokumen yang cocok dengan filter"
                     : "Belum ada dokumen yang terindeks"}
                 </p>
                 <p className="text-xs mt-1 max-w-sm mx-auto">
-                  {searchQuery || selectedDivision !== "all" || selectedExt !== "all"
-                    ? "Coba ubah kata kunci pencarian atau pilih kategori divisi/ekstensi lain."
+                  {searchQuery || selectedExt !== "all"
+                    ? "Coba ubah kata kunci pencarian atau pilih ekstensi lain."
                     : "Jalankan 'Sync Drive' untuk menarik dan memproses dokumen dari Google Drive."}
                 </p>
               </div>
@@ -432,7 +401,7 @@ export default function DocumentsPage() {
                       </h4>
                       <div className="flex items-center gap-2 mt-1 text-[11px] text-text-muted">
                         <span className="capitalize px-1.5 py-0.5 rounded bg-surface-raised border border-surface-border text-text-secondary">
-                          {doc.division || "presales"}
+                          {doc.docType || "Dokumen"}
                         </span>
                         <span>•</span>
                         <span>
@@ -491,7 +460,7 @@ export default function DocumentsPage() {
                   {activeDoc.title}
                 </h3>
                 <p className="text-[11px] text-text-muted mt-0.5">
-                  Divisi: <span className="capitalize font-medium text-text-secondary">{activeDoc.division}</span>
+                  Tipe: <span className="capitalize font-medium text-text-secondary">{activeDoc.docType || "Dokumen"}</span>
                 </p>
               </div>
               <button

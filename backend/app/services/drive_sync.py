@@ -171,17 +171,24 @@ def fetch_and_extract_text(file_id: str) -> str:
     mime = meta["mimeType"]
 
     if mime == GOOGLE_DOC_MIME:
+        from app.services.document_parser import clean_signature_blocks
+
         data = service.files().export(fileId=file_id, mimeType="text/plain").execute()
-        return data.decode("utf-8")
+        clean_text, _ = clean_signature_blocks(data.decode("utf-8"))
+        return clean_text
 
     if mime == PDF_MIME:
-        from pypdf import PdfReader
+        from app.services.document_parser import extract_pdf_with_ocr_fallback
 
-        reader = PdfReader(io.BytesIO(_download_media(service, file_id)))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
+        text, _ = extract_pdf_with_ocr_fallback(_download_media(service, file_id))
+        return text
 
     if mime == DOCX_MIME:
-        return _extract_docx_text_and_tables(_download_media(service, file_id))
+        from app.services.document_parser import clean_signature_blocks
+
+        raw_docx = _extract_docx_text_and_tables(_download_media(service, file_id))
+        clean_docx, _ = clean_signature_blocks(raw_docx)
+        return clean_docx
 
     if mime == PPTX_MIME:
         from pptx import Presentation

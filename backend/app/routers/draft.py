@@ -439,16 +439,19 @@ async def upload_tor(file: UploadFile):
     name = (file.filename or "").lower()
 
     if file.content_type == "application/pdf" or name.endswith(".pdf"):
-        from pypdf import PdfReader
+        from app.services.document_parser import extract_pdf_with_ocr_fallback
 
-        reader = PdfReader(io.BytesIO(data))
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        text, meta = extract_pdf_with_ocr_fallback(data)
+        return {"text": text, "metadata": meta}
     elif name.endswith(".docx") or file.content_type == (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ):
         from app.services.drive_sync import _extract_docx_text_and_tables
+        from app.services.document_parser import clean_signature_blocks
 
-        text = _extract_docx_text_and_tables(data)
+        raw_text = _extract_docx_text_and_tables(data)
+        text, has_sig = clean_signature_blocks(raw_text)
+        return {"text": text, "metadata": {"has_signature_page": has_sig}}
     else:
         raise HTTPException(status_code=400, detail="Only PDF or DOCX files are supported")
 

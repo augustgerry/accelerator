@@ -925,7 +925,7 @@ export function ExportModal({
                             <div key={doc.id} className="flex items-center justify-between gap-2 bg-surface rounded-md border border-surface-border px-3 py-2 text-xs">
                               <div className="min-w-0 flex-1">
                                 <p className="truncate font-semibold text-text-primary">{doc.title}</p>
-                                <p className="text-[10px] text-text-muted">{doc.division ? `Divisi: ${doc.division}` : "Dokumen Drive"}</p>
+                                <p className="text-[10px] text-text-muted">Dokumen Drive</p>
                               </div>
                               <Button
                                 size="sm"
@@ -969,7 +969,7 @@ export function ExportModal({
                           </option>
                           {docxTemplateLibrary.map((d) => (
                             <option key={d.id} value={d.id}>
-                              {d.title}{d.division ? ` (${d.division})` : ""}
+                              {d.title}
                             </option>
                           ))}
                         </select>
@@ -1130,7 +1130,7 @@ export function ExportModal({
                             <div key={doc.id} className="flex items-center justify-between gap-2 bg-surface rounded-md border border-surface-border px-3 py-2 text-xs">
                               <div className="min-w-0 flex-1">
                                 <p className="truncate font-semibold text-text-primary">{doc.title}</p>
-                                <p className="text-[10px] text-text-muted">{doc.division ? `Divisi: ${doc.division}` : "Slide PowerPoint Drive"}</p>
+                                <p className="text-[10px] text-text-muted">Slide PowerPoint Drive</p>
                               </div>
                               <Button
                                 size="sm"
@@ -1174,7 +1174,7 @@ export function ExportModal({
                           </option>
                           {pptxTemplateLibrary.map((d) => (
                             <option key={d.id} value={d.id}>
-                              {d.title}{d.division ? ` (${d.division})` : ""}
+                              {d.title}
                             </option>
                           ))}
                         </select>

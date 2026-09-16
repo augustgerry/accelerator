@@ -66,7 +66,7 @@ export default function LibraryPage() {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return source;
     return source.filter((doc) =>
-      [doc.title, doc.division, doc.docType].some((value) =>
+      [doc.title, doc.docType].some((value) =>
         value?.toLowerCase().includes(normalized)
       )
     );
@@ -183,7 +183,7 @@ export default function LibraryPage() {
                   </span>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{doc.title}</p>
-                    <p className="mt-0.5 truncate text-[11px] text-text-muted">{doc.division || "presales"} · {doc.chunkCount ?? 0} chunks · {doc.docType}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-text-muted">{doc.chunkCount ?? 0} chunks · {doc.docType}</p>
                   </div>
                 </div>
                 <span className="shrink-0 text-[11px] text-text-muted">{new Date(doc.updatedAt).toLocaleDateString("id-ID")}</span>
