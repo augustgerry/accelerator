@@ -4,30 +4,28 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Sesi terakhir (Antigravity):** PERBAIKAN 3 BUG KRITIS LAPORAN USER (Search Dokumen, Format Output Selector, & Pemilihan Dokumen Sumber) TELAH SELESAI & TERUJI.
-- **Branch Aktif:** `feat/proposal-visual-engine` (siap commit & push ke remote).
-- **Rincian Perbaikan Bug:**
+- **Sesi terakhir (Antigravity):** PERBAIKAN 3 BUG UTAMA LAPORAN USER + FIX NEXT.JS DEVSERVER CACHE (`./682.js`) TELAH SELESAI, DIKOMPILASI, DAN DI-PUSH KE GITHUB.
+- **Branch Aktif:** `feat/proposal-visual-engine` (commit terbaru sudah di-push ke `origin/feat/proposal-visual-engine`).
+- **Rincian Perbaikan & Status Terakhir:**
   1. **Bug 1 — Cari Dokumen Gagal / Blank (`/search` & `/draft`):**
-     - Root cause: CORS middleware di `backend/main.py` hanya mengizinkan `http://localhost:3000` (request dari `127.0.0.1:3000` ditolak browser), dan filter divisi di `/search` sebelumnya hardcoded nilai dummy (`presales`, `infrastructure`, `security`) yang tidak ada di database 172 dokumen.
-     - Perbaikan:
-       - CORS diperluas dengan `allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?"` dan origin eksplisit.
-       - `_hybrid_ranked_chunks` di `backend/app/services/retrieval.py` diperbarui menggunakan case-insensitive matching (`ilike`) dengan trimmed whitespace untuk divisi & tipe dokumen.
-       - Halaman `/search` kini mengambil divisi nyata dari database (`listDocuments()`) secara dinamis (`MoM`, `DPBM`, `Hitachi`, `Product`, `Others`, dll) dan membersihkan divisi usang/invalid di `localStorage`.
-  2. **Bug 2 — Gagal Pilih Ekstensi / Format Dokumen yang Ingin Dibuat:**
-     - Root cause: Format card di layar upload `/draft` kurang affordance visual interaktif, dan di `ExportModal` terjadi bug re-render infinite di mana `useEffect` modal mereset `format` kembali ke `initialFormat` setiap kali state autosave draf induk aktif (setiap 1.2 detik).
-     - Perbaikan:
-       - Memperbaiki `useEffect` di `frontend/components/draft/export-modal.tsx` menggunakan `prevIsOpenRef` sehingga format pilihan user tidak pernah ter-reset saat parent melakukan autosave atau render ulang.
-       - Redesign format selector di layar upload `/draft` dengan label jelas (`📄 Word (.docx)`, `📕 Adobe PDF (.pdf)`, `📊 PowerPoint (.pptx)`), active badge pill yang kontras, border highlight indigo, dan deskripsi tujuan dokumen.
+     - CORS middleware di `backend/main.py` diperluas dengan regex `allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?"` dan explicit origins untuk port 3000 & 3001.
+     - `_hybrid_ranked_chunks` di `backend/app/services/retrieval.py` case-insensitive (`ilike`) dengan whitespace trimming.
+     - Filter divisi di `/search` dinamis mengambil divisi nyata dari database (`listDocuments()`) dan membersihkan entri invalid di `localStorage`.
+  2. **Bug 2 — Gagal Pilih Format Dokumen Output (.docx, .pdf, .pptx):**
+     - Memperbaiki `useEffect` di `frontend/components/draft/export-modal.tsx` menggunakan `prevIsOpenRef` agar pilihan format & template tidak ter-reset saat autosave parent berjalan.
+     - Redesign tombol format di `/draft` dengan kartu visual interaktif (`📄 Word`, `📕 PDF`, `📊 PowerPoint`), badge pill aktif kontras, dan border highlight indigo.
   3. **Bug 3 — Gagal Pilih Dokumen Sumber (TOR / RFP):**
-     - Root cause: Layar upload sebelumnya HANYA mengizinkan user mengunggah file lokal dari laptop. Pengguna tidak memiliki opsi memilih dari 172 dokumen enterprise yang sudah ada di Google Drive / Database.
-     - Perbaikan:
-       - Menambahkan tab switcher di card input dokumen sumber: **"Upload dari Laptop"** vs **"Pilih dari Library"**.
-       - Tab "Pilih dari Library" menyediakan live search instan, filter dokumen berdasarkan judul dan divisi, serta tombol 1-klik "Gunakan Dokumen Ini ➔".
-       - Mengintegrasikan fungsi `getDocumentChunks` untuk mengambil teks langsung dari database pgvector tanpa perlu download ulang dari Google Drive, lalu otomatis memuat struktur bab dan draf.
-       - Menambahkan tombol langsung "Ganti File" (`RotateCcw`) di progress header workspace aktif agar user dapat dengan mudah mengganti dokumen sumber kapan saja.
-- **Status Build & Runtime:**
-  - Frontend: `npm run build` berhasil 100% (9/9 static pages, 0 TypeScript error).
-  - Backend: `py_compile` clean, Uvicorn port 8000 aktif (`/health` 200 OK, `/query` dengan filter division 200 OK).
+     - Tab switcher di kartu Dokumen Sumber: "Upload dari Laptop" vs "Pilih dari Library".
+     - Tab "Pilih dari Library" menyediakan live search instan, filter dokumen berdasarkan judul dan divisi dari seluruh 172 dokumen database, serta tombol 1-klik "Gunakan Dokumen Ini ➔".
+     - Memakai API `getDocumentChunks` untuk membaca teks langsung dari database pgvector tanpa unduh ulang Drive.
+     - Tombol "Ganti File" (`RotateCcw`) di progress header workspace aktif.
+  4. **Next.js Error Fix — Cannot find module `./682.js`:**
+     - Penyebab: dev server Next.js sebelumnya memegang cache memory lama saat production build (`next build`) dijalankan.
+     - Solusi: proses node lama dimatikan, direktori cache `frontend/.next` dibersihkan, dan dev server Next.js dijalankan ulang fresh. Semua halaman (`/search`, `/draft`, `/`, `/documents`, `/library`, `/settings`) terkompilasi sukses 200 OK.
+- **Status Build & Services:**
+  - Frontend Next.js dev server aktif di port 3000 (status 200 OK di semua rute).
+  - Backend FastAPI Uvicorn aktif di port 8000 (`/health` 200 OK, LLM: `gemini-3.6-flash`).
+  - Git working tree: clean & up-to-date dengan remote `origin/feat/proposal-visual-engine`.
 
 ---
 
