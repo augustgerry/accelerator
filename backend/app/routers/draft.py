@@ -1,4 +1,5 @@
 import io
+import logging
 import re
 
 from typing import Optional
@@ -17,7 +18,12 @@ from app.services.llm_provider import (
     format_llm_error,
     get_llm_provider,
 )
+from app.services.image_search import search_public_images, download_and_optimize_image
+from app.services.diagram_generator import generate_hld_mermaid, render_mermaid_to_image
+from app.services.template_extractor import extract_images_from_office_bytes
 from app.db import get_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/draft", tags=["draft"])
 
@@ -361,6 +367,93 @@ class ExportDocxItem(BaseModel):
     category: str
     draft_text: str
     status: str
+    image_data_url: Optional[str] = None
+    image_caption: Optional[str] = None
+
+
+class SearchImagesRequest(BaseModel):
+    query: str
+    limit: int = 8
+
+
+class SearchImagesResponse(BaseModel):
+    items: list[dict]
+
+
+class DownloadImageRequest(BaseModel):
+    image_url: str
+
+
+class GenerateHldRequest(BaseModel):
+    tor_text: str
+    solution_text: str = ""
+    title: str = "High Level Design"
+
+
+class GenerateHldResponse(BaseModel):
+    mermaid_code: str
+    caption: str
+    architecture_narrative: str
+    image_data_url: Optional[str] = None
+
+
+class RenderMermaidRequest(BaseModel):
+    mermaid_code: str
+
+
+class RenderMermaidResponse(BaseModel):
+    data_url: Optional[str] = None
+    engine: str = ""
+
+
+@router.post("/search-images", response_model=SearchImagesResponse)
+def search_images(payload: SearchImagesRequest):
+    """Search public enterprise hardware photos and diagrams via DuckDuckGo and Wikimedia Commons."""
+    results = search_public_images(payload.query, payload.limit)
+    return SearchImagesResponse(items=results)
+
+
+@router.post("/download-image")
+def download_image(payload: DownloadImageRequest):
+    """Download, validate with Pillow, optimize, and convert an image URL into a base64 data URL."""
+    result = download_and_optimize_image(payload.image_url)
+    if not result:
+        raise HTTPException(status_code=400, detail="Gagal mengunduh atau memproses gambar dari URL tersebut.")
+    return result
+
+
+@router.post("/generate-hld", response_model=GenerateHldResponse)
+def generate_hld(payload: GenerateHldRequest):
+    """Synthesize existing TOR conditions + proposed solution into a Mermaid architecture diagram and render to PNG."""
+    result = generate_hld_mermaid(payload.tor_text, payload.solution_text, payload.title)
+    code = result.get("mermaid_code", "")
+    rendered = render_mermaid_to_image(code)
+    return GenerateHldResponse(
+        mermaid_code=code,
+        caption=result.get("caption", f"Gambar: Arsitektur High Level Design (HLD) Solusi {payload.title}"),
+        architecture_narrative=result.get("architecture_narrative", ""),
+        image_data_url=rendered.get("data_url") if rendered else None,
+    )
+
+
+@router.post("/render-mermaid", response_model=RenderMermaidResponse)
+def render_mermaid(payload: RenderMermaidRequest):
+    """Render a Mermaid code snippet into an optimized PNG base64 data URL."""
+    rendered = render_mermaid_to_image(payload.mermaid_code)
+    if not rendered:
+        raise HTTPException(status_code=400, detail="Gagal me-render diagram Mermaid.")
+    return RenderMermaidResponse(
+        data_url=rendered.get("data_url"),
+        engine=rendered.get("engine", "kroki"),
+    )
+
+
+@router.post("/extract-template-images")
+async def extract_template_images(file: UploadFile):
+    """Extract embedded images/diagrams from an uploaded .docx or .pptx template."""
+    content = await file.read()
+    images = extract_images_from_office_bytes(content)
+    return {"images": images}
 
 
 class ExportPreflightRequest(BaseModel):
@@ -429,6 +522,45 @@ def _decode_logo_bytes(data_url: str) -> bytes | None:
         return decoded
     except (ValueError, base64.binascii.Error, OSError):
         return None
+
+
+def _insert_item_image_docx(doc, item, prefix: str = "Gambar"):
+    if not getattr(item, "image_data_url", None):
+        return
+    img_bytes = _decode_logo_bytes(item.image_data_url)
+    if not img_bytes:
+        return
+    try:
+        from docx.shared import Inches, Pt, RGBColor
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from PIL import Image
+
+        with Image.open(io.BytesIO(img_bytes)) as pil_img:
+            w_px, h_px = pil_img.size
+
+        w_in = 5.2
+        h_in = (h_px / w_px) * w_in if w_px > 0 else 3.0
+        if h_in > 4.0:
+            h_in = 4.0
+            w_in = (w_px / h_px) * h_in if h_px > 0 else 5.2
+
+        p_img = doc.add_paragraph()
+        p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_img.paragraph_format.space_before = Pt(8)
+        p_img.paragraph_format.space_after = Pt(2)
+        run_img = p_img.add_run()
+        run_img.add_picture(io.BytesIO(img_bytes), width=Inches(w_in), height=Inches(h_in))
+
+        caption = getattr(item, "image_caption", None) or f"{prefix}: Visualisasi Solusi {item.title}"
+        p_cap = doc.add_paragraph()
+        p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_cap.paragraph_format.space_after = Pt(12)
+        r_cap = p_cap.add_run(caption)
+        r_cap.font.size = Pt(8.5)
+        r_cap.italic = True
+        r_cap.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+    except Exception as exc:
+        logger.warning(f"Failed to insert image for item '{item.title}' in DOCX: {exc}")
 
 
 class ExportDocxRequest(BaseModel):
@@ -578,6 +710,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
             req_p.add_run("Rincian Lingkup Eksekusi:\n").bold = True
             req_p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Rincian belum ditentukan]")
             req_p.paragraph_format.space_after = Pt(10)
+            _insert_item_image_docx(doc, item, prefix=f"Gambar 2.{idx}")
 
         doc.add_heading("3. Deliverables & Serah Terima", level=1)
         doc.add_paragraph(
@@ -609,6 +742,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
             p.add_run("Solusi & Keunggulan SMG: ").bold = True
             p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Solusi belum diisi]")
             p.paragraph_format.space_after = Pt(10)
+            _insert_item_image_docx(doc, item, prefix=f"Gambar {idx}")
 
         doc.add_heading("3. Keunggulan Kompetitif & Mengapa SMG", level=1)
         doc.add_paragraph(
@@ -697,6 +831,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
             p.add_run("Talking Points & Solusi yang Disampaikan:\n").bold = True
             p.add_run(item.draft_text.strip() if item.draft_text.strip() else "[Talking points belum diisi]")
             p.paragraph_format.space_after = Pt(10)
+            _insert_item_image_docx(doc, item, prefix=f"Visual Slide {idx}")
 
         doc.add_heading("4. Rekomendasi Tindak Lanjut & Call to Action", level=1)
         doc.add_paragraph(
@@ -729,6 +864,7 @@ def export_proposal_docx(payload: ExportDocxRequest):
             resp_text = item.draft_text if item.draft_text.strip() else "[Tanggapan belum disusun]"
             resp_p.add_run(resp_text)
             resp_p.paragraph_format.space_after = Pt(12)
+            _insert_item_image_docx(doc, item, prefix=f"Gambar 2.{idx}")
 
         doc.add_heading("3. Status Kepatuhan & Penutup", level=1)
         doc.add_paragraph(
@@ -848,6 +984,47 @@ def export_proposal_pdf(payload: ExportPdfRequest):
     def paragraph(text: str, style=body_style) -> Paragraph:
         return Paragraph(escape(text or "").replace("\n", "<br/>"), style)
 
+    def _build_item_image_story(item, prefix: str = "Gambar") -> list:
+        if not getattr(item, "image_data_url", None):
+            return []
+        img_bytes = _decode_logo_bytes(item.image_data_url)
+        if not img_bytes:
+            return []
+        try:
+            from reportlab.platypus import Image as RLImage
+            from PIL import Image
+
+            with Image.open(io.BytesIO(img_bytes)) as pil_img:
+                w_px, h_px = pil_img.size
+
+            max_w = 160 * mm
+            max_h = 95 * mm
+            ratio = min(max_w / max(w_px, 1), max_h / max(h_px, 1), 1.0)
+            target_w = w_px * ratio
+            target_h = h_px * ratio
+
+            cap_style = ParagraphStyle(
+                f"ImgCap_{getattr(item, 'id', 'item')}",
+                parent=styles["Normal"],
+                fontName="Helvetica-Oblique",
+                fontSize=8,
+                leading=10,
+                textColor=colors.HexColor("#6B7280"),
+                alignment=TA_CENTER,
+                spaceBefore=3,
+                spaceAfter=8,
+            )
+
+            caption_text = getattr(item, "image_caption", None) or f"{prefix}: Visualisasi {item.title}"
+            return [
+                Spacer(1, 4),
+                RLImage(io.BytesIO(img_bytes), width=target_w, height=target_h),
+                Paragraph(escape(caption_text), cap_style),
+            ]
+        except Exception as exc:
+            logger.warning(f"Failed to build image story for PDF: {exc}")
+            return []
+
     story = [
         paragraph(payload.company_name.upper(), subtitle_style),
         paragraph(document_type.upper(), title_style),
@@ -935,6 +1112,7 @@ def export_proposal_pdf(payload: ExportPdfRequest):
             story.append(paragraph(
                 f"<b>Talking Points Solusi SMG:</b><br/>{item.draft_text or '[Tanggapan belum disusun]'}"
             ))
+            story.extend(_build_item_image_story(item, f"Visual Slide {index}"))
             story.append(Spacer(1, 4))
 
         story.append(paragraph("Next Steps & Call to Action", heading_style))
@@ -956,6 +1134,7 @@ def export_proposal_pdf(payload: ExportPdfRequest):
             story.append(paragraph(
                 f"Tanggapan {payload.company_name}:\n{item.draft_text or '[Tanggapan belum disusun]'}"
             ))
+            story.extend(_build_item_image_story(item, f"Gambar {index}"))
         story.append(paragraph("Penutup", heading_style))
         story.append(paragraph(
             "Dokumen ini disusun berdasarkan bagian yang tersedia dan dapat disempurnakan "
@@ -1026,91 +1205,111 @@ class ExportPptxRequest(BaseModel):
 
 @router.post("/export-pptx")
 def export_proposal_pptx(payload: ExportPptxRequest):
-    """Generate a high-impact presentation slide deck (.pptx) from drafted items."""
+    """Generate an elegant, modern widescreen presentation slide deck (.pptx) with animations and visual assets."""
     import io
     from datetime import datetime
     from pptx import Presentation
     from pptx.util import Inches, Pt
     from pptx.dml.color import RGBColor
     from pptx.enum.text import PP_ALIGN
+    from pptx.oxml import parse_xml
     from fastapi.responses import StreamingResponse
 
     prs = Presentation()
-    # 16:9 widescreen
+    # Modern 16:9 widescreen layout (13.333 x 7.5 inches)
     prs.slide_width = Inches(13.333)
     prs.slide_height = Inches(7.5)
 
     blank_slide_layout = prs.slide_layouts[6]
 
-    # Slide 1: Cover
+    def _add_transition(slide, trans_type: str = "fade"):
+        try:
+            xml_str = (
+                f'<p:transition xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+                f'spd="med" advClick="1"><p:{trans_type}/></p:transition>'
+            )
+            slide._element.append(parse_xml(xml_str))
+        except Exception as exc:
+            logger.warning(f"Failed to add PPTX slide transition: {exc}")
+
+    # Slide 1: Executive Title & Cover Slide
     cover_slide = prs.slides.add_slide(blank_slide_layout)
-    # Background card
-    cover_box = cover_slide.shapes.add_textbox(Inches(1.0), Inches(1.5), Inches(11.333), Inches(4.5))
+    _add_transition(cover_slide, "fade")
+
+    cover_box = cover_slide.shapes.add_textbox(Inches(1.2), Inches(1.6), Inches(10.9), Inches(4.5))
     tf = cover_box.text_frame
     tf.word_wrap = True
 
     p_badge = tf.paragraphs[0]
-    p_badge.text = "SOLUTION PRESENTATION & TECHNICAL PITCH"
-    p_badge.font.size = Pt(14)
+    p_badge.text = "SOLUTION ARCHITECTURE & TECHNICAL PROPOSAL"
+    p_badge.font.size = Pt(13)
     p_badge.font.bold = True
-    p_badge.font.color.rgb = RGBColor(0xD9, 0x77, 0x06)  # Amber accent
+    p_badge.font.color.rgb = RGBColor(0xD9, 0x77, 0x06)  # Warm amber
 
     p_title = tf.add_paragraph()
     p_title.text = payload.document_title
     p_title.font.size = Pt(36)
     p_title.font.bold = True
     p_title.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
-    p_title.space_before = Pt(14)
+    p_title.space_before = Pt(16)
 
     p_sub = tf.add_paragraph()
-    p_sub.text = f"Dipersiapkan oleh: {payload.company_name} · {datetime.now().strftime('%d %B %Y')}"
+    p_sub.text = f"Dipersiapkan secara eksklusif oleh: {payload.company_name}"
     p_sub.font.size = Pt(16)
-    p_sub.font.color.rgb = RGBColor(0x4B, 0x55, 0x63)
+    p_sub.font.color.rgb = RGBColor(0x2F, 0x5F, 0xE0)  # Primary secondary blue
     p_sub.space_before = Pt(12)
 
-    # Slide 2: Agenda / Executive Summary
+    p_meta = tf.add_paragraph()
+    p_meta.text = f"Tanggal: {datetime.now().strftime('%d %B %Y')}  ·  {len(payload.items)} Bagian Solusi Teknis"
+    p_meta.font.size = Pt(12)
+    p_meta.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+    p_meta.space_before = Pt(8)
+
+    # Slide 2: Executive Summary & Presentation Blueprint
     agenda_slide = prs.slides.add_slide(blank_slide_layout)
+    _add_transition(agenda_slide, "fade")
+
     ag_box = agenda_slide.shapes.add_textbox(Inches(1.0), Inches(0.8), Inches(11.333), Inches(1.2))
     tf_ag = ag_box.text_frame
     p_h = tf_ag.paragraphs[0]
-    p_h.text = "Ringkasan Eksekutif & Agenda Pemaparan"
+    p_h.text = "Ringkasan Eksekutif & Agenda Solusi"
     p_h.font.size = Pt(24)
     p_h.font.bold = True
     p_h.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
 
-    ag_body = agenda_slide.shapes.add_textbox(Inches(1.0), Inches(2.2), Inches(11.333), Inches(4.5))
+    ag_body = agenda_slide.shapes.add_textbox(Inches(1.0), Inches(2.0), Inches(11.333), Inches(4.8))
     tf_body = ag_body.text_frame
     tf_body.word_wrap = True
 
     p_intro = tf_body.paragraphs[0]
     p_intro.text = (
-        f"Presentasi ini menyajikan usulan solusi menyeluruh untuk {payload.document_title}, "
-        f"mencakup {len(payload.items)} bagian utama dan "
-        "merumuskan pendekatan arsitektur terbaik."
+        f"Presentasi ini menyajikan usulan arsitektur dan komitmen menyeluruh dari {payload.company_name} "
+        f"dalam menjawab kebutuhan {payload.document_title}."
     )
     p_intro.font.size = Pt(14)
     p_intro.font.color.rgb = RGBColor(0x37, 0x41, 0x51)
 
     points = [
-        f"Analisis Kebutuhan Teknis ({len(payload.items)} Bagian Utama)",
-        "Pendekatan Arsitektur Solusi Teruji & Praktik Terbaik SMG",
-        "Komitmen Deliverables, Tata Kelola Proyek, dan SLA Implementasi",
-        "Keunggulan Kompetitif & Nilai Tambah Kemitraan SMG",
+        f"Analisis Kebutuhan & Cakupan Teknis ({len(payload.items)} Bagian Prioritas)",
+        "Desain Arsitektur Solusi Terpadu & Standar Prinsipal Terkemuka",
+        "Visualisasi Perangkat, Topologi HLD, dan Spesifikasi Komponen Kunci",
+        "Tata Kelola Proyek, SLA Layanan Purnajual 24/7, dan Keunggulan SMG",
     ]
     for pt in points:
         p_pt = tf_body.add_paragraph()
-        p_pt.text = f"• {pt}"
-        p_pt.font.size = Pt(14)
+        p_pt.text = f"•  {pt}"
+        p_pt.font.size = Pt(13.5)
         p_pt.font.bold = True
         p_pt.font.color.rgb = RGBColor(0x1F, 0x29, 0x37)
-        p_pt.space_before = Pt(8)
+        p_pt.space_before = Pt(10)
 
-    # Slides 3..N: Content Slides (Max 10 per deck to keep concise)
-    for idx, item in enumerate(payload.items[:12], start=1):
+    # Slides 3..N: Content Slides (Max 14 per deck)
+    for idx, item in enumerate(payload.items[:14], start=1):
         slide = prs.slides.add_slide(blank_slide_layout)
+        _add_transition(slide, "fade")
 
         # Header Title
-        hdr_box = slide.shapes.add_textbox(Inches(1.0), Inches(0.6), Inches(11.333), Inches(1.0))
+        hdr_box = slide.shapes.add_textbox(Inches(1.0), Inches(0.5), Inches(11.333), Inches(1.1))
         tf_hdr = hdr_box.text_frame
         p_cat = tf_hdr.paragraphs[0]
         p_cat.text = f"BAGIAN #{idx} · {item.category.upper()}"
@@ -1124,40 +1323,112 @@ def export_proposal_pptx(payload: ExportPptxRequest):
         p_t.font.bold = True
         p_t.font.color.rgb = RGBColor(0x11, 0x18, 0x27)
 
-        # Left Box: Kebutuhan Klien
-        left_box = slide.shapes.add_textbox(Inches(1.0), Inches(1.8), Inches(5.3), Inches(4.8))
-        tf_l = left_box.text_frame
-        tf_l.word_wrap = True
-        p_lh = tf_l.paragraphs[0]
-        p_lh.text = "📋 Kebutuhan Dokumen Tender"
-        p_lh.font.size = Pt(14)
-        p_lh.font.bold = True
-        p_lh.font.color.rgb = RGBColor(0x25, 0x63, 0xEB)
+        has_image = bool(getattr(item, "image_data_url", None))
+        img_bytes = _decode_logo_bytes(item.image_data_url) if has_image else None
 
-        p_lb = tf_l.add_paragraph()
-        p_lb.text = item.requirement_text
-        p_lb.font.size = Pt(12)
-        p_lb.font.color.rgb = RGBColor(0x4B, 0x55, 0x63)
-        p_lb.space_before = Pt(8)
+        if img_bytes:
+            # Layout 2 Kolom: Kolom Kiri Teks (Ringkas & Padat), Kolom Kanan Visual Aset / Diagram
+            left_box = slide.shapes.add_textbox(Inches(1.0), Inches(1.7), Inches(5.6), Inches(5.2))
+            tf_l = left_box.text_frame
+            tf_l.word_wrap = True
 
-        # Right Box: Solusi SMG
-        right_box = slide.shapes.add_textbox(Inches(6.8), Inches(1.8), Inches(5.5), Inches(4.8))
-        tf_r = right_box.text_frame
-        tf_r.word_wrap = True
-        p_rh = tf_r.paragraphs[0]
-        p_rh.text = f"⚡ Tanggapan & Komitmen {payload.company_name}"
-        p_rh.font.size = Pt(14)
-        p_rh.font.bold = True
-        p_rh.font.color.rgb = RGBColor(0x05, 0x96, 0x69)
+            p_lh = tf_l.paragraphs[0]
+            p_lh.text = "📋 Kebutuhan Dokumen Tender"
+            p_lh.font.size = Pt(13)
+            p_lh.font.bold = True
+            p_lh.font.color.rgb = RGBColor(0x25, 0x63, 0xEB)
 
-        p_rb = tf_r.add_paragraph()
-        p_rb.text = item.draft_text.strip() if item.draft_text.strip() else "[Tanggapan belum disusun]"
-        p_rb.font.size = Pt(12)
-        p_rb.font.color.rgb = RGBColor(0x1F, 0x29, 0x37)
-        p_rb.space_before = Pt(8)
+            p_lb = tf_l.add_paragraph()
+            req_snippet = item.requirement_text[:300] + ("..." if len(item.requirement_text) > 300 else "")
+            p_lb.text = req_snippet
+            p_lb.font.size = Pt(11)
+            p_lb.font.color.rgb = RGBColor(0x4B, 0x55, 0x63)
+            p_lb.space_before = Pt(6)
 
-    # Closing Slide: Q&A / Terima Kasih
+            p_rh = tf_l.add_paragraph()
+            p_rh.text = f"⚡ Tanggapan & Solusi {payload.company_name}"
+            p_rh.font.size = Pt(13)
+            p_rh.font.bold = True
+            p_rh.font.color.rgb = RGBColor(0x05, 0x96, 0x69)
+            p_rh.space_before = Pt(14)
+
+            p_rb = tf_l.add_paragraph()
+            resp_str = item.draft_text.strip() if item.draft_text.strip() else "[Tanggapan belum disusun]"
+            resp_snippet = resp_str[:420] + ("..." if len(resp_str) > 420 else "")
+            p_rb.text = resp_snippet
+            p_rb.font.size = Pt(11)
+            p_rb.font.color.rgb = RGBColor(0x1F, 0x29, 0x37)
+            p_rb.space_before = Pt(6)
+
+            # Kolom Kanan: Card Visual
+            try:
+                from PIL import Image
+                with Image.open(io.BytesIO(img_bytes)) as pil_img:
+                    w_px, h_px = pil_img.size
+
+                max_w_in = 5.7
+                max_h_in = 4.2
+                ratio = min(max_w_in / max(w_px, 1), max_h_in / max(h_px, 1))
+                w_in = w_px * ratio
+                h_in = h_px * ratio
+                left_in = 7.0 + (max_w_in - w_in) / 2
+                top_in = 1.8 + (max_h_in - h_in) / 2
+
+                slide.shapes.add_picture(
+                    io.BytesIO(img_bytes),
+                    Inches(left_in),
+                    Inches(top_in),
+                    width=Inches(w_in),
+                    height=Inches(h_in),
+                )
+
+                cap_box = slide.shapes.add_textbox(Inches(6.9), Inches(top_in + h_in + 0.1), Inches(max_w_in), Inches(0.8))
+                tf_cap = cap_box.text_frame
+                tf_cap.word_wrap = True
+                p_cap = tf_cap.paragraphs[0]
+                p_cap.text = getattr(item, "image_caption", None) or f"Gambar: Visualisasi Solusi {item.title}"
+                p_cap.font.size = Pt(9.5)
+                p_cap.font.italic = True
+                p_cap.font.color.rgb = RGBColor(0x6B, 0x72, 0x80)
+                p_cap.alignment = PP_ALIGN.CENTER
+            except Exception as exc:
+                logger.warning(f"Failed to render PPTX image for slide {idx}: {exc}")
+        else:
+            # Layout Standar: 2 Kolom Lebar Berdampingan
+            left_box = slide.shapes.add_textbox(Inches(1.0), Inches(1.8), Inches(5.4), Inches(4.8))
+            tf_l = left_box.text_frame
+            tf_l.word_wrap = True
+            p_lh = tf_l.paragraphs[0]
+            p_lh.text = "📋 Kebutuhan Dokumen Tender"
+            p_lh.font.size = Pt(14)
+            p_lh.font.bold = True
+            p_lh.font.color.rgb = RGBColor(0x25, 0x63, 0xEB)
+
+            p_lb = tf_l.add_paragraph()
+            p_lb.text = item.requirement_text
+            p_lb.font.size = Pt(11.5)
+            p_lb.font.color.rgb = RGBColor(0x4B, 0x55, 0x63)
+            p_lb.space_before = Pt(8)
+
+            right_box = slide.shapes.add_textbox(Inches(6.8), Inches(1.8), Inches(5.5), Inches(4.8))
+            tf_r = right_box.text_frame
+            tf_r.word_wrap = True
+            p_rh = tf_r.paragraphs[0]
+            p_rh.text = f"⚡ Tanggapan & Komitmen {payload.company_name}"
+            p_rh.font.size = Pt(14)
+            p_rh.font.bold = True
+            p_rh.font.color.rgb = RGBColor(0x05, 0x96, 0x69)
+
+            p_rb = tf_r.add_paragraph()
+            p_rb.text = item.draft_text.strip() if item.draft_text.strip() else "[Tanggapan belum disusun]"
+            p_rb.font.size = Pt(11.5)
+            p_rb.font.color.rgb = RGBColor(0x1F, 0x29, 0x37)
+            p_rb.space_before = Pt(8)
+
+    # Slide Penutup: Q&A / Terima Kasih
     close_slide = prs.slides.add_slide(blank_slide_layout)
+    _add_transition(close_slide, "fade")
+
     close_box = close_slide.shapes.add_textbox(Inches(1.0), Inches(2.2), Inches(11.333), Inches(3.5))
     tf_c = close_box.text_frame
     tf_c.word_wrap = True

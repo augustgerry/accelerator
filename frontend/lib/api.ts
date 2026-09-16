@@ -205,6 +205,7 @@ export type QualityCheckResult = {
     score: number;
     issues: string[];
     missing_values: string[];
+    suggestions?: string[];
   }>;
 };
 
@@ -217,6 +218,28 @@ export async function qualityCheckDraft(items: Array<{
   status: string;
 }>): Promise<QualityCheckResult> {
   return postJson<QualityCheckResult>("/draft/quality-check", { items });
+}
+
+export type RecommendedSection = {
+  id: string;
+  title: string;
+  category: string;
+  requirement_text: string;
+  rationale: string;
+};
+
+export type RecommendStructureResponse = {
+  items: RecommendedSection[];
+  summary: string;
+};
+
+export async function recommendStructure(payload: {
+  tor_text: string;
+  doc_type: string;
+  document_title?: string;
+  instruction?: string;
+}): Promise<RecommendStructureResponse> {
+  return postJson<RecommendStructureResponse>("/draft/recommend-structure", payload);
 }
 
 export type ExportPreflightResult = {
@@ -305,6 +328,8 @@ export async function exportProposalDocx(payload: {
     category: string;
     draft_text: string;
     status: string;
+    image_data_url?: string;
+    image_caption?: string;
   }>;
 }): Promise<Blob> {
   const res = await fetch(`${API_BASE}/draft/export-docx`, {
@@ -329,6 +354,8 @@ export async function exportProposalPptx(payload: {
     category: string;
     draft_text: string;
     status: string;
+    image_data_url?: string;
+    image_caption?: string;
   }>;
 }): Promise<Blob> {
   const res = await fetch(`${API_BASE}/draft/export-pptx`, {
@@ -359,6 +386,8 @@ export async function exportProposalPdf(payload: {
     category: string;
     draft_text: string;
     status: string;
+    image_data_url?: string;
+    image_caption?: string;
   }>;
 }): Promise<Blob> {
   const res = await fetch(`${API_BASE}/draft/export-pdf`, {
@@ -371,6 +400,74 @@ export async function exportProposalPdf(payload: {
     throw new Error(`Gagal membuat dokumen PDF (${res.status}): ${detail}`);
   }
   return res.blob();
+}
+
+export async function searchImages(query: string, limit: number = 8): Promise<{
+  items: Array<{
+    title: string;
+    image_url: string;
+    thumbnail_url: string;
+    source: string;
+    width?: number;
+    height?: number;
+  }>;
+}> {
+  return postJson("/draft/search-images", { query, limit });
+}
+
+export async function downloadImage(imageUrl: string): Promise<{
+  data_url: string;
+  mime_type: string;
+  width: number;
+  height: number;
+}> {
+  return postJson("/draft/download-image", { image_url: imageUrl });
+}
+
+export async function generateHld(
+  torText: string,
+  solutionText: string = "",
+  title: string = "High Level Design",
+): Promise<{
+  mermaid_code: string;
+  caption: string;
+  architecture_narrative: string;
+  image_data_url?: string;
+}> {
+  return postJson("/draft/generate-hld", {
+    tor_text: torText,
+    solution_text: solutionText,
+    title,
+  });
+}
+
+export async function renderMermaid(mermaidCode: string): Promise<{
+  data_url?: string;
+  engine: string;
+}> {
+  return postJson("/draft/render-mermaid", { mermaid_code: mermaidCode });
+}
+
+export async function extractTemplateImages(file: File): Promise<{
+  images: Array<{
+    filename: string;
+    mime_type: string;
+    width: number;
+    height: number;
+    data_url: string;
+  }>;
+}> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_BASE}/draft/extract-template-images`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gagal mengekstrak aset template (${res.status}): ${detail}`);
+  }
+  return res.json();
 }
 
 export async function convertOfficeToPdf(file: Blob, filename: string): Promise<Blob> {

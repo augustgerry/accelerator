@@ -251,6 +251,8 @@ export function ExportModal({
       category: it.category,
       draft_text: it.draft_text,
       status: it.status,
+      image_data_url: it.image_data_url,
+      image_caption: it.image_caption,
     }));
     const docType = getDocType(docTypeId);
 

@@ -43,11 +43,13 @@ import {
   saveProposalSession,
   listDocuments,
   type QualityCheckResult,
+  type RecommendedSection,
 } from "@/lib/api";
 import { OnboardingModal } from "@/components/onboarding-modal";
 import type { RequirementItem, RequirementStatus, SourceCitation, IndexedDocument } from "@/lib/types";
 import { DOC_TYPES, FORMAT_LABELS, getDocType, type DraftDocTypeId, type DraftFormat } from "@/lib/document-types";
 import { SKELETONS } from "@/lib/skeletons";
+import { VisualAssetStudio } from "@/components/draft/visual-asset-studio";
 
 // Poin 4: Grounding cuplikan TOR kini diproses secara semantik oleh backend
 // menggunakan model sentence-transformers lokal. Frontend meneruskan konteks TOR
@@ -343,7 +345,7 @@ export default function DraftPage() {
           doc_type: docTypeId,
           document_title: file.name,
         });
-        const recItems: RequirementItem[] = resp.items.map((sec) => ({
+        const recItems: RequirementItem[] = resp.items.map((sec: RecommendedSection) => ({
           id: sec.id,
           title: sec.title,
           requirement_text: sec.requirement_text,
@@ -391,7 +393,7 @@ export default function DraftPage() {
         document_title: fileName || "Tender",
         instruction: structureInstruction.trim(),
       });
-      const recItems: RequirementItem[] = resp.items.map((sec) => ({
+      const recItems: RequirementItem[] = resp.items.map((sec: RecommendedSection) => ({
         id: sec.id,
         title: sec.title,
         requirement_text: sec.requirement_text,
@@ -1433,6 +1435,11 @@ export default function DraftPage() {
                             <span className="rounded bg-surface border border-surface-border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
                               {item.category}
                             </span>
+                            {item.image_data_url && (
+                              <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 text-[9.5px] font-medium text-blue-700">
+                                🖼️ Aset
+                              </span>
+                            )}
                           </div>
 
                           {/* Status Pill */}
@@ -1677,6 +1684,17 @@ export default function DraftPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Visual Asset Studio (Public Hardware Search, AI HLD Diagram, and Image Attachment) */}
+                  <VisualAssetStudio
+                    item={selectedItem}
+                    torText={torText}
+                    onUpdateItem={(updated) => {
+                      setItems((prev) =>
+                        prev.map((it) => (it.id === updated.id ? updated : it))
+                      );
+                    }}
+                  />
 
                   {/* Internal Knowledge Base Grounding Citations */}
                   <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
@@ -1952,7 +1970,7 @@ export default function DraftPage() {
                           <Sparkles size={13} /> Rekomendasi Presales:
                         </div>
                         <ul className="list-disc list-inside space-y-1 pl-1 text-xs text-text-secondary">
-                          {res.suggestions.map((sug, sIdx) => (
+                          {res.suggestions.map((sug: string, sIdx: number) => (
                             <li key={sIdx}>{sug}</li>
                           ))}
                         </ul>

@@ -4,14 +4,23 @@
 ---
 
 ## 📍 STATUS AKTIF (SEDANG DIKERJAKAN DETIK INI)
-- **Sesi terakhir (Antigravity):** Fitur Sub-Bab Adaptif dari Dokumen Acuan (TOR/RKS/KAK) dengan Layar Kurasi & Diskusi AI, Presales Quality & Compliance Auditor, Real-time Drafting Progress Bar, dan PPTX Table Clone TELAH SELESAI diimplementasikan, diverifikasi, dan lolos uji end-to-end.
-- **Ringkasan Fitur yang Baru Selesai:**
-  1. **Sub-Bab Adaptif Berdasarkan Dokumen Acuan:** Synapse membaca dokumen acuan (TOR, RKS, KAK, RFP) dan merekomendasikan urutan sub-bab kontekstual lengkap dengan alasan rekomendasi (*rationale*) per butir melalui endpoint `POST /draft/recommend-structure`.
-  2. **Layar Kurasi & Diskusi Struktur Sebelum Drafting:** Sebelum draf isi dibuat, user masuk ke tampilan kurasi untuk melihat ringkasan AI, membaca alasan pemilihan sub-bab, mengatur urutan (▲ / ▼), mengedit cakupan/judul, menambah sub-bab manual, atau berdiskusi dengan AI (*"Revisi Struktur dengan AI"*) hingga susunan disetujui (*fixed*).
-  3. **Presales Quality & Compliance Auditor:** Endpoint `POST /draft/quality-check` diperluas dengan skor kepatuhan (0-100), deteksi komitmen ambigu/tentatif, audit SLA eksplisit, pemenuhan metrik angka, serta rekomendasi presales per sub-bab (`suggestions`) yang ditampilkan dalam Auditor Modal interaktif.
-  4. **Progress Bar Real-Time & Reordering di Workspace:** Banner progres dinamis saat drafting berjalan bertahap, dan tombol panah mini (▲ / ▼) pada navigator kiri untuk fleksibilitas susunan proposal.
-  5. **PPTX Template Clone Table Support:** Mesin kloning PPTX kini memindai dan menggantikan token di dalam shape tabel (`shape.has_table`).
-- **Status Service:** Backend aktif di port 8000 (`http://127.0.0.1:8000/health` 200 OK, LLM: `gemini-3.6-flash`), Frontend aktif di port 3000. TypeScript compilation `npx tsc --noEmit` exit code 0.
+- **Sesi terakhir (Antigravity):** Fitur Pencarian Gambar Publik Hardware, Generator Topologi HLD Otomatis (Mermaid + Kroki), Integrasi Visual DOCX/PDF, serta Modernisasi Presentasi PPTX 16:9 dengan Transisi Animasi Slide TELAH SELESAI, teruji end-to-end, dan branch git telah dipisahkan secara bersih (Opsi B).
+- **Pemisahan Branch & Git Hygiene (Opsi B):**
+  1. Commit `844b882` (Sub-Bab Adaptif & Auditor) telah di-cherry-pick bersih ke `main` (`c54b9ed`) dan di-push ke `origin/main`.
+  2. Branch kerja baru `feat/proposal-visual-engine` dibuat dari `main` untuk seluruh fitur visual dan PPTX.
+  3. Script `auto-commit.ps1` dinonaktifkan / tidak berjalan di background; semua file di-commit secara terisolasi dan eksplisit.
+- **Ringkasan Fitur Visual & PPTX yang Selesai:**
+  1. **Pencarian Gambar Publik Hardware Enterprise:** Multi-engine search (`backend/app/services/image_search.py`) via Wikimedia Commons API dan Bing scraper untuk menemukan foto resmi perangkat (server rackmount HPE/Dell, switch Cisco, firewall Fortinet, storage). Dilengkapi optimizer gambar Pillow (RGB, aspect ratio scaling, base64 data URL) via endpoint `POST /draft/search-images` dan `POST /draft/download-image`.
+  2. **Generator Arsitektur High Level Design (HLD) Otomatis:** Endpoint `POST /draft/generate-hld` memanfaatkan Gemini 3.6 Flash untuk membaca kondisi existing TOR dan solusi SMG, menghasilkan diagram topologi Mermaid multi-subgraph (DC vs DR vs Interconnect), dan me-render ke PNG via Kroki API (`POST /draft/render-mermaid`).
+  3. **Visual Asset Studio UI:** Komponen interaktif `frontend/components/draft/visual-asset-studio.tsx` terpasang di workspace `/draft` dengan 3 tab: Cari Gambar Publik, Generate Diagram HLD, dan Upload Lokal. Dilengkapi pratinjau thumbnail terlampir, penyunting keterangan (caption), dan badge penanda visual pada navigator kiri.
+  4. **Penyisipan Gambar pada Word (.docx) & PDF:**
+     - Word: helper `_insert_item_image_docx` menyisipkan gambar terpusat berskala proporsional dan caption italic formal di format naratif, SoW, Solution Brief, dan Pitch Deck.
+     - PDF: helper `_build_item_image_story` menyisipkan `RLImage` dan caption formal ReportLab.
+  5. **Modernisasi PPTX 16:9 & Transisi Animasi Slide:**
+     - Layout slide diupgrade ke format widescreen 16:9 (13.333 x 7.5 inci) dengan visual container card.
+     - Transisi animasi slide (`<p:transition spd="med" advClick="1"><p:fade/></p:transition>`) diinjeksikan ke semua slide (Cover, Agenda, Konten, Penutup) dan kompatibel penuh dengan PowerPoint/Google Slides.
+     - Slide dengan aset visual otomatis mengadopsi layout 2-kolom: kolom kiri narasi poin kunci, kolom kanan kartu visual hardware/HLD dengan caption elegan.
+- **Status Service:** Backend aktif di port 8000 (`http://127.0.0.1:8000/health` 200 OK, LLM: `gemini-3.6-flash`), Frontend aktif di port 3000. `npx tsc --noEmit` exit 0, Python `py_compile` exit 0.
 
 ---
 

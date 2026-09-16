@@ -53,7 +53,18 @@ export type RequirementItem = {
   sources?: SourceCitation[];
   isGenerating?: boolean;
   error?: string;
+  image_data_url?: string;
+  image_caption?: string;
 };
+
+export interface SectionVisualAsset {
+  type: "web_search" | "hld_diagram" | "template";
+  data_url: string;
+  caption: string;
+  source_query?: string;
+  mermaid_code?: string;
+  preview_url?: string;
+}
 
 export type SegmentItemApi = {
   id: string;
