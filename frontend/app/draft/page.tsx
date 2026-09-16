@@ -122,6 +122,15 @@ function getGroundingBadge(item: RequirementItem): GroundingBadge | null {
   };
 }
 
+// Shared base for every small meta chip/pill (item header, sidebar rows, intel
+// strip) — one fixed height + radius + text size so a row of mixed badges and
+// buttons never zig-zags regardless of icon/label length.
+const CHIP_BASE =
+  "inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[11px] font-medium leading-none";
+// Denser variant for the sidebar's narrow rows — same shape/radius language, smaller footprint.
+const CHIP_SM =
+  "inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[10px] font-medium leading-none";
+
 // Draft text is plain-ish markdown (bold, lists, BoQ tables from the Sizing
 // calculator) — style it with the app's own tokens instead of pulling in the
 // Tailwind typography plugin just for a preview toggle.
@@ -2376,11 +2385,11 @@ export default function DraftPage() {
                         </div>
 
                         <div className="mt-1.5 flex items-center gap-1.5 pl-6">
-                          <span className="rounded bg-surface border border-surface-border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                          <span className={`${CHIP_SM} border border-surface-border bg-surface uppercase tracking-wider text-text-secondary`}>
                             {item.category}
                           </span>
                           {item.image_data_url && (
-                            <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 text-[9.5px] font-medium text-blue-700">
+                            <span className={`${CHIP_SM} border border-blue-200/60 bg-blue-50 text-blue-700`}>
                               🖼️ Aset
                             </span>
                           )}
@@ -2404,9 +2413,7 @@ export default function DraftPage() {
                                 key={item.sources?.length ?? 0}
                                 className="animate-in fade-in duration-300 mt-2 pl-6"
                               >
-                                <span
-                                  className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${badge.className}`}
-                                >
+                                <span className={`${CHIP_SM} border ${badge.className}`}>
                                   <span className={`h-1.5 w-1.5 rounded-full ${badge.dotClassName}`} />
                                   {badge.label}
                                 </span>
@@ -2443,11 +2450,12 @@ export default function DraftPage() {
                   {/* Item Header & Status Bar */}
                   <div className="flex flex-col gap-4 rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="rounded bg-accent-soft px-2 py-0.5 text-xs font-bold text-accent-ink">
+                      {/* All meta chips share one fixed height/radius/text-size so nothing zig-zags */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={`${CHIP_BASE} border border-transparent bg-accent-soft font-bold text-accent-ink`}>
                           {selectedItem.id.toUpperCase()}
                         </span>
-                        <span className="rounded bg-surface border border-surface-border px-2 py-0.5 text-xs font-medium text-text-secondary">
+                        <span className={`${CHIP_BASE} border border-surface-border bg-surface text-text-secondary`}>
                           {selectedItem.category}
                         </span>
                         {(() => {
@@ -2455,7 +2463,7 @@ export default function DraftPage() {
                           return badge ? (
                             <span
                               key={selectedItem.sources?.length ?? 0}
-                              className={`animate-in fade-in duration-300 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${badge.className}`}
+                              className={`${CHIP_BASE} animate-in fade-in duration-300 border ${badge.className}`}
                               title={`${selectedItem.sources?.length ?? 0} sumber referensi dipakai saat generate`}
                             >
                               <span className={`h-1.5 w-1.5 rounded-full ${badge.dotClassName}`} />
@@ -2467,7 +2475,7 @@ export default function DraftPage() {
                           type="button"
                           onClick={handleOpenEditSection}
                           title="Edit Judul & Cakupan Bagian"
-                          className="inline-flex items-center gap-1 rounded border border-surface-border bg-surface px-2 py-0.5 text-[11px] text-text-secondary hover:border-accent hover:text-text-primary transition-colors ml-1"
+                          className={`${CHIP_BASE} border border-surface-border bg-surface text-text-secondary transition-colors hover:border-accent hover:text-text-primary active:scale-[0.98]`}
                         >
                           <Pencil size={11} /> Edit Info
                         </button>
@@ -2475,21 +2483,21 @@ export default function DraftPage() {
                           type="button"
                           onClick={() => handleDeleteSection(selectedItem.id)}
                           title="Hapus Bagian ini"
-                          className="inline-flex items-center gap-1 rounded border border-red-200 bg-surface px-2 py-0.5 text-[11px] text-red-600 hover:bg-red-50 transition-colors"
+                          className={`${CHIP_BASE} border border-red-200 bg-surface text-red-600 transition-colors hover:bg-red-50 active:scale-[0.98]`}
                         >
                           <Trash2 size={11} /> Hapus
                         </button>
                       </div>
-                      <h3 className="mt-2 text-base font-bold text-text-primary">
+                      <h3 className="mt-2.5 text-base font-bold text-text-primary">
                         {selectedItem.title}
                       </h3>
                     </div>
 
                     {/* Status Selector Segmented Controls */}
-                    <div className="flex items-center rounded-lg border border-surface-border bg-surface p-1">
+                    <div className="flex h-8 shrink-0 items-center rounded-lg border border-surface-border bg-surface p-1">
                       <button
                         onClick={() => handleStatusChange("todo")}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                        className={`flex h-full items-center rounded-md px-3 text-xs font-medium transition-all active:scale-[0.98] ${
                           selectedItem.status === "todo"
                             ? "bg-surface-raised text-text-primary shadow-subtle"
                             : "text-text-muted hover:text-text-primary"
@@ -2499,7 +2507,7 @@ export default function DraftPage() {
                       </button>
                       <button
                         onClick={() => handleStatusChange("draft")}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                        className={`flex h-full items-center rounded-md px-3 text-xs font-medium transition-all active:scale-[0.98] ${
                           selectedItem.status === "draft"
                             ? "bg-accent-soft text-accent-ink font-semibold shadow-subtle"
                             : "text-text-muted hover:text-text-primary"
@@ -2509,7 +2517,7 @@ export default function DraftPage() {
                       </button>
                       <button
                         onClick={() => handleStatusChange("final")}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                        className={`flex h-full items-center rounded-md px-3 text-xs font-medium transition-all active:scale-[0.98] ${
                           selectedItem.status === "final"
                             ? "bg-emerald-600 text-white font-semibold shadow-subtle"
                             : "text-text-muted hover:text-text-primary"
