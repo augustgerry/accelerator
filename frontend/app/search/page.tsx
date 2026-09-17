@@ -78,6 +78,8 @@ function SearchContent() {
   useEffect(() => {
     setHistory(loadHistory());
     setBookmarks(loadBookmarks());
+    if (!initialQuery) inputRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isBookmarked = !!result && bookmarks.some((b) => b.question === query);

@@ -3,6 +3,19 @@
 
 ---
 
+## ✅ CLAUDE CODE (FRONTEND) — SELESAI: Fix Ctrl+K search shortcut mati di Topbar
+
+Task singkat atas permintaan user ("apa enhancement yang bisa dibuat" → "kerjain yang paling terbaik"). Scope sengaja dibatasi ke file yang **tidak** kesenggol WIP uncommitted Antigravity yang lagi berjalan live di checkout yang sama (backend: `diagram_generator.py`, `image_search.py`, `draft.py`, dll; frontend: `draft/page.tsx`, `export-modal.tsx`, `visual-asset-studio.tsx`, `citation-drawer.tsx`, `highlighted-text.tsx`, `lib/api.ts`).
+
+1. **Bug ditemukan:** `frontend/components/topbar.tsx` nampilin box "Cari dokumen... Ctrl+K" di **SETIAP halaman** (Documents/Library/Draft/Settings/Search) — tapi cuma `<div>` statis, gak ada `onClick`, gak ada keyboard listener. User pencet Ctrl+K, gak ada efek apa pun.
+2. **Fix:**
+   - `frontend/components/topbar.tsx`: tambah `"use client"`, jadi `<button>` beneran (klik → `router.push("/search")`), plus global `keydown` listener `Ctrl+K`/`Cmd+K` yang jalan dari halaman manapun.
+   - `frontend/app/search/page.tsx`: auto-focus `inputRef` pas mount tanpa `initialQuery`, biar shortcut lengkap (lompat halaman + langsung siap ketik).
+3. **Verifikasi:** `npx tsc --noEmit` clean. Sempat kejadian mini-insiden: `npm run build` dijalanin bareng dev server yang masih hidup → keduanya rebutan folder `.next` yang sama → `/search` sempat 500. Fix: kill proses node, `rm -rf .next`, restart `npm run dev` fresh (prosedur baku yang udah didokumentasikan di sesi-sesi sebelumnya). Setelah restart: 6 route (`/`, `/search`, `/documents`, `/library`, `/settings`, `/draft`) semua 200, dev log bersih tanpa compile error — termasuk `/draft` yang isinya lagi WIP Antigravity, gak ikut kesenggol/rusak oleh perubahan ini.
+4. **Catatan kolaborasi:** commit ini cuma nyertain `frontend/components/topbar.tsx`, `frontend/app/search/page.tsx`, dan file markdown ini — TIDAK pakai `git add -A`/broad staging, biar WIP backend+frontend Antigravity yang masih uncommitted gak ke-bawa ke commit history sebelum dia sendiri yang commit.
+
+---
+
 ## 🚀 MILESTONE SELESAI: 100% GAP ANALYSIS RESOLVED, SYNTHETIC QA ENGINE, 2D HARDWARE STUDIO UI, & TEST SUITE HARDENING
 
 Seluruh sisa backlog pada `synapse-gap-analysis.md` dan penyempurnaan UI/Backend telah 100% selesai dan tervalidasi:
