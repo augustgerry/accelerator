@@ -7,11 +7,18 @@ endpoint answers from the live public web. Don't merge the two — mixing
 both the UX and the citation trail.
 """
 
-from fastapi import APIRouter, HTTPException
+from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.db import get_session
 from app.services.llm_provider import format_llm_error, get_llm_provider
+from app.services.synthetic_qa import (
+    generate_synthetic_qa_pairs,
+    evaluate_retrieval_against_synthetic_qa,
+)
 
 router = APIRouter(prefix="/research", tags=["research"])
 
@@ -23,6 +30,18 @@ class ResearchRequest(BaseModel):
 class ResearchResponse(BaseModel):
     answer: str
     citations: list[dict]
+
+
+class GenerateSyntheticQaRequest(BaseModel):
+    workspace_id: str = settings.default_workspace_id
+    num_pairs: int = 3
+    document_id: Optional[str] = None
+
+
+class EvaluateSyntheticQaRequest(BaseModel):
+    workspace_id: str = settings.default_workspace_id
+    qa_pairs: List[Dict[str, Any]]
+    top_k: int = 5
 
 
 @router.post("", response_model=ResearchResponse)
@@ -38,3 +57,38 @@ def research_external(payload: ResearchRequest):
     except Exception as exc:
         raise HTTPException(status_code=503, detail=format_llm_error(exc)) from exc
     return ResearchResponse(**result)
+
+
+@router.post("/synthetic-qa/generate")
+def generate_synthetic_qa_endpoint(
+    payload: GenerateSyntheticQaRequest, session: Session = Depends(get_session)
+):
+    """
+    Auto-generate high-quality synthetic RFP/TOR Q&A pairs from existing knowledge chunks.
+    Implements Sangfor Agent Builder autonomous self-learning pattern.
+    """
+    pairs = generate_synthetic_qa_pairs(
+        session=session,
+        workspace_id=payload.workspace_id,
+        num_pairs=payload.num_pairs,
+        document_id=payload.document_id,
+    )
+    return {"status": "success", "count": len(pairs), "qa_pairs": pairs}
+
+
+@router.post("/synthetic-qa/evaluate")
+def evaluate_synthetic_qa_endpoint(
+    payload: EvaluateSyntheticQaRequest, session: Session = Depends(get_session)
+):
+    """
+    Run retrieval evaluation and grounding benchmark against synthetic Q&A pairs.
+    Measures Hit@k, MRR, latency, and context sufficiency.
+    """
+    report = evaluate_retrieval_against_synthetic_qa(
+        session=session,
+        workspace_id=payload.workspace_id,
+        qa_pairs=payload.qa_pairs,
+        top_k=payload.top_k,
+    )
+    return {"status": "success", "report": report}
+

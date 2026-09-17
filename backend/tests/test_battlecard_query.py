@@ -1,24 +1,28 @@
-import json
-import urllib.request
+import sys
+from pathlib import Path
+import unittest
+from fastapi.testclient import TestClient
 
-payload = {
-    "question": "battle card vmware vs nutanix komparasi fitur utama dan TCO"
-}
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from main import app
 
-data = json.dumps(payload).encode("utf-8")
-req = urllib.request.Request(
-    "http://127.0.0.1:8000/query",
-    data=data,
-    headers={"Content-Type": "application/json"}
-)
 
-try:
-    with urllib.request.urlopen(req, timeout=90) as resp:
-        res = json.loads(resp.read().decode("utf-8"))
-        print("[PASS] Battlecard Query Success!")
-        print(f"Sources Used: {res.get('sources_used')}")
-        for s in res.get("sources", []):
-            print(f"  - [{s.get('source')}] {s.get('title')}")
-        print("\nAnswer Excerpt:\n", res.get("answer", "")[:400])
-except Exception as e:
-    print("[FAIL] Request error:", e)
+class TestBattlecardQuery(unittest.TestCase):
+
+    def test_battlecard_query(self):
+        client = TestClient(app)
+        payload = {
+            "question": "battle card vmware vs nutanix komparasi fitur utama dan TCO"
+        }
+        resp = client.post("/query", json=payload)
+        self.assertEqual(resp.status_code, 200)
+        res = resp.json()
+        self.assertIn("answer", res)
+        self.assertGreater(len(res["answer"]), 50)
+        self.assertIn("sources", res)
+        print("[PASS] Battlecard Query Success! Sources Used:", res.get("sources_used"))
+
+
+if __name__ == "__main__":
+    unittest.main()
+

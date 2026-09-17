@@ -180,11 +180,48 @@ def execute_autonomous_reasoning(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def execute_synthetic_qa_pipeline(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Auto-generates synthetic Q&A pairs from corpus and benchmarks retrieval accuracy."""
+    log("Running synthetic Q&A generation & retrieval benchmark pipeline...")
+    from app.db import SessionLocal
+    from app.config import settings
+    from app.services.synthetic_qa import generate_synthetic_qa_pairs, evaluate_retrieval_against_synthetic_qa
+
+    session = SessionLocal()
+    try:
+        num_pairs = int(payload.get("num_pairs", 3))
+        ws_id = payload.get("workspace_id", settings.default_workspace_id)
+        doc_id = payload.get("document_id")
+
+        qa_pairs = generate_synthetic_qa_pairs(session, workspace_id=ws_id, num_pairs=num_pairs, document_id=doc_id)
+        if not qa_pairs:
+            return {
+                "status": "failed",
+                "error": "No chunks found or failed to generate synthetic QA pairs.",
+                "agent_verdict": "Synthetic QA generation yielded 0 pairs."
+            }
+
+        eval_report = evaluate_retrieval_against_synthetic_qa(session, workspace_id=ws_id, qa_pairs=qa_pairs)
+        return {
+            "status": "success",
+            "pairs_generated": len(qa_pairs),
+            "hit_rate_pct": eval_report.get("hit_rate_pct"),
+            "mrr": eval_report.get("mrr"),
+            "avg_latency_ms": eval_report.get("avg_latency_ms"),
+            "verdict": eval_report.get("verdict"),
+            "detailed_results": eval_report.get("results"),
+            "agent_verdict": f"Synthetic QA evaluation complete. Hit Rate: {eval_report.get('hit_rate_pct')}% | MRR: {eval_report.get('mrr')}."
+        }
+    finally:
+        session.close()
+
+
 HANDLERS = {
     "database_vector_audit": execute_database_vector_audit,
     "run_benchmark_eval": execute_benchmark_eval,
     "run_test_suite": execute_test_suite,
-    "autonomous_reasoning": execute_autonomous_reasoning
+    "autonomous_reasoning": execute_autonomous_reasoning,
+    "synthetic_qa_pipeline": execute_synthetic_qa_pipeline,
 }
 
 

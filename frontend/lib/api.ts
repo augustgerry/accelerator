@@ -474,6 +474,24 @@ export async function searchImages(query: string, limit: number = 8): Promise<{
   return postJson("/draft/search-images", { query, limit });
 }
 
+export async function generateHardwareVisual(
+  deviceName: string,
+  formFactor: string = "2U",
+): Promise<{
+  title: string;
+  image_url: string;
+  thumbnail_url: string;
+  source: string;
+  data_url: string;
+  width: number;
+  height: number;
+}> {
+  return postJson("/draft/generate-hardware-visual", {
+    device_name: deviceName,
+    form_factor: formFactor,
+  });
+}
+
 export async function downloadImage(imageUrl: string): Promise<{
   data_url: string;
   mime_type: string;

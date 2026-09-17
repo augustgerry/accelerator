@@ -1,4 +1,8 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings
+
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_ENV_FILE = _BACKEND_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -21,7 +25,7 @@ class Settings(BaseSettings):
     enable_external_research: bool = False
 
     class Config:
-        env_file = ".env"
+        env_file = str(_ENV_FILE) if _ENV_FILE.exists() else ".env"
 
 
 settings = Settings()

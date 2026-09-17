@@ -27,7 +27,7 @@ Context: Sangfor demoed their Agent Builder platform (RAG + agentic workflow bui
 ## 3. Evaluation / self-learning loop (Backend — Antigravity)
 
 - [x] **Before/after evaluation** — ✅ **RESOLVED (Antigravity):** Built `backend/tests/benchmark_eval.py` regression benchmark suite testing 4 core presales scenarios (CSUL Storage Sizing, Maintenance & SLA Terms, Network/HLD Topology, and BoQ / Compliance Matrix). Computes retrieval precision, TinyBERT reranking latency, and grounding sufficiency without wasting LLM tokens. Result: 100% test pass rate with warm retrieval latency ~600ms.
-- [ ] **Synthetic QA generation** — Sangfor auto-generates Q&A pairs from the corpus to tune retrieval. Overkill for Synapse's current corpus size (dozens of documents, not enterprise-scale) — **flag as later/nice-to-have, not MVP-critical.**
+- [x] **Synthetic QA generation** — ✅ **RESOLVED (Antigravity):** Implemented `backend/app/services/synthetic_qa.py` with `generate_synthetic_qa_pairs` and `evaluate_retrieval_against_synthetic_qa`. Automatically samples knowledge chunks, synthesizes realistic RFP/TOR technical Q&A pairs via LLM, and benchmarks retrieval accuracy (Hit@k, MRR, latency, and reflect-before-generate sufficiency). Exposed via API endpoints `/research/synthetic-qa/generate` & `/research/synthetic-qa/evaluate` and integrated into `.agents/worker_agent2.py`.
 
 **Priority:** Low for now — benchmark evaluation complete.
 
@@ -62,3 +62,4 @@ Context: Sangfor demoed their Agent Builder platform (RAG + agentic workflow bui
 4. [x] Document parsing enhancements: Signature/stamp page noise reduction & Scanned OCR fallback (backend)
 5. [x] Evaluation benchmark suite (backend, before/after retrieval regression test - 100% pass)
 6. [x] MCP server endpoint (`backend/mcp_server.py` stdio JSON-RPC protocol)
+7. [x] Synthetic QA dataset generation & retrieval tuning pipeline (backend)

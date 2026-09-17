@@ -7,9 +7,12 @@ Verifies:
 """
 
 import sys
+from pathlib import Path
 import unittest
-from fastapi.testclient import TestClient
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from fastapi.testclient import TestClient
 from app.services.proposal_intelligence import scan_critical_clauses, audit_requirement_coverage
 from main import app
 

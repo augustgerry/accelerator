@@ -3,6 +3,33 @@
 
 ---
 
+## 🚀 MILESTONE SELESAI: 100% GAP ANALYSIS RESOLVED, SYNTHETIC QA ENGINE, 2D HARDWARE STUDIO UI, & TEST SUITE HARDENING
+
+Seluruh sisa backlog pada `synapse-gap-analysis.md` dan penyempurnaan UI/Backend telah 100% selesai dan tervalidasi:
+
+1. **Synthetic QA Generation & Retrieval Benchmark Pipeline (`backend/app/services/synthetic_qa.py`):**
+   - Mengimplementasikan pola Sangfor Agent Builder untuk pembuatan dataset evaluasi otomatis: mengambil cuplikan pengetahuan internal, lalu LLM menyusun pasangan Pertanyaan Presales & Jawaban Target (Ground-Truth) yang realistis beserta kata kunci wajib.
+   - Fungsi evaluasi otomatis menghitung skor akurasi: Hit@k, Mean Reciprocal Rank (MRR), latensi, dan kecukupan grounding (*reflect-before-generate*).
+   - Terintegrasi pada endpoint `POST /research/synthetic-qa/generate` dan `POST /research/synthetic-qa/evaluate`, serta didaftarkan sebagai autonomous task pada `worker_agent2.py`.
+   - Menuntaskan 100% seluruh daftar item pada `synapse-gap-analysis.md`.
+
+2. **Integrasi UI 2D Technical Hardware Studio (`frontend/components/draft/visual-asset-studio.tsx` & `api.ts`):**
+   - Menambahkan tab khusus `🛠️ Studio Hardware 2D` di dalam Visual Asset Studio.
+   - User dapat menginput nama perangkat keras (misal: HPE DL380, Pure Storage //X20, Cisco Catalyst, Sangfor HCI), memilih form factor (1U / 2U / 4U), atau menggunakan preset cepat 1-klik.
+   - Generator langsung menggambar visual sasis teknis (chassis body, status LEDs, rack ears, drive bays), menyediakan tombol preview perbesar fullscreen, dan tombol `Gunakan Sebagai Aset Bagian Ini`.
+   - Function API client `generateHardwareVisual` ditambahkan di `frontend/lib/api.ts`.
+
+3. **Backend Test Suite Hardening & In-Process TestClient:**
+   - Memperbaiki `backend/app/config.py` agar selalu me-resolve file `.env` di direktori backend secara absolut, mencegah error SQLAlchemy URL saat dieksekusi dari direktori mana pun.
+   - Mengonversi `test_sizing.py`, `test_battlecard_query.py`, dan `test_proposal_intelligence.py` ke standar `unittest.TestCase` menggunakan `TestClient(app)` in-process.
+   - Hasil pengujian: seluruh unit test lolos bersih, benchmark RAG `benchmark_eval.py` **100% PASSED** dengan 4/4 skenario berstatus `STRONG` grounding.
+
+4. **Verifikasi Frontend:**
+   - `npx tsc --noEmit` lolos bersih (0 error).
+   - `npm run build` berhasil mengompilasi seluruh 9/9 halaman aplikasi tanpa kendala.
+
+---
+
 ## 🚀 MILESTONE SELESAI: DEEP RESEARCH, 2D FLAT ARCHITECTURE, & 2D HARDWARE STUDIO (COMMITTED & PUSHED)
 
 Rangkaian perbaikan terkini berdasarkan feedback langsung user telah berhasil diselesaikan, diuji, dan divalidasi:

@@ -1,25 +1,32 @@
-import json
-import urllib.request
+import sys
+from pathlib import Path
+import unittest
+from fastapi.testclient import TestClient
 
-payload = {
-    "platform": "pure_storage",
-    "usable_capacity_tb": 100,
-    "target_workload": "database",
-    "growth_buffer_pct": 20
-}
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from main import app
 
-data = json.dumps(payload).encode("utf-8")
-req = urllib.request.Request(
-    "http://127.0.0.1:8000/draft/calculate-sizing",
-    data=data,
-    headers={"Content-Type": "application/json"}
-)
 
-try:
-    with urllib.request.urlopen(req) as resp:
-        res = json.loads(resp.read().decode("utf-8"))
-        print("[PASS] Sizing Calculation Success!")
-        print("Recommended Model:", res.get("recommended_model"))
-        print("Metrics:", json.dumps(res.get("metrics"), indent=2))
-except Exception as e:
-    print("[FAIL] Request error:", e)
+class TestSizing(unittest.TestCase):
+
+    def test_calculate_sizing(self):
+        client = TestClient(app)
+        payload = {
+            "platform": "pure_storage",
+            "usable_capacity_tb": 100,
+            "target_workload": "database",
+            "growth_buffer_pct": 20,
+        }
+        resp = client.post("/draft/calculate-sizing", json=payload)
+        self.assertEqual(resp.status_code, 200)
+        res = resp.json()
+        self.assertIn("recommended_model", res)
+        self.assertIn("Pure Storage", res["recommended_model"])
+        self.assertIn("metrics", res)
+        self.assertGreater(res["metrics"]["raw_capacity_provisioned_tb"], 0)
+        print("[PASS] Sizing Calculation Test:", res["recommended_model"])
+
+
+if __name__ == "__main__":
+    unittest.main()
+

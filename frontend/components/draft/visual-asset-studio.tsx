@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import { RequirementItem } from "@/lib/types";
-import { searchImages, downloadImage, generateHld, renderMermaid } from "@/lib/api";
+import { searchImages, downloadImage, generateHld, renderMermaid, generateHardwareVisual } from "@/lib/api";
 
 interface VisualAssetStudioProps {
   item: RequirementItem;
   torText: string;
   onUpdateItem: (updated: RequirementItem) => void;
   onClose?: () => void;
-  initialTab?: "search" | "hld" | "upload";
+  initialTab?: "search" | "hardware" | "hld" | "upload";
 }
 
 export function VisualAssetStudio({
@@ -19,7 +19,7 @@ export function VisualAssetStudio({
   onClose,
   initialTab = "search",
 }: VisualAssetStudioProps) {
-  const [activeTab, setActiveTab] = useState<"search" | "hld" | "upload">(initialTab);
+  const [activeTab, setActiveTab] = useState<"search" | "hardware" | "hld" | "upload">(initialTab);
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,6 +47,15 @@ export function VisualAssetStudio({
   const [hldRenderedUrl, setHldRenderedUrl] = useState<string | null>(null);
   const [isReRenderingMermaid, setIsReRenderingMermaid] = useState(false);
 
+  // 2D Hardware Studio State
+  const [hwDeviceName, setHwDeviceName] = useState("");
+  const [hwFormFactor, setHwFormFactor] = useState<"1U" | "2U" | "4U">("2U");
+  const [isGeneratingHw, setIsGeneratingHw] = useState(false);
+  const [hwGeneratedAsset, setHwGeneratedAsset] = useState<{
+    data_url: string;
+    title: string;
+  } | null>(null);
+
   // Auto-suggest search query when item changes
   useEffect(() => {
     if (!item.image_data_url) {
@@ -59,8 +68,10 @@ export function VisualAssetStudio({
 
       if (matchedHw) {
         setSearchQuery(titleClean.length < 35 ? titleClean : `Enterprise ${matchedHw}`);
+        setHwDeviceName(titleClean.length < 35 ? titleClean : `Enterprise ${matchedHw}`);
       } else {
         setSearchQuery(titleClean.slice(0, 35));
+        setHwDeviceName(titleClean.slice(0, 35));
       }
     }
   }, [item.id, item.title, item.image_caption, item.image_data_url, item.requirement_text]);
@@ -144,6 +155,39 @@ export function VisualAssetStudio({
       ...item,
       image_data_url: hldRenderedUrl,
       image_caption: cap,
+    });
+  };
+
+  // Handle Generate 2D Hardware Visual
+  const handleGenerateHardware = async (nameOverride?: string, ffOverride?: "1U" | "2U" | "4U") => {
+    const devName = (nameOverride ?? hwDeviceName).trim();
+    if (!devName) return;
+    if (nameOverride) setHwDeviceName(nameOverride);
+    const ff = ffOverride ?? hwFormFactor;
+    if (ffOverride) setHwFormFactor(ffOverride);
+
+    setIsGeneratingHw(true);
+    try {
+      const res = await generateHardwareVisual(devName, ff);
+      setHwGeneratedAsset({
+        data_url: res.data_url,
+        title: res.title,
+      });
+    } catch (err: any) {
+      console.error("Generate hardware visual error:", err);
+      alert("Gagal generate visual chassis 2D: " + (err?.message || "Kesalahan server"));
+    } finally {
+      setIsGeneratingHw(false);
+    }
+  };
+
+  // Apply 2D Hardware to Item
+  const handleApplyHardwareToItem = () => {
+    if (!hwGeneratedAsset) return;
+    onUpdateItem({
+      ...item,
+      image_data_url: hwGeneratedAsset.data_url,
+      image_caption: `Gambar: ${hwGeneratedAsset.title}`,
     });
   };
 
@@ -283,6 +327,18 @@ export function VisualAssetStudio({
           }`}
         >
           🔍 Cari Gambar Publik (Hardware)
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("hardware")}
+          className={`pb-2 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+            activeTab === "hardware"
+              ? "border-[#111827] text-gray-900 font-semibold"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          🛠️ Studio Hardware 2D
         </button>
 
         <button
@@ -507,7 +563,136 @@ export function VisualAssetStudio({
         </div>
       )}
 
-      {/* TAB 3: Upload Local File */}
+      {/* TAB 2: 2D Technical Hardware Studio */}
+      {activeTab === "hardware" && (
+        <div className="space-y-3">
+          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className="flex-1">
+                <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                  Nama Perangkat / Model Perangkat Keras:
+                </label>
+                <input
+                  type="text"
+                  value={hwDeviceName}
+                  onChange={(e) => setHwDeviceName(e.target.value)}
+                  placeholder="Mis: HPE ProLiant DL380 Gen10, Pure Storage //X20, Cisco Catalyst 9300..."
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-900 bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                  Form Factor:
+                </label>
+                <div className="flex items-center gap-1">
+                  {(["1U", "2U", "4U"] as const).map((ff) => (
+                    <button
+                      key={ff}
+                      type="button"
+                      onClick={() => setHwFormFactor(ff)}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-md border transition-all ${
+                        hwFormFactor === ff
+                          ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {ff}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="sm:self-end">
+                <button
+                  type="button"
+                  onClick={() => handleGenerateHardware()}
+                  disabled={isGeneratingHw || !hwDeviceName.trim()}
+                  className="w-full sm:w-auto px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  {isGeneratingHw ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Menggambar...
+                    </>
+                  ) : (
+                    "🎨 Gambar Chassis 2D"
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Presets for Hardware */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-200/60">
+              <span className="text-[10px] text-slate-500 font-medium">Preset Cepat:</span>
+              {[
+                { name: "Pure Storage FlashArray //X20", ff: "2U" as const },
+                { name: "HPE ProLiant DL360 Gen10", ff: "1U" as const },
+                { name: "Dell PowerEdge R750", ff: "2U" as const },
+                { name: "Cisco Catalyst 9300 Switch", ff: "1U" as const },
+                { name: "Sangfor HCI aSV Server Node", ff: "2U" as const },
+                { name: "DirectFlash Petabyte Array", ff: "4U" as const },
+              ].map((p) => (
+                <button
+                  key={p.name}
+                  type="button"
+                  onClick={() => handleGenerateHardware(p.name, p.ff)}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-white hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
+                >
+                  {p.name} ({p.ff})
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Generated 2D Visual Preview */}
+          {hwGeneratedAsset && (
+            <div className="border border-slate-200 rounded-lg p-3 bg-white space-y-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-900 text-xs">
+                  {hwGeneratedAsset.title}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+                  2D Flat Technical Vector
+                </span>
+              </div>
+
+              <div
+                className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-900/5 p-2 flex items-center justify-center cursor-pointer hover:opacity-95 transition-opacity"
+                onClick={() => setZoomImageUrl(hwGeneratedAsset.data_url)}
+                title="Klik untuk pratinjau penuh"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={hwGeneratedAsset.data_url}
+                  alt={hwGeneratedAsset.title}
+                  className="max-h-40 w-auto rounded object-contain shadow-md"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={() => setZoomImageUrl(hwGeneratedAsset.data_url)}
+                  className="text-xs text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1"
+                >
+                  🔍 Perbesar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleApplyHardwareToItem}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5"
+                >
+                  ✅ Gunakan Sebagai Aset Bagian Ini
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 4: Upload Local File */}
       {activeTab === "upload" && (
         <div className="p-4 border-2 border-dashed border-gray-200 rounded-lg text-center space-y-2">
           <div className="text-2xl">📤</div>
