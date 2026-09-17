@@ -597,13 +597,14 @@ export function VisualAssetStudio({
                     handleGenerateHld();
                   }
                 }}
-                placeholder="Ketik alur perangkat yang diinginkan di sini, misal: Dari Core Switch 100G ke Spine-Leaf ToR MLAG, konek ke 3x Server HCI Sangfor via 25G SFP28, dengan Firewall FortiGate HA di depan perimeter..."
-                rows={3}
-                className="w-full text-xs rounded-md border border-gray-300 bg-white p-2.5 text-gray-900 placeholder:text-gray-400 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
+                placeholder="Ketik alur perangkat yang diinginkan di sini, misal: Dari Core Switch 100G ke Spine-Leaf ToR MLAG, konek ke Dual Controller Pure Storage FlashArray RC20 via 32G FC / 25G iSCSI, dan 3x Server Compute Dell R750 dengan Firewall FortiGate 100F HA di perimeter..."
+                rows={4}
+                className="w-full text-xs rounded-lg border border-amber-300 bg-white p-3 text-gray-900 placeholder:text-gray-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 outline-none min-h-[96px] leading-relaxed shadow-xs"
               />
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1">
                 <div className="flex flex-wrap gap-1.5">
                   {[
+                    "Pure Storage RC20 / //X SAN Fabric + 4x Compute",
                     "3-Node HCI + ToR MLAG + Firewall HA",
                     "Core Switch 100G ke Dual SAN Storage + 4x Compute",
                     "Perimeter FortiGate HA + DMZ Switch + Internal Cluster",
@@ -613,7 +614,7 @@ export function VisualAssetStudio({
                       key={preset}
                       type="button"
                       onClick={() => setCustomHldInstruction(preset)}
-                      className="text-[10px] px-2 py-0.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 transition-colors"
+                      className="text-[10px] px-2.5 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-200 transition-colors font-medium shadow-2xs"
                     >
                       + {preset}
                     </button>

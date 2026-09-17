@@ -308,6 +308,72 @@ def render_rear_chassis_visual(
         draw.text((idrac_x + 85, 45), "Dedicated Out-of-Band MGMT", fill=(0, 0, 0), font=font_callout_title)
         draw.text((idrac_x + 85, 70), "iDRAC9 Enterprise / iLO 5", fill=(100, 100, 100), font=font_callout_speed)
 
+    elif is_storage:
+        # ════════ PURE STORAGE FLASHARRAY //X & //C & RC20 DUAL CONTROLLER REAR ════════
+        c_mid_y = (c_top + c_bottom) // 2
+        # Outer chassis body
+        draw.rectangle([c_left, c_top, c_right, c_bottom], fill=(24, 26, 32), outline=(120, 125, 130), width=2)
+        
+        # Dual redundant hot-plug PSUs at far left (PSU0) and far right (PSU1)
+        psu0_box = [c_left + 8, c_top + 8, c_left + 115, c_bottom - 8]
+        psu1_box = [c_right - 115, c_top + 8, c_right - 8, c_bottom - 8]
+        for psu in [psu0_box, psu1_box]:
+            draw.rectangle(psu, fill=(40, 44, 52), outline=(80, 85, 95), width=1)
+            # Pure Storage Orange latch handle
+            draw.rounded_rectangle([psu[0] + 6, psu[1] + 12, psu[0] + 24, psu[3] - 12], radius=4, fill=(255, 102, 0), outline=(200, 75, 0), width=1)
+            # AC inlet & status LED
+            draw.rectangle([psu[0] + 35, psu[1] + 25, psu[2] - 10, psu[3] - 25], fill=(15, 17, 20), outline=(60, 65, 75), width=1)
+            draw.ellipse([psu[2] - 20, psu[1] + 10, psu[2] - 12, psu[1] + 18], fill=(34, 197, 94))
+            draw.text((psu[0] + 35, psu[1] + 8), "1600W", fill=(200, 205, 215), font=font_port)
+
+        # Dual Controller Bays (CT0 on Top, CT1 on Bottom)
+        ct_left = c_left + 125
+        ct_right = c_right - 125
+        ct0_box = [ct_left, c_top + 8, ct_right, c_mid_y - 4]
+        ct1_box = [ct_left, c_mid_y + 4, ct_right, c_bottom - 8]
+
+        for idx, ct in enumerate([ct0_box, ct1_box]):
+            draw.rectangle(ct, fill=(32, 35, 42), outline=(100, 105, 115), width=1)
+            ct_label = f"CT{idx}: Pure Storage Controller (Active)" if idx == 0 else f"CT{idx}: Pure Storage Controller (Sync HA)"
+            draw.text((ct[0] + 12, ct[1] + 6), ct_label, fill=(255, 140, 0), font=font_port)
+
+            # 4x High Speed Fibre Channel / NVMe-oF 25G SFP28 ports
+            fc_start_x = ct[0] + 230
+            for p in range(4):
+                px = fc_start_x + p * 32
+                draw.rectangle([px, ct[1] + 22, px + 26, ct[3] - 10], fill=(20, 22, 26), outline=(80, 85, 95), width=1)
+                draw.rectangle([px + 3, ct[1] + 25, px + 23, ct[3] - 13], fill=(132, 204, 22), outline=(101, 163, 13))
+                draw.text((px + 5, ct[1] + 28), f"FC{p}", fill=(20, 40, 10), font=font_port)
+
+            # 2x 10GbE Replication / ActiveCluster Ports
+            rep_start_x = ct[0] + 380
+            for r in range(2):
+                rx = rep_start_x + r * 32
+                draw.rectangle([rx, ct[1] + 22, rx + 26, ct[3] - 10], fill=(20, 22, 26), outline=(80, 85, 95), width=1)
+                draw.rectangle([rx + 3, ct[1] + 25, rx + 23, ct[3] - 13], fill=(2, 132, 199), outline=(14, 165, 233))
+                draw.text((rx + 5, ct[1] + 28), f"R{r}", fill=(255, 255, 255), font=font_port)
+
+            # Management & Service Ports (RJ45)
+            mgmt_x = ct[0] + 465
+            draw.rectangle([mgmt_x, ct[1] + 22, mgmt_x + 28, ct[3] - 10], fill=(20, 22, 26), outline=(80, 85, 95), width=1)
+            draw.rectangle([mgmt_x + 3, ct[1] + 25, mgmt_x + 25, ct[3] - 13], fill=(245, 158, 11), outline=(217, 119, 6))
+            draw.text((mgmt_x + 5, ct[1] + 28), "MGT", fill=(30, 20, 5), font=font_port)
+
+        # Callouts for Pure Storage
+        draw.line([(c_left + 60, c_top + 10), (c_left + 60, 55), (c_left + 10, 55)], fill=(255, 102, 0), width=3)
+        draw.text((c_left + 15, 38), "Dual 1600W Hot-Plug PSUs", fill=(0, 0, 0), font=font_callout_title)
+        draw.text((c_left + 15, 62), "Platinum Redundant Power", fill=(100, 100, 100), font=font_callout_speed)
+
+        fc_pt = ct_left + 295
+        draw.line([(fc_pt, c_top + 10), (fc_pt, 45), (fc_pt - 80, 45)], fill=(132, 204, 22), width=3)
+        draw.text((fc_pt - 260, 30), "4x 32Gb FC / 25GbE NVMe-oF", fill=(0, 0, 0), font=font_callout_title)
+        draw.text((fc_pt - 260, 55), "Host SAN Multi-Path Fabric per CT", fill=(100, 100, 100), font=font_callout_speed)
+
+        rep_pt = ct_left + 412
+        draw.line([(rep_pt, c_top + 10), (rep_pt, 75), (rep_pt + 80, 75)], fill=(2, 132, 199), width=3)
+        draw.text((rep_pt + 85, 60), "ActiveCluster & Async Sync", fill=(0, 0, 0), font=font_callout_title)
+        draw.text((rep_pt + 85, 85), "Zero RPO / Sub-ms RTO Replication", fill=(100, 100, 100), font=font_callout_speed)
+
     else:
         # ════════ 2U MULTI-NODE PLATFORM REAR (Rubrik / Nutanix Style) ════════
         c_mid_y = (c_top + c_bottom) // 2

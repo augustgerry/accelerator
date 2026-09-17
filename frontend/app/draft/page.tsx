@@ -43,6 +43,7 @@ import {
   Ruler,
   Target,
   Eye,
+  Boxes,
 } from "lucide-react";
 import {
   uploadTor,
@@ -1137,6 +1138,98 @@ export default function DraftPage() {
     }
   };
 
+  const PRODUCT_BREAKDOWN_TEMPLATES: Array<Pick<RequirementItem, "title" | "category" | "requirement_text" | "rationale">> = [
+    {
+      title: "3.4 Spesifikasi Teknis Storage & Perangkat Utama (Pure Storage / HCI)",
+      category: "Teknis",
+      requirement_text: "Detail spesifikasi teknis platform perangkat utama (misal Pure Storage FlashArray //X / //C / RC20, Sangfor HCI, Dell PowerEdge, atau HPE): controller active/active, port NVMe-oF / 32G FC, kapasitas raw & usable, DirectFlash modules, dan redundancy power supply.",
+      rationale: "Membuktikan kesesuaian mendalam spesifikasi perangkat terhadap klausul tender.",
+    },
+    {
+      title: "3.5 Fitur Reduksi Data & Efisiensi Kapasitas (DRR 3:1 - 5:1)",
+      category: "Teknis",
+      requirement_text: "Arsitektur deduplikasi dan kompresi data inline hardware-accelerated, proyeksi rasio reduksi data (DRR 3:1 s.d 5:1), garansi kapasitas efektif, dan perbandingan efisiensi TCO terhadap pool eksisting klien.",
+      rationale: "Justifikasi keunggulan efisiensi kapasitas dan penghematan biaya storage klien.",
+    },
+    {
+      title: "3.6 Arsitektur High Availability & Redundansi Konektivitas (SAN Fabric)",
+      category: "Teknis",
+      requirement_text: "Skema redundansi dual-controller active/active, multi-pathing I/O (SAN FC / NVMe-oF / iSCSI 25G), dual fabric switch ToR, dual PSU, dan eliminasi single-point-of-failure.",
+      rationale: "Menjamin ketersediaan 99.9999% untuk workload misi kritis perbankan/finansial tanpa downtime.",
+    },
+    {
+      title: "3.7 Proteksi Data, Snapshot Immutability & Disaster Recovery",
+      category: "Teknis",
+      requirement_text: "Perlindungan data terhadap serangan siber/ransomware dengan immutable snapshot (SafeMode), integrasi replikasi sinkron/asinkron, serta pemenuhan target RPO = 0 dan sub-menit RTO.",
+      rationale: "Kepatuhan terhadap regulasi ketahanan siber dan disaster recovery perbankan/finansial.",
+    },
+    {
+      title: "3.8 Matriks Kompatibilitas Sistem Operasi & Hypervisor (VMware/KVM)",
+      category: "Teknis",
+      requirement_text: "Matriks dukungan resmi terhadap VMware vSphere, KVM, Nutanix, sistem operasi server (RHEL, Windows Server), integrasi VAAI storage offload, dan vCenter Plugin.",
+      rationale: "Jaminan integrasi mulus dengan lingkungan server eksisting klien tanpa kendala driver.",
+    },
+  ];
+
+  const handleAddProductBreakdownSections = () => {
+    const existingTitles = new Set(items.map((it) => it.title.toLowerCase()));
+    const toAdd = PRODUCT_BREAKDOWN_TEMPLATES.filter((tpl) => !existingTitles.has(tpl.title.toLowerCase()));
+    if (toAdd.length === 0) {
+      alert("Seluruh sub-bab breakdown produk solusi sudah ada di dalam proposal.");
+      return;
+    }
+
+    const newItems: RequirementItem[] = toAdd.map((tpl, i) => ({
+      id: `sec-prod-${Date.now()}-${i}`,
+      title: tpl.title,
+      category: tpl.category,
+      requirement_text: tpl.requirement_text,
+      rationale: tpl.rationale,
+      draft_text: "",
+      status: "todo",
+    }));
+
+    const hldIdx = items.findIndex((it) => it.title.includes("3.3") || it.title.toLowerCase().includes("hld"));
+    let updated: RequirementItem[];
+    if (hldIdx >= 0) {
+      updated = [...items.slice(0, hldIdx + 1), ...newItems, ...items.slice(hldIdx + 1)];
+    } else {
+      updated = [...items, ...newItems];
+    }
+
+    setItems(updated);
+    setSelectedItemId(newItems[0].id);
+  };
+
+  const handleAddProductBreakdownToCuration = () => {
+    const existingTitles = new Set(curationItems.map((it) => it.title.toLowerCase()));
+    const toAdd = PRODUCT_BREAKDOWN_TEMPLATES.filter((tpl) => !existingTitles.has(tpl.title.toLowerCase()));
+    if (toAdd.length === 0) {
+      alert("Seluruh sub-bab breakdown produk solusi sudah ada di daftar kurasi.");
+      return;
+    }
+
+    const newItems: RequirementItem[] = toAdd.map((tpl, i) => ({
+      id: `sec-cur-prod-${Date.now()}-${i}`,
+      title: tpl.title,
+      category: tpl.category,
+      requirement_text: tpl.requirement_text,
+      rationale: tpl.rationale,
+      draft_text: "",
+      status: "todo",
+    }));
+
+    const hldIdx = curationItems.findIndex((it) => it.title.includes("3.3") || it.title.toLowerCase().includes("hld"));
+    let updated: RequirementItem[];
+    if (hldIdx >= 0) {
+      updated = [...curationItems.slice(0, hldIdx + 1), ...newItems, ...curationItems.slice(hldIdx + 1)];
+    } else {
+      updated = [...curationItems, ...newItems];
+    }
+
+    setCurationItems(updated);
+  };
+
   const handleOpenAddSection = () => {
     setSectionFormTitle("");
     setSectionFormCategory("Teknis");
@@ -1943,14 +2036,25 @@ export default function DraftPage() {
                     Atur urutan (▲/▼), edit cakupan, atau hapus bagian sebelum draf jawaban di-generate.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleOpenAddCurationSection}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent-ink hover:bg-accent transition-colors shadow-subtle"
-                >
-                  <Plus size={13} />
-                  <span>Tambah Sub-Bab Manual</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddProductBreakdownToCuration}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors shadow-subtle"
+                    title="Sisipkan sub-bab spesifikasi teknis produk (Pure Storage / HCI, DRR, HA SAN Fabric, dll.)"
+                  >
+                    <Boxes size={13} className="text-amber-600 dark:text-amber-400" />
+                    <span>+ Breakdown Produk Solusi</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenAddCurationSection}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-1.5 text-xs font-semibold text-accent-ink hover:bg-accent transition-colors shadow-subtle"
+                  >
+                    <Plus size={13} />
+                    <span>Tambah Sub-Bab Manual</span>
+                  </button>
+                </div>
               </div>
 
               {isRecommendingStructure ? (
@@ -2556,7 +2660,16 @@ export default function DraftPage() {
               </div>
 
               {/* Bottom Add Section affordance */}
-              <div className="p-2.5 border-t border-surface-border bg-surface/50">
+              <div className="p-2.5 border-t border-surface-border bg-surface/50 space-y-1.5">
+                <button
+                  type="button"
+                  onClick={handleAddProductBreakdownSections}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-md border border-amber-300 dark:border-amber-700/60 bg-amber-50/70 dark:bg-amber-950/20 py-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all shadow-2xs"
+                  title="Sisipkan sub-bab spesifikasi teknis produk (Pure Storage RC20, DRR, SAN HA Fabric)"
+                >
+                  <Boxes size={13} className="text-amber-600 dark:text-amber-400" />
+                  <span>+ Breakdown Produk (Pure Storage / HCI)</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleOpenAddSection}
@@ -2569,249 +2682,322 @@ export default function DraftPage() {
             </div>
 
             {/* RIGHT COLUMN: ACTIVE REQUIREMENT STUDIO & DRAFT WORKSPACE */}
-            <div className="flex flex-1 flex-col overflow-y-auto bg-surface p-6 lg:p-8">
+            <div className="flex flex-1 flex-col overflow-hidden bg-surface">
               {selectedItem ? (
-                <div
-                  key={selectedItem.id}
-                  className="flex flex-col gap-6 max-w-4xl mx-auto w-full animate-in fade-in slide-in-from-bottom-1 duration-150"
-                >
-                  {/* Item Header & Status Bar */}
-                  <div className="flex flex-col gap-4 rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      {/* All meta chips share one fixed height/radius/text-size so nothing zig-zags */}
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className={`${CHIP_BASE} border border-transparent bg-accent-soft font-bold text-accent-ink`}>
-                          {selectedItem.id.toUpperCase()}
+                <>
+                  {/* Pinned Top Action Bar — stays permanently pinned across the top of the editor column without floating */}
+                  <div className="shrink-0 z-20 w-full border-b border-surface-border bg-surface-raised/95 backdrop-blur-md px-6 py-2.5 shadow-xs flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Sparkles size={16} className="text-accent-ink shrink-0" />
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-bold text-text-primary truncate max-w-xs md:max-w-md">
+                          {selectedItem.title}
                         </span>
-                        <span className={`${CHIP_BASE} border border-surface-border bg-surface text-text-secondary`}>
+                        <span className="hidden sm:inline-block rounded bg-surface border border-surface-border px-2 py-0.5 text-[10px] font-semibold uppercase text-text-secondary shrink-0">
                           {selectedItem.category}
                         </span>
-                        {(() => {
-                          const badge = getGroundingBadge(selectedItem);
-                          return badge ? (
-                            <span
-                              key={selectedItem.sources?.length ?? 0}
-                              className={`${CHIP_BASE} animate-in fade-in duration-300 border ${badge.className}`}
-                              title={`${selectedItem.sources?.length ?? 0} sumber referensi dipakai saat generate`}
-                            >
-                              <span className={`h-1.5 w-1.5 rounded-full ${badge.dotClassName}`} />
-                              {badge.label}
-                            </span>
-                          ) : null;
-                        })()}
-                        <button
-                          type="button"
-                          onClick={handleOpenEditSection}
-                          title="Edit Judul & Cakupan Bagian"
-                          className={`${CHIP_BASE} border border-surface-border bg-surface text-text-secondary transition-colors hover:border-accent hover:text-text-primary active:scale-[0.98]`}
-                        >
-                          <Pencil size={11} /> Edit Info
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSection(selectedItem.id)}
-                          title="Hapus Bagian ini"
-                          className={`${CHIP_BASE} border border-red-200 bg-surface text-red-600 transition-colors hover:bg-red-50 active:scale-[0.98]`}
-                        >
-                          <Trash2 size={11} /> Hapus
-                        </button>
                       </div>
-                      <h3 className="mt-2.5 text-base font-bold text-text-primary">
-                        {selectedItem.title}
-                      </h3>
                     </div>
 
-                    {/* Status Selector Segmented Controls */}
-                    <div className="flex h-8 shrink-0 items-center rounded-lg border border-surface-border bg-surface p-1">
-                      <button
-                        onClick={() => handleStatusChange("todo")}
-                        className={`flex h-full items-center rounded-md px-3 text-xs font-medium transition-all active:scale-[0.98] ${
-                          selectedItem.status === "todo"
-                            ? "bg-surface-raised text-text-primary shadow-subtle"
-                            : "text-text-muted hover:text-text-primary"
-                        }`}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          handleOpenStudio(
+                            selectedItem.title.toLowerCase().includes("hld") ||
+                            selectedItem.title.toLowerCase().includes("arsitektur") ||
+                            selectedItem.title.toLowerCase().includes("topologi")
+                              ? "hld"
+                              : "search"
+                          )
+                        }
+                        title="Buka Visual Asset Studio (Diagram HLD, Stencil Hardware, Gambar)"
+                        className="h-7 px-2.5 text-xs font-medium border-surface-border hover:border-accent"
                       >
-                        Belum
-                      </button>
-                      <button
-                        onClick={() => handleStatusChange("draft")}
-                        className={`flex h-full items-center rounded-md px-3 text-xs font-medium transition-all active:scale-[0.98] ${
-                          selectedItem.status === "draft"
-                            ? "bg-accent-soft text-accent-ink font-semibold shadow-subtle"
-                            : "text-text-muted hover:text-text-primary"
-                        }`}
-                      >
-                        Draf
-                      </button>
-                      <button
-                        onClick={() => handleStatusChange("final")}
-                        className={`flex h-full items-center rounded-md px-3 text-xs font-medium transition-all active:scale-[0.98] ${
-                          selectedItem.status === "final"
-                            ? "bg-emerald-600 text-white font-semibold shadow-subtle"
-                            : "text-text-muted hover:text-text-primary"
-                        }`}
-                      >
-                        Final
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Requirement Blockquote — collapsed to 3 lines by default, keeps the editor from being crowded out */}
-                  <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                        Tujuan Bagian Ini
-                      </span>
-                    </div>
-                    <blockquote
-                      className={`rounded-lg border-l-4 border-accent bg-surface p-4 text-xs font-normal leading-relaxed text-text-primary transition-all duration-200 ${
-                        requirementExpanded ? "" : "line-clamp-3"
-                      }`}
-                    >
-                      {selectedItem.requirement_text}
-                    </blockquote>
-                    {selectedItem.requirement_text.length > 180 && (
-                      <button
-                        type="button"
-                        onClick={() => setRequirementExpanded((v) => !v)}
-                        className="mt-1.5 text-[11px] font-medium text-accent-ink hover:underline"
-                      >
-                        {requirementExpanded ? "Sembunyikan" : "Lihat selengkapnya"}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* AI Draft Response Editor */}
-                  <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle space-y-4">
-                    {/* Sticky action bar — Generate/Regenerate/Salin stay reachable without scrolling back up */}
-                    <div className="sticky top-0 z-10 -mx-5 -mt-5 flex items-center justify-between bg-surface-raised/95 px-5 py-3 backdrop-blur-sm border-b border-surface-border rounded-t-xl">
-                      <div className="flex items-center gap-2">
-                        <Sparkles size={16} className="text-accent-ink" />
-                        <span className="text-sm font-semibold text-text-primary">
-                          Draf Jawaban Proposal (Siap Copas)
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
+                        <ImageIcon size={13} className="mr-1.5 text-accent-ink" />
+                        <span>Studio Visual</span>
+                      </Button>
+                      {localDraftText && (
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => handleOpenStudio("search")}
-                          title="Asset Studio"
-                          className="h-7 w-7 justify-center px-0 text-xs"
+                          onClick={() => setShowMarkdownPreview((v) => !v)}
+                          title={showMarkdownPreview ? "Edit teks mentah (markdown)" : "Selesai edit, kembali ke tampilan rapi"}
+                          className="h-7 px-2.5 text-xs"
                         >
-                          <ImageIcon size={13} />
-                        </Button>
-                        {localDraftText && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setShowMarkdownPreview((v) => !v)}
-                            title={showMarkdownPreview ? "Edit teks mentah (markdown)" : "Selesai edit, kembali ke tampilan rapi"}
-                            className="h-7 px-2.5 text-xs"
-                          >
-                            {showMarkdownPreview ? (
-                              <><Pencil size={12} className="mr-1" /> Edit Teks Mentah</>
-                            ) : (
-                              <><Eye size={12} className="mr-1" /> Selesai Edit</>
-                            )}
-                          </Button>
-                        )}
-                        {localDraftText && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={handleCopyCurrentDraft}
-                            className="text-xs h-7 px-2.5"
-                          >
-                            {copiedItem ? (
-                              <>
-                                <Check size={12} className="mr-1 text-emerald-500" />
-                                Tersalin
-                              </>
-                            ) : (
-                              <>
-                                <Copy size={12} className="mr-1" />
-                                Salin
-                              </>
-                            )}
-                          </Button>
-                        )}
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          disabled={selectedItem.isGenerating}
-                          onClick={() =>
-                            handleGenerateItemDraft(selectedItem.id, customPrompt)
-                          }
-                          className="bg-ink-900 hover:bg-ink-800 text-white text-xs h-7 px-3"
-                        >
-                          {selectedItem.isGenerating ? (
-                            <>
-                              <Loader2 size={12} className="mr-1.5 animate-spin" />
-                              Menyusun...
-                            </>
-                          ) : selectedItem.draft_text ? (
-                            <>
-                              <Sparkles size={12} className="mr-1.5" />
-                              Regenerate Draf
-                            </>
+                          {showMarkdownPreview ? (
+                            <><Pencil size={12} className="mr-1" /> Edit Mentah</>
                           ) : (
-                            <>
-                              <Sparkles size={12} className="mr-1.5" />
-                              Buat Draf AI
-                            </>
+                            <><Eye size={12} className="mr-1" /> Pratinjau</>
                           )}
                         </Button>
-                      </div>
-                    </div>
-
-                      {/* Textarea Editor / Markdown Preview */}
-                    <div className="relative">
-                      {showMarkdownPreview && localDraftText.trim() ? (
-                        <div className="min-h-[13rem] w-full rounded-lg border border-surface-border bg-surface p-4 text-xs leading-relaxed text-text-primary animate-in fade-in duration-150">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
-                            {cleanLatexMath(localDraftText)}
-                          </ReactMarkdown>
-                        </div>
-                      ) : (
-                        <textarea
-                          value={localDraftText}
-                          onChange={(e) => {
-                            const text = e.target.value;
-                            setLocalDraftText(text);
-                            draftDebounceRef.current.itemId = selectedItem.id;
-                            draftDebounceRef.current.text = text;
-                            if (draftDebounceRef.current.timer) clearTimeout(draftDebounceRef.current.timer);
-                            draftDebounceRef.current.timer = setTimeout(() => {
-                              handleTextChange(selectedItem.id, text);
-                              draftDebounceRef.current.timer = null;
-                              draftDebounceRef.current.itemId = null;
-                            }, 200);
-                          }}
-                          onBlur={() => {
-                            if (draftDebounceRef.current.timer) {
-                              clearTimeout(draftDebounceRef.current.timer);
-                              draftDebounceRef.current.timer = null;
-                              draftDebounceRef.current.itemId = null;
-                              handleTextChange(selectedItem.id, localDraftText);
-                            }
-                          }}
-                          placeholder="Klik 'Buat Draf AI' atau ketik langsung konten bagian proposal di sini..."
-                          rows={10}
-                          className={`w-full rounded-lg border p-4 text-xs leading-relaxed text-text-primary outline-none focus:border-accent font-sans transition-colors duration-700 resize-y ${
-                            justGeneratedId === selectedItem.id
-                              ? "border-accent bg-accent-soft/30"
-                              : "border-surface-border bg-surface"
-                          }`}
-                        />
                       )}
                       {localDraftText && (
-                        <div className="mt-1 flex justify-end text-[11px] text-text-muted">
-                          {localDraftText.split(/\s+/).filter(Boolean).length} kata ·{" "}
-                          {localDraftText.length} karakter
-                        </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleCopyCurrentDraft}
+                          className="text-xs h-7 px-2.5"
+                        >
+                          {copiedItem ? (
+                            <><Check size={12} className="mr-1 text-emerald-500" /> Tersalin</>
+                          ) : (
+                            <><Copy size={12} className="mr-1" /> Salin</>
+                          )}
+                        </Button>
                       )}
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={selectedItem.isGenerating}
+                        onClick={() => handleGenerateItemDraft(selectedItem.id, customPrompt)}
+                        className="bg-ink-900 hover:bg-ink-800 text-white text-xs h-7 px-3"
+                      >
+                        {selectedItem.isGenerating ? (
+                          <>
+                            <Loader2 size={12} className="mr-1.5 animate-spin" />
+                            Menyusun...
+                          </>
+                        ) : selectedItem.draft_text ? (
+                          <>
+                            <Sparkles size={12} className="mr-1.5" />
+                            Regenerate
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={12} className="mr-1.5" />
+                            Buat Draf AI
+                          </>
+                        )}
+                      </Button>
                     </div>
+                  </div>
+
+                  {/* Scrollable Workspace Content */}
+                  <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+                    <div
+                      key={selectedItem.id}
+                      className="flex flex-col gap-6 max-w-4xl mx-auto w-full animate-in fade-in slide-in-from-bottom-1 duration-150"
+                    >
+                      {/* Item Header & Status Bar */}
+                      <div className="flex flex-col gap-4 rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          {/* All meta chips share one fixed height/radius/text-size so nothing zig-zags */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={`${CHIP_BASE} border border-transparent bg-accent-soft font-bold text-accent-ink`}>
+                              {selectedItem.id.toUpperCase()}
+                            </span>
+                            <span className={`${CHIP_BASE} border border-surface-border bg-surface text-text-secondary`}>
+                              {selectedItem.category}
+                            </span>
+                            {(() => {
+                              const badge = getGroundingBadge(selectedItem);
+                              return badge ? (
+                                <span
+                                  key={selectedItem.sources?.length ?? 0}
+                                  className={`${CHIP_BASE} animate-in fade-in duration-300 border ${badge.className}`}
+                                  title={`${selectedItem.sources?.length ?? 0} sumber referensi dipakai saat generate`}
+                                >
+                                  <span className={`h-1.5 w-1.5 rounded-full ${badge.dotClassName}`} />
+                                  {badge.label}
+                                </span>
+                              ) : null;
+                            })()}
+                            <button
+                              type="button"
+                              onClick={handleOpenEditSection}
+                              title="Edit Judul & Cakupan Bagian"
+                              className={`${CHIP_BASE} border border-surface-border bg-surface text-text-secondary transition-colors hover:border-accent hover:text-text-primary active:scale-[0.98]`}
+                            >
+                              <Pencil size={11} /> Edit Info
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSection(selectedItem.id)}
+                              title="Hapus Bagian ini"
+                              className={`${CHIP_BASE} border border-red-200 bg-surface text-red-600 transition-colors hover:bg-red-50 active:scale-[0.98]`}
+                            >
+                              <Trash2 size={11} /> Hapus
+                            </button>
+                          </div>
+                          <h3 className="mt-2.5 text-base font-bold text-text-primary">
+                            {selectedItem.title}
+                          </h3>
+                        </div>
+
+                        {/* Status Selector Segmented Controls */}
+                        <div className="flex h-8 shrink-0 items-center rounded-lg border border-surface-border bg-surface p-1">
+                          <button
+                            onClick={() => handleStatusChange("todo")}
+                            className={`flex h-full items-center rounded-md px-3 text-xs font-medium transition-all active:scale-[0.98] ${
+                              selectedItem.status === "todo"
+                                ? "bg-surface-raised text-text-primary shadow-subtle"
+                                : "text-text-muted hover:text-text-primary"
+                            }`}
+                          >
+                            Belum
+                          </button>
+                          <button
+                            onClick={() => handleStatusChange("draft")}
+                            className={`flex h-full items-center rounded-md px-3 text-xs font-medium transition-all active:scale-[0.98] ${
+                              selectedItem.status === "draft"
+                                ? "bg-accent-soft text-accent-ink font-semibold shadow-subtle"
+                                : "text-text-muted hover:text-text-primary"
+                            }`}
+                          >
+                            Draf
+                          </button>
+                          <button
+                            onClick={() => handleStatusChange("final")}
+                            className={`flex h-full items-center rounded-md px-3 text-xs font-medium transition-all active:scale-[0.98] ${
+                              selectedItem.status === "final"
+                                ? "bg-emerald-600 text-white font-semibold shadow-subtle"
+                                : "text-text-muted hover:text-text-primary"
+                            }`}
+                          >
+                            Final
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Requirement Blockquote — collapsed to 2 lines if long, with toggle */}
+                      <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                            Tujuan Bagian Ini
+                          </span>
+                        </div>
+                        <blockquote
+                          className={`rounded-lg border-l-4 border-accent bg-surface p-4 text-xs font-normal leading-relaxed text-text-primary transition-all duration-200 ${
+                            requirementExpanded ? "" : "line-clamp-2"
+                          }`}
+                        >
+                          {selectedItem.requirement_text}
+                        </blockquote>
+                        {selectedItem.requirement_text.length > 150 && (
+                          <button
+                            type="button"
+                            onClick={() => setRequirementExpanded((v) => !v)}
+                            className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-accent-ink hover:underline"
+                          >
+                            {requirementExpanded ? "▲ Sembunyikan Ringkasan" : "▼ Lihat Selengkapnya"}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* AI Draft Response Editor */}
+                      <div className="rounded-xl border border-surface-border bg-surface-raised p-5 shadow-subtle space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Sparkles size={15} className="text-accent-ink" />
+                            <span className="text-xs font-bold uppercase tracking-wider text-text-muted">
+                              Draf Jawaban Proposal (Siap Copas)
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-text-muted">
+                            {localDraftText && (
+                              <span>
+                                {localDraftText.split(/\s+/).filter(Boolean).length} kata · {localDraftText.length} karakter
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Textarea Editor / Markdown Preview / Empty Draft State */}
+                        {!localDraftText.trim() && !selectedItem.isGenerating ? (
+                          <div className="flex flex-col items-center justify-center p-8 rounded-xl border border-dashed border-surface-border bg-surface text-center space-y-3">
+                            <div className="w-10 h-10 rounded-full bg-accent-soft flex items-center justify-center text-accent-ink">
+                              <Sparkles size={20} />
+                            </div>
+                            <div className="space-y-1">
+                              <h4 className="text-sm font-bold text-text-primary">
+                                Draf untuk &ldquo;{selectedItem.title}&rdquo; belum disusun
+                              </h4>
+                              <p className="text-xs text-text-muted max-w-md">
+                                AI akan mengintegrasikan klausul KAK/TOR, referensi terindeks, dan spesifikasi produk ke dalam jawaban teknis komprehensif.
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleGenerateItemDraft(selectedItem.id, customPrompt)}
+                                className="bg-ink-900 hover:bg-ink-800 text-white text-xs font-semibold px-4 py-2"
+                              >
+                                <Sparkles size={13} className="mr-1.5" />
+                                Buat Draf AI Sekarang
+                              </Button>
+                              {(selectedItem.title.toLowerCase().includes("hld") ||
+                                selectedItem.title.toLowerCase().includes("arsitektur") ||
+                                selectedItem.title.toLowerCase().includes("topologi")) && (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => handleOpenStudio("hld")}
+                                  className="text-xs font-semibold px-3 py-2 border-surface-border hover:border-accent"
+                                >
+                                  <ImageIcon size={13} className="mr-1.5 text-accent-ink" />
+                                  Buka Studio Desain HLD & Topologi
+                                </Button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setLocalDraftText(" ")}
+                                className="text-xs text-text-muted hover:text-text-primary hover:underline px-2 py-1"
+                              >
+                                Ketik Manual
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            {showMarkdownPreview && localDraftText.trim() ? (
+                              <div className="min-h-[13rem] w-full rounded-lg border border-surface-border bg-surface p-4 text-xs leading-relaxed text-text-primary animate-in fade-in duration-150">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
+                                  {cleanLatexMath(localDraftText)}
+                                </ReactMarkdown>
+                              </div>
+                            ) : (
+                              <textarea
+                                value={localDraftText}
+                                onChange={(e) => {
+                                  const text = e.target.value;
+                                  setLocalDraftText(text);
+                                  draftDebounceRef.current.itemId = selectedItem.id;
+                                  draftDebounceRef.current.text = text;
+                                  if (draftDebounceRef.current.timer) clearTimeout(draftDebounceRef.current.timer);
+                                  draftDebounceRef.current.timer = setTimeout(() => {
+                                    handleTextChange(selectedItem.id, text);
+                                    draftDebounceRef.current.timer = null;
+                                    draftDebounceRef.current.itemId = null;
+                                  }, 200);
+                                }}
+                                onBlur={() => {
+                                  if (draftDebounceRef.current.timer) {
+                                    clearTimeout(draftDebounceRef.current.timer);
+                                    draftDebounceRef.current.timer = null;
+                                    draftDebounceRef.current.itemId = null;
+                                    handleTextChange(selectedItem.id, localDraftText);
+                                  }
+                                }}
+                                placeholder="Klik 'Buat Draf AI' atau ketik langsung konten bagian proposal di sini..."
+                                rows={10}
+                                className={`w-full rounded-lg border p-4 text-xs leading-relaxed text-text-primary outline-none focus:border-accent font-sans transition-colors duration-700 resize-y ${
+                                  justGeneratedId === selectedItem.id
+                                    ? "border-accent bg-accent-soft/30"
+                                    : "border-surface-border bg-surface"
+                                }`}
+                              />
+                            )}
+                            {localDraftText && (
+                              <div className="mt-1 flex justify-end text-[11px] text-text-muted">
+                                {localDraftText.split(/\s+/).filter(Boolean).length} kata ·{" "}
+                                {localDraftText.length} karakter
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                     {/* Quick Custom Instruction Input */}
                     <div className="flex items-center gap-2 rounded-md border border-surface-border bg-surface px-3 py-2">
@@ -3126,12 +3312,14 @@ export default function DraftPage() {
                     )}
                   </div>
                 </div>
-              ) : (
-                <div className="flex h-full items-center justify-center text-xs text-text-muted">
-                  Pilih salah satu butir soal di kolom kiri untuk melihat dan mengedit draf jawaban.
-                </div>
-              )}
+              </div>
+            </>
+          ) : (
+            <div className="flex h-full items-center justify-center text-xs text-text-muted">
+              Pilih salah satu butir soal di kolom kiri untuk melihat dan mengedit draf jawaban.
             </div>
+          )}
+        </div>
           </div>
 
           {/* Proposal Compilation & Export Modal */}

@@ -21,10 +21,15 @@ NARRATIVE_STRUCTURE_TEMPLATE = """1. Latar Belakang
 1.2 Risiko End of Life (EOL) / End of Support (EOS)
 2. Tujuan
 3. Proposed Solution
-3.1 Solution Overview
-3.2 Sizing dan Opsi Penawaran
-3.2.1 Dasar Perhitungan Kapasitas
-3.3 Proposed High Level Design (HLD)
+3.1 Solution Overview & Value Proposition
+3.2 Sizing dan Opsi Penawaran Perangkat
+3.2.1 Dasar Perhitungan Kapasitas & Pertumbuhan Data (Data Growth)
+3.3 Proposed High Level Design (HLD) & Topologi Arsitektur
+3.4 Spesifikasi Teknis Storage & Perangkat Utama (Pure Storage / Sangfor HCI / Dell PowerEdge / HPE)
+3.5 Fitur Reduksi Data, Kompresi Aktif & Efisiensi Kapasitas (DRR)
+3.6 Arsitektur High Availability (HA), Multi-Pathing & Redundansi Konektivitas (SAN / NVMe-oF / 10G/25G)
+3.7 Proteksi Data, Immutability, Snapshot & Integrasi Disaster Recovery (RPO/RTO)
+3.8 Matriks Kompatibilitas Sistem Operasi, Hypervisor (VMware/KVM/Nutanix) & Manajemen Terpusat
 4. Compliance Matrix (berdasarkan dokumen acuan RFP/TOR/KAK/RKS)
 5. Bill of Quantity
 6. Implementation Plan
@@ -565,6 +570,11 @@ def _fallback_recommend_structure(doc_type: str, tor_text: str = "", document_ti
             {"id": "sec-3-2", "title": "3.2 Sizing dan Opsi Penawaran", "category": "Teknis", "requirement_text": "Perhitungan sizing kapasitas dan opsi-opsi penawaran solusi (mis. varian kapasitas/performa) sesuai kebutuhan klien.", "rationale": "Menunjukkan solusi disesuaikan dengan kebutuhan riil, bukan generik."},
             {"id": "sec-3-2-1", "title": "3.2.1 Dasar Perhitungan Kapasitas", "category": "Teknis", "requirement_text": "Metodologi dan asumsi perhitungan kapasitas: data growth rate, redundancy, overhead, dan proyeksi 3-5 tahun ke depan.", "rationale": "Transparansi metodologi sizing agar mudah diverifikasi klien."},
             {"id": "sec-3-3", "title": "3.3 Proposed High Level Design (HLD)", "category": "Teknis", "requirement_text": "Diagram topologi arsitektur solusi yang diusulkan, termasuk konektivitas dan skema redundansi.", "rationale": "Visualisasi arsitektur wajib untuk pembuktian desain solusi enterprise."},
+            {"id": "sec-3-4", "title": "3.4 Spesifikasi Teknis Storage & Perangkat Utama", "category": "Teknis", "requirement_text": "Detail spesifikasi teknis platform perangkat utama (mis. Pure Storage FlashArray //X, //C / RC20, Sangfor HCI, Dell PowerEdge, atau HPE): controller, interface I/O, direct flash, dan lisensi.", "rationale": "Membuktikan kesesuaian mendalam spesifikasi hardware terhadap klausul teknis tender."},
+            {"id": "sec-3-5", "title": "3.5 Fitur Reduksi Data & Efisiensi Kapasitas (DRR)", "category": "Teknis", "requirement_text": "Arsitektur deduplikasi dan kompresi data inline hardware-accelerated, proyeksi rasio reduksi data (DRR 3:1 s.d 5:1), dan garansi kapasitas efektif.", "rationale": "Memperkuat nilai efisiensi TCO dan justifikasi komparasi sizing data pool klien."},
+            {"id": "sec-3-6", "title": "3.6 Arsitektur High Availability & Redundansi Konektivitas", "category": "Teknis", "requirement_text": "Skema redundansi dual-controller active/active, multi-pathing I/O (SAN FC / NVMe-oF / iSCSI 25G), dual PSU, dan zero-single-point-of-failure.", "rationale": "Menjamin kelangsungan operasional sistem misi kritis perbankan/finansial tanpa downtime."},
+            {"id": "sec-3-7", "title": "3.7 Proteksi Data, Snapshot Immutability & Disaster Recovery", "category": "Teknis", "requirement_text": "Fitur perlindungan data terhadap ransomware melalui immutable snapshot (SafeMode), replikasi asinkron/sinkron, serta pemenuhan target RPO = 0 dan RTO sub-menit.", "rationale": "Memenuhi kepatuhan regulasi proteksi data OJK/BI dan ketahanan insiden siber."},
+            {"id": "sec-3-8", "title": "3.8 Matriks Kompatibilitas Sistem Operasi & Hypervisor", "category": "Teknis", "requirement_text": "Matriks dukungan resmi platform terhadap hypervisor VMware vSphere, KVM, Nutanix, sistem operasi server (RHEL, Windows Server), dan integrasi API VAAI.", "rationale": "Jaminan integrasi seamless dengan infrastruktur server existing klien tanpa kendala driver."},
             {"id": "sec-4", "title": "4. Compliance Matrix", "category": "Teknis", "requirement_text": "Matriks kepatuhan spesifikasi teknis terhadap setiap butir dokumen acuan (RFP/TOR/KAK/RKS) — Comply / Not Comply / Exceed.", "rationale": "Wajib merujuk langsung ke klausul dokumen acuan sebagai bukti pemenuhan requirement, bukan klaim sepihak."},
             {"id": "sec-5", "title": "5. Bill of Quantity", "category": "Teknis", "requirement_text": "Rincian item, part number, deskripsi, dan kuantitas perangkat/lisensi yang ditawarkan.", "rationale": "BOQ jadi acuan komersial dan teknis yang harus konsisten dengan Compliance Matrix di atasnya."},
             {"id": "sec-6", "title": "6. Implementation Plan", "category": "Manajemen Proyek", "requirement_text": "Rencana pelaksanaan proyek secara keseluruhan dari persiapan hingga serah terima.", "rationale": "Bab tata kelola implementasi, menaungi timeline/scope/out-of-scope di bawahnya."},
