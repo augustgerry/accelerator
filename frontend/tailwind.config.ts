@@ -13,6 +13,7 @@ const config: Config = {
         },
         surface: {
           DEFAULT: "#F7F8FA",
+          base: "#F7F8FA",
           raised: "#FFFFFF",
           border: "#E5E7EB",
         },

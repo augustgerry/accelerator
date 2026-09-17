@@ -115,7 +115,7 @@ export function CitationDrawer({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm transition-opacity duration-200 ${
+      className={`fixed inset-0 z-[9999] flex justify-end bg-black/65 backdrop-blur-sm transition-opacity duration-200 ${
         open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
       }`}
       onClick={onClose}
@@ -126,155 +126,236 @@ export function CitationDrawer({
         role="dialog"
         aria-modal="true"
         aria-label={chunk ? `Detail kutipan: ${chunk.title}` : "Detail kutipan"}
-        className={`h-full w-full max-w-md border-l border-surface-border bg-surface-base shadow-2xl flex flex-col transition-transform duration-200 ease-out ${
+        className={`h-full w-full max-w-2xl lg:max-w-3xl border-l border-slate-300 bg-[#F0F2F5] shadow-2xl flex flex-col transition-transform duration-200 ease-out ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
         {chunk && (
           <>
-            {/* Header */}
-            <div className="flex items-start justify-between gap-3 border-b border-surface-border bg-surface-raised p-5">
-              <div className="min-w-0 flex-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-accent-ink">
-                  Kutipan [{index + 1}]
-                </span>
-                <h3 className="mt-1 text-sm font-bold leading-snug text-text-primary break-words">
-                  {chunk.title}
-                </h3>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {ext && (
-                    <span className="rounded border border-surface-border bg-surface px-1.5 py-0.5 text-[10px] font-semibold uppercase text-text-secondary">
-                      .{ext}
+            {/* Top Ribbon — Microsoft Word / Document Viewer Style */}
+            <div className="flex items-center justify-between gap-3 border-b border-[#154694] bg-[#185ABD] px-5 py-3 text-white shadow-sm">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15 text-white shadow-inner font-bold text-sm">
+                  {ext === "pdf" ? "📕" : ext === "docx" || ext === "doc" ? "📄" : "📝"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-100">
+                      Pratinjau Dokumen Sumber · Kutipan [{index + 1} dari {total}]
                     </span>
-                  )}
-                  <span
-                    className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
-                      DOC_TYPE_COLORS[chunk.docType] ?? DOC_TYPE_COLORS.other
-                    }`}
-                  >
-                    {chunk.docType}
-                  </span>
-                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                    Relevansi {chunk.confidence}%
-                  </span>
-                  {formattedDate && (
-                    <span className="flex items-center gap-1 rounded bg-surface px-1.5 py-0.5 text-[10px] text-text-muted border border-surface-border">
-                      <Clock size={10} />
-                      {formattedDate}
+                    <span className="rounded bg-white/20 px-1.5 py-0.2 text-[10px] font-semibold uppercase text-white">
+                      .{ext || "doc"}
                     </span>
-                  )}
+                  </div>
+                  <h3 className="text-xs sm:text-sm font-bold leading-snug text-white truncate" title={chunk.title}>
+                    {chunk.title}
+                  </h3>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1">
+
+              {/* Navigation & Close Buttons */}
+              <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   onClick={() => onNavigate(index - 1)}
                   disabled={index <= 0}
-                  title="Kutipan sebelumnya"
+                  title="Kutipan sebelumnya (Panah Kiri)"
                   aria-label="Kutipan sebelumnya"
-                  className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-border hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
+                  className="rounded-md bg-white/10 p-1.5 text-white transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10"
                 >
                   <ChevronLeft size={16} />
                 </button>
+                <span className="text-[11px] font-medium text-blue-100 px-1 select-none">
+                  {index + 1}/{total}
+                </span>
                 <button
                   onClick={() => onNavigate(index + 1)}
                   disabled={index >= total - 1}
-                  title="Kutipan berikutnya"
+                  title="Kutipan berikutnya (Panah Kanan)"
                   aria-label="Kutipan berikutnya"
-                  className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-border hover:text-text-primary disabled:opacity-30 disabled:hover:bg-transparent"
+                  className="rounded-md bg-white/10 p-1.5 text-white transition-colors hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10"
                 >
                   <ChevronRight size={16} />
                 </button>
+                <div className="h-4 w-px bg-white/20 mx-1" />
                 <button
                   ref={closeButtonRef}
                   onClick={onClose}
+                  title="Tutup (Esc)"
                   aria-label="Tutup panel kutipan"
-                  className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-border hover:text-text-primary"
+                  className="rounded-md bg-white/10 p-1.5 text-white transition-colors hover:bg-white/25 hover:text-white"
                 >
                   <X size={18} />
                 </button>
               </div>
             </div>
 
-            {/* Snippet */}
-            <div className="flex-1 overflow-y-auto p-5">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                  Cuplikan Teks Acuan
-                </p>
+            {/* Word Sub-toolbar / Document Metadata Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-5 py-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`rounded border px-2 py-0.5 text-[10px] font-bold ${
+                    DOC_TYPE_COLORS[chunk.docType] ?? DOC_TYPE_COLORS.other
+                  }`}
+                >
+                  {chunk.docType}
+                </span>
+                <span className="rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                  Relevansi {chunk.confidence}%
+                </span>
+                {formattedDate && (
+                  <span className="flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 border border-slate-200">
+                    <Clock size={11} />
+                    {formattedDate}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
                 <button
                   onClick={handleCopySnippet}
-                  className="flex items-center gap-1 text-[11px] font-medium text-text-secondary transition-colors hover:text-text-primary"
+                  className="flex items-center gap-1.5 rounded border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
                 >
                   {copied ? (
                     <>
-                      <Check size={12} className="text-emerald-500 animate-in zoom-in duration-200" />
-                      <span className="text-emerald-600 animate-in fade-in duration-200">Tersalin!</span>
+                      <Check size={12} className="text-emerald-600" />
+                      <span className="text-emerald-700">Tersalin ke Clipboard!</span>
                     </>
                   ) : (
                     <>
                       <Copy size={12} />
-                      Salin
+                      Salin Teks Acuan
                     </>
                   )}
                 </button>
               </div>
-              <div
-                className={`rounded-lg border p-4 transition-colors duration-700 ${
-                  pulse ? "border-accent bg-accent-soft/40" : "border-surface-border bg-surface-raised"
-                }`}
-              >
-                <p className="whitespace-pre-wrap text-xs leading-relaxed text-text-primary font-normal">
-                  <HighlightedText
-                    text={
-                      chunk.chunk_text.trim().match(/[.!?\n]$/)
-                        ? chunk.chunk_text
-                        : `${chunk.chunk_text.trim()} ...`
-                    }
-                    query={query}
-                  />
-                </p>
-              </div>
-
-              {chunk.matched_terms.length > 0 && (
-                <div className="mt-4">
-                  <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                    Kata Kunci Cocok
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {chunk.matched_terms.map((term) => (
-                      <span key={term} className="rounded bg-surface px-1.5 py-0.5 text-[10px] text-text-muted border border-surface-border">
-                        {term}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* Actions */}
-            <div className="space-y-2 border-t border-surface-border bg-surface-raised p-4">
+            {/* Word Document Paper View Container */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#E8EBF0]">
+              {/* Simulated A4 Document Sheet */}
+              <div
+                className={`mx-auto max-w-2xl rounded-sm bg-white p-7 sm:p-10 shadow-lg border border-slate-300/80 transition-all duration-300 text-slate-900 font-sans ${
+                  pulse ? "ring-2 ring-blue-500" : ""
+                }`}
+                style={{ minHeight: "560px" }}
+              >
+                {/* Simulated Word Document Header / Letterhead */}
+                <div className="border-b-2 border-slate-800 pb-3 mb-5">
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
+                    <span>Smartnet Magna Global · Knowledge Base</span>
+                    <span>Arsip Dokumen Resmi</span>
+                  </div>
+                  <h1 className="text-base sm:text-lg font-extrabold text-slate-900 leading-snug">
+                    {chunk.title}
+                  </h1>
+                </div>
+
+                {/* Simulated Word Margin / Content Ruler Guide */}
+                <div className="mb-4 flex items-center justify-between text-[9px] font-mono text-slate-400 select-none border-b border-dashed border-slate-200 pb-1">
+                  <span>◀ MARGIN KIRI</span>
+                  <span>[ CUPLIKAN ASLI HASIL INDEXING PGVECTOR ]</span>
+                  <span>MARGIN KANAN ▶</span>
+                </div>
+
+                {/* Document Body Text with Clean Document Formatting */}
+                <div className="text-[13px] leading-relaxed text-slate-800 space-y-3">
+                  {chunk.chunk_text.split("\n\n").map((para, pIdx) => {
+                    const trimmed = para.trim();
+                    if (!trimmed) return null;
+
+                    // Detect bullet points or lists
+                    const lines = trimmed.split("\n");
+                    const isList = lines.every((l) => l.trim().startsWith("•") || l.trim().startsWith("-") || l.trim().startsWith("*") || l.trim().match(/^\d+\./));
+
+                    if (isList) {
+                      return (
+                        <ul key={pIdx} className="space-y-1.5 pl-5 list-disc my-2">
+                          {lines.map((line, lIdx) => {
+                            const cleanLine = line.replace(/^[•\-*]\s*/, "").replace(/^\d+\.\s*/, "");
+                            return (
+                              <li key={lIdx} className="text-slate-800 leading-normal pl-1">
+                                <HighlightedText text={cleanLine} query={query} />
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      );
+                    }
+
+                    // Meeting minutes or key-value header line (e.g. "Date:", "Attendees:", etc.)
+                    const isHeaderLike = /^(minutes of meeting|agenda|attendees|discussions|hasil pembahasan|catatan penting|spesifikasi teknis):?/i.test(trimmed);
+
+                    return (
+                      <div
+                        key={pIdx}
+                        className={
+                          isHeaderLike
+                            ? "font-bold text-slate-900 text-sm mt-3 pt-2 border-t border-slate-100"
+                            : "text-justify leading-relaxed"
+                        }
+                      >
+                        <HighlightedText text={trimmed} query={query} />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Keyword Match Tags inside document view */}
+                {chunk.matched_terms.length > 0 && (
+                  <div className="mt-8 pt-4 border-t border-slate-200">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Kata Kunci Cocok dengan Pencarian:
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {chunk.matched_terms.map((term) => (
+                        <span
+                          key={term}
+                          className="rounded bg-yellow-100 text-yellow-900 border border-yellow-300 px-2 py-0.5 text-[11px] font-medium"
+                        >
+                          ✓ {term}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Simulated Word Page Footer */}
+                <div className="mt-10 pt-4 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-500 select-none">
+                  <span>Dokumen Arsip Presales SMG · Rahasia</span>
+                  <span className="font-semibold">Halaman 1 dari 1</span>
+                  <span>ID: {chunk.id.slice(0, 8)}...</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Persistent Bottom Action Bar */}
+            <div className="border-t border-slate-300 bg-white px-5 py-3 shadow-md">
               {downloadError && (
-                <p className="rounded-md border border-red-200 bg-red-50 p-2 text-[11px] text-red-700">
+                <p className="mb-2 rounded-md border border-red-200 bg-red-50 p-2 text-[11px] text-red-700">
                   {downloadError}
                 </p>
               )}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={handleDownload}
                   disabled={downloading}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-ink-900 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-ink-800 disabled:opacity-50"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#185ABD] px-4 py-2.5 text-xs font-bold text-white transition-all hover:bg-[#124b9e] active:scale-[0.99] disabled:opacity-50 shadow-sm"
                 >
-                  {downloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-                  Download Dokumen
+                  {downloading ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Download size={14} />
+                  )}
+                  Download Dokumen Lengkap (.{ext || "pdf"})
                 </button>
                 <a
                   href={`https://drive.google.com/file/d/${chunk.id}/view`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-primary transition-colors hover:border-accent hover:bg-accent-soft"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-800 transition-all hover:bg-slate-100 hover:border-slate-400 active:scale-[0.99] shadow-sm"
                 >
-                  <ExternalLink size={13} />
-                  Buka di Drive
+                  <ExternalLink size={14} />
+                  Buka Dokumen Asli di Drive ↗
                 </a>
               </div>
             </div>

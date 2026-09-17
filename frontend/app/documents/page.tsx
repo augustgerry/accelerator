@@ -545,8 +545,8 @@ export default function DocumentsPage() {
 
       {/* Chunk Inspection Slide-Over Drawer */}
       {activeDoc && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end bg-black/40 backdrop-blur-sm transition-opacity animate-in fade-in">
-          <div className="w-full max-w-2xl bg-surface-base h-full shadow-2xl flex flex-col border-l border-surface-border animate-in slide-in-from-right duration-200">
+        <div className="fixed inset-0 z-[9999] overflow-hidden flex justify-end bg-black/60 backdrop-blur-sm transition-opacity animate-in fade-in">
+          <div className="w-full max-w-2xl bg-[#F8F9FA] h-full shadow-2xl flex flex-col border-l border-surface-border animate-in slide-in-from-right duration-200">
             {/* Drawer Header */}
             <div className="p-5 border-b border-surface-border bg-surface-raised flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
@@ -645,7 +645,7 @@ export default function DocumentsPage() {
                       </button>
                     </div>
 
-                    <p className="text-xs text-text-secondary leading-relaxed font-mono whitespace-pre-wrap bg-surface-base/60 p-3 rounded-lg border border-surface-border/60">
+                    <p className="text-xs text-slate-800 leading-relaxed font-mono whitespace-pre-wrap bg-white p-3.5 rounded-lg border border-surface-border shadow-xs">
                       {chunk.content}
                     </p>
                   </div>

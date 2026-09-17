@@ -166,7 +166,7 @@ function SearchContent() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-surface font-sans text-text-primary">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-surface font-sans text-text-primary">
       <Topbar
         title="Pencarian Presales Knowledge Base"
         subtitle="Cari arsip dokumen internal dengan AI synthesis — Glean Model"
@@ -278,7 +278,7 @@ function SearchContent() {
       </div>
 
       {/* ── Main Content ──────────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col md:flex-row overflow-hidden">
+      <div className="flex flex-1 min-h-0 flex-col md:flex-row overflow-hidden">
 
         {/* LEFT: Document Citation Cards */}
         <div className="flex max-h-[45vh] md:max-h-none w-full md:w-[420px] shrink-0 flex-col border-b md:border-b-0 md:border-r border-surface-border bg-surface-raised overflow-y-auto">

@@ -1280,7 +1280,7 @@ export default function DraftPage() {
 
       {/* STATE A: EMPTY / UPLOAD STATE */}
       {!fileName && (
-        <div className="flex flex-1 flex-col items-center justify-center p-8">
+        <div className="flex flex-1 flex-col items-center justify-start sm:justify-center p-6 sm:p-8 overflow-y-auto">
           <div className="w-full max-w-2xl">
             {/* Upload Card */}
             <div className="rounded-xl border border-surface-border bg-surface-raised p-8 shadow-panel transition-all">
