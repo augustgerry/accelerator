@@ -14,9 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body className="flex">
+      <body className="flex h-screen overflow-hidden bg-surface text-text-primary">
         <Sidebar />
-        <main className="min-w-0 flex-1 pb-14 md:pb-0">{children}</main>
+        <main className="min-w-0 flex-1 h-screen overflow-hidden flex flex-col pb-14 md:pb-0">{children}</main>
         <MobileNav />
       </body>
     </html>

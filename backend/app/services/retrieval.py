@@ -26,8 +26,21 @@ def clear_retrieval_cache() -> None:
     _RETRIEVAL_CACHE.clear()
 
 
+_INDONESIAN_STOPWORDS = {
+    "yang", "untuk", "dengan", "dari", "adalah", "pada", "atau", "dan", "ini", "itu",
+    "dalam", "bisa", "klien", "dokumen", "arsip", "saya", "kami", "kita", "anda",
+    "mereka", "juga", "akan", "telah", "sudah", "oleh", "secara", "karena", "agar",
+    "supaya", "tentang", "sebagai", "bagi", "setiap", "seluruh", "semua", "hanya",
+    "lama", "bgt", "nyarinya", "gabisa", "dicepetin", "mencara", "mencari",
+    "the", "and", "for", "with", "from", "that", "this", "are", "was", "were", "been"
+}
+
+
 def _query_tokens(query: str) -> list[str]:
-    return list(dict.fromkeys(re.findall(r"[a-zA-Z0-9][a-zA-Z0-9._/-]{2,}", query.lower())))
+    raw_tokens = re.findall(r"[a-zA-Z0-9][a-zA-Z0-9._/-]{2,}", query.lower())
+    # Filter stopwords and prioritize meaningful domain tokens
+    filtered = [t for t in dict.fromkeys(raw_tokens) if t not in _INDONESIAN_STOPWORDS and len(t) >= 3]
+    return filtered[:6]  # Cap to top 6 most distinct tokens to avoid catastrophic SQL latency
 
 
 def _hybrid_ranked_chunks(
@@ -40,7 +53,7 @@ def _hybrid_ranked_chunks(
     doc_ids: list[str] | None = None,
 ) -> list[dict]:
     """Blend vector candidates with exact-term candidates and Cross-Encoder reranking.
-    Caches results in-memory for instant 0ms response on repeated/sub-section queries."""
+    Caches results in-memory for instant response on repeated/sub-section queries."""
     cache_key = (
         workspace_id,
         query.strip().lower(),
@@ -54,7 +67,7 @@ def _hybrid_ranked_chunks(
         if now - cached_time < _CACHE_TTL_SECONDS:
             return cached_results
 
-    candidate_limit = max(top_k * 4, 20)
+    candidate_limit = max(top_k * 2, 10)
     filters = [DocumentChunk.workspace_id == workspace_id]
     if doc_type and doc_type.strip():
         filters.append(DocumentChunk.document.has(func.lower(Document.doc_type) == doc_type.strip().lower()))
@@ -77,16 +90,25 @@ def _hybrid_ranked_chunks(
 
     tokens = _query_tokens(query)
     keyword_rows = []
-    if tokens:
-        keyword_rows = session.execute(
-            select(DocumentChunk)
-            .options(joinedload(DocumentChunk.document))
-            .where(
-                *filters,
-                or_(*(DocumentChunk.content.ilike(f"%{token}%") for token in tokens)),
-            )
-            .limit(candidate_limit)
-        ).scalars().all()
+    
+    # Performance optimization: If vector search found sufficient high-confidence matches (similarity >= 0.65),
+    # skip the expensive multi-token ILIKE remote DB scan. Only execute ILIKE if vector search was weak or sparse.
+    top_vector_sim = (1.0 - float(vector_rows[0][1])) if vector_rows else 0.0
+    needs_keyword_scan = (len(vector_rows) < top_k or top_vector_sim < 0.65) and bool(tokens)
+
+    if needs_keyword_scan:
+        try:
+            keyword_rows = session.execute(
+                select(DocumentChunk)
+                .options(joinedload(DocumentChunk.document))
+                .where(
+                    *filters,
+                    or_(*(DocumentChunk.content.ilike(f"%{token}%") for token in tokens[:3])),
+                )
+                .limit(candidate_limit)
+            ).scalars().all()
+        except Exception as e:
+            logger.warning("Keyword query error: %s", e)
 
     candidates: dict[str, dict] = {}
     for rank, (chunk, raw_distance) in enumerate(vector_rows):
@@ -108,10 +130,10 @@ def _hybrid_ranked_chunks(
         content = (candidate["chunk"].content or "").lower()
         matched_tokens = [token for token in tokens if token in content]
         matches = len(matched_tokens)
-        lexical_score = matches / max(1, len(tokens))
+        lexical_score = (matches / max(1, len(tokens))) if tokens else 0.0
         if query_numbers and any(number in content for number in query_numbers):
             lexical_score = min(1.0, lexical_score + 0.25)
-        candidate["score"] = candidate["vector_score"] * 0.65 + lexical_score * 0.35
+        candidate["score"] = candidate["vector_score"] * 0.70 + lexical_score * 0.30
         candidate["matched_tokens"] = matched_tokens
 
     ranked = sorted(
@@ -146,8 +168,8 @@ def _rerank_candidates(query: str, ranked_candidates: list[dict], top_k: int) ->
     if not ranked_candidates:
         return []
 
-    # Consider up to 20 top candidates for reranking
-    candidate_pool = ranked_candidates[:max(top_k * 3, 20)]
+    # Bound candidate pool to keep CrossEncoder prediction latency under ~100ms
+    candidate_pool = ranked_candidates[:max(top_k * 2, 8)]
     reranker = _get_reranker()
 
     if reranker is None:

@@ -121,7 +121,10 @@ def extract_pdf_with_ocr_fallback(file_bytes: bytes, enable_ocr: bool = True) ->
     scanned_pages = 0
 
     for page_idx, page in enumerate(reader.pages):
-        native_text = (page.extract_text() or "").strip()
+        try:
+            native_text = (page.extract_text(extraction_mode="layout") or "").strip()
+        except Exception:
+            native_text = (page.extract_text() or "").strip()
 
         # Check if page is effectively empty but has images (scanned PDF)
         if len(native_text) < 50 and len(page.images) > 0 and enable_ocr:

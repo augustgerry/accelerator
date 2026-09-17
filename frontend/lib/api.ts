@@ -505,17 +505,33 @@ export async function generateHld(
   torText: string,
   solutionText: string = "",
   title: string = "High Level Design",
+  customInstruction: string = "",
+  diagramStyle: string = "topology",
 ): Promise<{
   mermaid_code: string;
   caption: string;
   architecture_narrative: string;
   image_data_url?: string;
+  diagram_2d_url?: string;
+  mermaid_rendered_url?: string;
+  hardware_rear_url?: string;
 }> {
   return postJson("/draft/generate-hld", {
     tor_text: torText,
     solution_text: solutionText,
     title,
+    custom_instruction: customInstruction,
+    diagram_style: diagramStyle,
   });
+}
+
+export async function renderHardwareRear(deviceName: string = "Enterprise Storage & Compute Node"): Promise<{
+  data_url: string;
+  title: string;
+  width: number;
+  height: number;
+}> {
+  return postJson("/draft/render-hardware-rear", { device_name: deviceName });
 }
 
 export async function renderMermaid(mermaidCode: string): Promise<{

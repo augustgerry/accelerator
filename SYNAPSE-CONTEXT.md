@@ -3,6 +3,24 @@
 
 ---
 
+## 🚀 MILESTONE SELESAI: PERBAIKAN KOMPREHENSIF USABILITY DRAFTING, FORMULA SANITIZER, STENSIL HARDWARE, & HLD ENGINE
+
+Menuntaskan seluruh feedback dan keluhan teknis dari user:
+1. **Port 3000 Clean & Live**: Membersihkan proses zombie `9040` yang sempat menggantung port 3000 sehingga browser muter-muter. Frontend Next.js kini aktif bersih di `http://localhost:3000` (HTTP 200 OK) dan backend di `http://127.0.0.1:8000` (HTTP 200 OK).
+2. **Sidebar Kiri Tinggi Penuh (Full-Viewport Scroll)**: Diperbaiki dengan `h-full flex-1 min-h-0 overflow-hidden` pada outer container, sehingga 8–12 butir bab tampil sekaligus dan lancar di-scroll tanpa terjepit.
+3. **Performa Drafting Cepat (Non-blocking)**: Menghapus web image search otomatis yang memperlambat draf per butir, meningkatkan paralelisme batch menjadi 3 item konkuren.
+4. **Formula Sanitizer (Bebas LaTeX Mentah)**: Mengubah formula LaTeX mentah (`$$\text{Total Kapasitas Efektif} = \frac{...}{...}$$`) menjadi format teks biasa proposal Bahasa Indonesia yang bersih pada editor, preview, dan ekspor Word (.docx).
+5. **Draf HLD Tidak Menimpa Keseluruhan Proposal**: Menambahkan Rule 7 di prompt LLM presales dan prompt guard agar saat generate HLD hanya menyusun narasi arsitektur dan topologi untuk sub-bab HLD tersebut saja, bukan menulis ulang seluruh bab.
+6. **Katalog Stensil Vendor & Filter Negatif Pencarian**: Menambahkan stensil transparan resmi vendor untuk Fortinet FortiGate (100F, 200F, 60F), Cisco Catalyst (9300, 9200), HPE DL360 Gen10, Dell PowerEdge R750, serta filter ketat terhadap gambar streamer/youtube viral.
+7. **Submit Arahan Khusus Alur Koneksi**: Kolom arahan alur koneksi kini memiliki tombol `[ 🚀 Terapkan Arahan & Generate HLD ]`, shortcut `Ctrl + Enter`, dan preset cepat arsitektur.
+8. **Diferensiasi 3 Visual HLD**:
+   - `Mermaid / Skematik`: Diagram alur topologi logikal arsitektur berbasis vector / Kroki / pako deflate.
+   - `2D Datacenter Rack`: Elevasi rak 2D multi-layer (1400x960) dengan kabel berwarna dan ringkasan spesifikasi.
+   - `Tampak Belakang & Port`: Chassis tampak belakang dinamis (1U Firewall FortiGate 100F dengan HA sync link & SFP+, 1U Switch Cisco dengan StackWise-480, 2U Server/Storage).
+9. **Logo Header Diperbesar**: Running header logo dokumen diperbesar menjadi `h-16 max-w-[240px]` dan cover page logo menjadi `h-14` agar jelas dan proporsional.
+
+---
+
 ## ✅ CLAUDE CODE (FRONTEND) — SELESAI: Fix Ctrl+K search shortcut mati di Topbar
 
 Task singkat atas permintaan user ("apa enhancement yang bisa dibuat" → "kerjain yang paling terbaik"). Scope sengaja dibatasi ke file yang **tidak** kesenggol WIP uncommitted Antigravity yang lagi berjalan live di checkout yang sama (backend: `diagram_generator.py`, `image_search.py`, `draft.py`, dll; frontend: `draft/page.tsx`, `export-modal.tsx`, `visual-asset-studio.tsx`, `citation-drawer.tsx`, `highlighted-text.tsx`, `lib/api.ts`).

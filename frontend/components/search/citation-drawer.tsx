@@ -223,8 +223,15 @@ export function CitationDrawer({
                   pulse ? "border-accent bg-accent-soft/40" : "border-surface-border bg-surface-raised"
                 }`}
               >
-                <p className="whitespace-pre-wrap text-xs leading-relaxed text-text-primary">
-                  <HighlightedText text={chunk.chunk_text} query={query} />
+                <p className="whitespace-pre-wrap text-xs leading-relaxed text-text-primary font-normal">
+                  <HighlightedText
+                    text={
+                      chunk.chunk_text.trim().match(/[.!?\n]$/)
+                        ? chunk.chunk_text
+                        : `${chunk.chunk_text.trim()} ...`
+                    }
+                    query={query}
+                  />
                 </p>
               </div>
 

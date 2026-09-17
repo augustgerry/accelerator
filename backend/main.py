@@ -30,9 +30,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.staticfiles import StaticFiles
+
 app.include_router(health.router)
 app.include_router(query.router)
 app.include_router(draft.router)
 app.include_router(documents.router)
 app.include_router(research.router)
 app.include_router(sessions.router)
+
+app.mount("/assets", StaticFiles(directory="app/assets"), name="assets")

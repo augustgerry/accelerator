@@ -3,8 +3,13 @@
 // formatting is already visible in the real document preview, not needed here.
 export function stripMarkdown(text: string): string {
   return text
+    .replace(/[Σ∑]/g, "Total ")
+    .replace(/[∏]/g, "Hasil Kali ")
+    .replace(/[∆]/g, "Selisih ")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/\*(.*?)\*/g, "$1")
+    .replace(/```[a-z]*\n?/gi, "")
+    .replace(/\n?```/g, "")
     .replace(/`(.*?)`/g, "$1");
 }
 

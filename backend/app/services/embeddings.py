@@ -162,13 +162,35 @@ def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 150) -> list[st
 
         # Regular paragraph
         if current_chunk_parts and (current_chunk_len + len(content) > chunk_size):
-            chunks.append("\n\n".join(current_chunk_parts))
+            flushed = "\n\n".join(current_chunk_parts).strip()
+            # Clean trailing dangling conjunctions before flushing
+            flushed = re.sub(r"(?i)\s+(?:sedangkan|dan|atau|serta|yaitu|bahwa|sebagaimana|termasuk|seperti)\s*[,.:;]?\s*$", ".", flushed)
+            chunks.append(flushed)
             # Start new chunk with active heading for context
             current_chunk_parts = [active_heading] if (active_heading and not content.startswith("#")) else []
             current_chunk_len = sum(len(p) + 2 for p in current_chunk_parts)
 
-        current_chunk_parts.append(content)
-        current_chunk_len += len(content) + 2
+        # If a single paragraph is longer than chunk_size, split by sentence boundaries
+        if len(content) > chunk_size:
+            sentences = re.split(r"(?<=[.!?\n])\s+", content)
+            sub_part: list[str] = []
+            sub_len = 0
+            for s in sentences:
+                if sub_len + len(s) > chunk_size and sub_part:
+                    flushed_sub = "\n\n".join(current_chunk_parts + [" ".join(sub_part)]).strip()
+                    flushed_sub = re.sub(r"(?i)\s+(?:sedangkan|dan|atau|serta|yaitu|bahwa|sebagaimana|termasuk|seperti)\s*[,.:;]?\s*$", ".", flushed_sub)
+                    chunks.append(flushed_sub)
+                    sub_part = []
+                    sub_len = 0
+                    current_chunk_parts = [active_heading] if active_heading else []
+                sub_part.append(s)
+                sub_len += len(s) + 1
+            if sub_part:
+                current_chunk_parts.append(" ".join(sub_part))
+                current_chunk_len += sub_len
+        else:
+            current_chunk_parts.append(content)
+            current_chunk_len += len(content) + 2
 
     if current_chunk_parts:
         final_chunk = "\n\n".join(current_chunk_parts).strip()

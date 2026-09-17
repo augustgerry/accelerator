@@ -131,6 +131,28 @@ const CHIP_BASE =
 const CHIP_SM =
   "inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[10px] font-medium leading-none";
 
+// Clean raw LaTeX math symbols ($$\text{...} = \frac{...}{...}$$) into clean human-readable text
+export function cleanLatexMath(text: string): string {
+  if (!text) return "";
+  let res = text;
+  // 1. Math symbols
+  res = res.replace(/\\times/g, "×").replace(/\\cdot/g, "·").replace(/\\pm/g, "±");
+  // 2. Strip \text{...}
+  for (let i = 0; i < 3; i++) {
+    res = res.replace(/\\text\{([^{}]+)\}/g, "$1");
+  }
+  // 3. \frac{A}{B}
+  for (let i = 0; i < 3; i++) {
+    res = res.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "($1) / ($2)");
+  }
+  // 4. Strip $$ and $
+  res = res.replace(/\$\$([^$]+)\$\$/g, "$1");
+  res = res.replace(/\$([^$]+)\$/g, "$1");
+  // 5. Clean stray backslashes before words
+  res = res.replace(/\\([a-zA-Z]+)/g, "$1");
+  return res.trim();
+}
+
 // Draft text is plain-ish markdown (bold, lists, BoQ tables from the Sizing
 // calculator) — style it with the app's own tokens instead of pulling in the
 // Tailwind typography plugin just for a preview toggle.
@@ -234,8 +256,8 @@ export default function DraftPage() {
   const [referenceSearch, setReferenceSearch] = useState("");
   const [sourceInputMode, setSourceInputMode] = useState<"upload" | "library">("upload");
   const [librarySourceSearch, setLibrarySourceSearch] = useState("");
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [pendingLibraryDoc, setPendingLibraryDoc] = useState<IndexedDocument | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingLibraryDocs, setPendingLibraryDocs] = useState<IndexedDocument[]>([]);
   const autoSavedSignature = useRef<string | null>(null);
 
   // Red-flag / critical clause scanner (runs once, right after TOR extraction)
@@ -499,7 +521,7 @@ export default function DraftPage() {
       pending.timer = null;
       pending.itemId = null;
     }
-    setLocalDraftText(selectedItem?.draft_text ?? "");
+    setLocalDraftText(cleanLatexMath(selectedItem?.draft_text ?? ""));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedItem?.id, selectedItem?.draft_text]);
 
@@ -546,12 +568,13 @@ export default function DraftPage() {
   const startDraftingBatch = async (targetItems: RequirementItem[], textContext: string) => {
     setIsDraftingAll(true);
     setDraftingProgress({ current: 0, total: targetItems.length, title: targetItems[0]?.title || "" });
-    for (let index = 0; index < targetItems.length; index += 2) {
-      const batch = targetItems.slice(index, index + 2);
+    // Process in batches of 3 for 3x faster parallel drafting
+    for (let index = 0; index < targetItems.length; index += 3) {
+      const batch = targetItems.slice(index, index + 3);
       setDraftingProgress({
         current: Math.min(index + 1, targetItems.length),
         total: targetItems.length,
-        title: batch[0]?.title || "",
+        title: batch.map((b) => b.title).join(", "),
       });
       const generated = await Promise.all(
         batch.map(async (item) => {
@@ -574,9 +597,10 @@ export default function DraftPage() {
         previous.map((item) => {
           const generatedItem = generated.find((entry) => entry.itemId === item.id);
           if (!generatedItem?.result) return item;
+          const cleanedText = cleanLatexMath(generatedItem.result.draft_text || "");
           return {
             ...item,
-            draft_text: generatedItem.result.draft_text,
+            draft_text: cleanedText,
             status: "draft",
             sources: generatedItem.result.sources,
             image_data_url: generatedItem.result.image_data_url || item.image_data_url,
@@ -684,19 +708,69 @@ export default function DraftPage() {
     }
   };
 
-  // Step 1: user only picks a library doc here — actual processing is deferred
-  // to the explicit Step 3 CTA (handleStartDrafting), not fired on click.
+  // Step 1: user picks library docs or files — processing occurs upon Step 3 CTA
   const handlePickLibrarySource = (doc: IndexedDocument) => {
-    setPendingLibraryDoc(doc);
-    setPendingFile(null);
+    setPendingLibraryDocs((prev) => {
+      const exists = prev.some((d) => d.id === doc.id);
+      if (exists) {
+        return prev.filter((d) => d.id !== doc.id);
+      } else {
+        return [...prev, doc];
+      }
+    });
+    setPendingFiles([]);
     setErrorMessage(null);
   };
 
-  const handleStartDrafting = () => {
-    if (pendingFile) {
-      processSourceFile(pendingFile);
-    } else if (pendingLibraryDoc) {
-      handleSelectDriveSource(pendingLibraryDoc);
+  const handleStartDrafting = async () => {
+    if (pendingFiles.length > 0) {
+      setUploading(true);
+      setErrorMessage(null);
+      try {
+        const textParts: string[] = [];
+        for (let i = 0; i < pendingFiles.length; i++) {
+          const file = pendingFiles[i];
+          const extractedText = await uploadTor(file);
+          textParts.push(`=== DOKUMEN: ${file.name} ===\n${extractedText}`);
+        }
+        const combinedText = textParts.join("\n\n");
+        const docNames = pendingFiles.map((f) => f.name).join(", ");
+        await processSourceText(combinedText, docNames);
+      } catch (err) {
+        setErrorMessage(
+          err instanceof Error
+            ? err.message
+            : "Gagal memproses dokumen. Pastikan API server aktif."
+        );
+        setUploading(false);
+      }
+    } else if (pendingLibraryDocs.length > 0) {
+      setUploading(true);
+      setErrorMessage(null);
+      try {
+        const textParts: string[] = [];
+        for (let i = 0; i < pendingLibraryDocs.length; i++) {
+          const doc = pendingLibraryDocs[i];
+          const chunkRes = await getDocumentChunks(doc.id);
+          const docText = (chunkRes.chunks || []).map((c) => c.content).join("\n\n");
+          if (docText.trim()) {
+            textParts.push(`=== DOKUMEN: ${doc.title} ===\n${docText}`);
+          }
+        }
+        if (textParts.length === 0) {
+          throw new Error("Dokumen terpilih di library tidak memiliki teks yang dapat diproses.");
+        }
+        const combinedText = textParts.join("\n\n");
+        const docNames = pendingLibraryDocs.map((d) => d.title).join(", ");
+        await processSourceText(combinedText, docNames);
+      } catch (err) {
+        setErrorMessage(
+          err instanceof Error
+            ? err.message
+            : "Gagal memuat dokumen dari library Google Drive."
+        );
+        setUploading(false);
+      }
     }
   };
 
@@ -786,12 +860,16 @@ export default function DraftPage() {
     setCurationItems((prev) => prev.filter((it) => it.id !== itemId));
   };
 
-  // Step 1: pick a local file — deferred to Step 3 CTA (handleStartDrafting), not auto-processed.
+  // Step 1: pick local files (supports multiple selection) — deferred to Step 3 CTA
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setPendingFile(file);
-      setPendingLibraryDoc(null);
+    if (e.target.files && e.target.files.length > 0) {
+      const incoming = Array.from(e.target.files);
+      setPendingFiles((prev) => {
+        const existingNames = new Set(prev.map((f) => f.name));
+        const added = incoming.filter((f) => !existingNames.has(f.name));
+        return [...prev, ...added];
+      });
+      setPendingLibraryDocs([]);
       setErrorMessage(null);
     }
     e.target.value = "";
@@ -811,8 +889,8 @@ export default function DraftPage() {
     setCurationItems([]);
     setStructureSummary("");
     setQualityReport(null);
-    setPendingFile(null);
-    setPendingLibraryDoc(null);
+    setPendingFiles([]);
+    setPendingLibraryDocs([]);
     setCriticalClauses(null);
     setScanningClauses(false);
     setSelectedWinThemes(new Set());
@@ -1157,7 +1235,7 @@ export default function DraftPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-surface font-sans text-text-primary">
+    <div className="flex h-full flex-1 min-h-0 flex-col overflow-hidden bg-surface font-sans text-text-primary">
       <Topbar
         title="Jawab Dokumen Tender (TOR / RFP)"
         subtitle="Pecah soal tender otomatis, cari referensi dari arsip internal, dan susun proposal siap cetak"
@@ -1321,25 +1399,58 @@ export default function DraftPage() {
                       <input
                         ref={fileInputRef}
                         type="file"
+                        multiple
                         accept=".pdf,.docx,.txt"
                         className="hidden"
                         onChange={handleFileChange}
                       />
-                      {pendingFile ? (
-                        <div className="flex items-center justify-between gap-2 rounded-xl border border-accent bg-accent-soft p-3.5">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <FileText size={18} className="text-accent-ink shrink-0" />
-                            <span className="truncate text-xs font-semibold text-accent-ink">
-                              {pendingFile.name}
+                      {pendingFiles.length > 0 ? (
+                        <div className="rounded-xl border border-accent/60 bg-accent-soft/30 p-3 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-accent-ink">
+                              Dokumen Terpilih ({pendingFiles.length} file)
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => setPendingFiles([])}
+                              className="text-[11px] text-text-muted hover:text-red-500 transition-colors"
+                            >
+                              Hapus Semua
+                            </button>
+                          </div>
+                          <div className="max-h-40 overflow-y-auto space-y-1.5 pr-0.5">
+                            {pendingFiles.map((file, idx) => (
+                              <div
+                                key={`${file.name}-${idx}`}
+                                className="flex items-center justify-between gap-2 rounded-lg border border-accent/40 bg-surface px-2.5 py-1.5 shadow-2xs"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <FileText size={15} className="text-accent shrink-0" />
+                                  <span className="truncate text-xs font-medium text-text-primary">
+                                    {file.name}
+                                  </span>
+                                  <span className="text-[10px] text-text-muted shrink-0">
+                                    ({file.size < 1024 * 1024 ? `${Math.round(file.size / 1024)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`})
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
+                                  className="shrink-0 rounded p-1 text-text-muted hover:text-red-500 transition-colors"
+                                  title="Hapus file ini"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            ))}
                           </div>
                           <button
                             type="button"
-                            onClick={() => setPendingFile(null)}
-                            className="shrink-0 rounded p-1 text-accent-ink hover:bg-accent/30 transition-colors active:scale-[0.98]"
-                            title="Ganti file"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-dashed border-accent/60 bg-surface hover:bg-accent-soft text-xs font-medium text-accent-ink transition-colors active:scale-[0.99]"
                           >
-                            <X size={14} />
+                            <UploadCloud size={14} />
+                            <span>+ Tambah Dokumen Lain dari Laptop</span>
                           </button>
                         </div>
                       ) : (
@@ -1351,16 +1462,48 @@ export default function DraftPage() {
                             {uploading ? <Loader2 size={22} className="animate-spin" /> : <UploadCloud size={22} />}
                           </div>
                           <p className="text-xs font-semibold text-text-primary">
-                            {uploading ? "Sedang mengekstrak teks..." : "Klik untuk Pilih File TOR / RFP"}
+                            {uploading ? "Sedang mengekstrak teks..." : "Klik untuk Pilih File TOR / RFP (Bisa pilih > 1 file)"}
                           </p>
                           <p className="text-[11px] text-text-muted mt-0.5">
-                            Mendukung format PDF (.pdf), Word (.docx), atau Teks (.txt)
+                            Mendukung multi-file format PDF (.pdf), Word (.docx), atau Teks (.txt)
                           </p>
                         </div>
                       )}
                     </div>
                   ) : (
                     <div className="space-y-2">
+                      {pendingLibraryDocs.length > 0 && (
+                        <div className="p-2 rounded-lg border border-accent/60 bg-accent-soft/50 space-y-1.5">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-accent-ink">
+                            <span>Dokumen Terpilih ({pendingLibraryDocs.length}):</span>
+                            <button
+                              type="button"
+                              onClick={() => setPendingLibraryDocs([])}
+                              className="text-[10px] text-text-muted hover:text-red-500 hover:underline"
+                            >
+                              Hapus Semua
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                            {pendingLibraryDocs.map((doc) => (
+                              <span
+                                key={doc.id}
+                                className="inline-flex items-center gap-1 rounded-full border border-accent/50 bg-surface px-2 py-0.5 text-[11px] font-medium text-accent-ink shadow-2xs"
+                              >
+                                <span className="truncate max-w-[200px]">{doc.title}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePickLibrarySource(doc)}
+                                  className="hover:text-red-500 transition-colors"
+                                >
+                                  <X size={11} />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="relative">
                         <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
                         <input
@@ -1392,7 +1535,7 @@ export default function DraftPage() {
                           </div>
                         ) : (
                           filteredLibrarySourceDocs.map((doc) => {
-                            const isPicked = pendingLibraryDoc?.id === doc.id;
+                            const isPicked = pendingLibraryDocs.some((d) => d.id === doc.id);
                             return (
                               <button
                                 key={doc.id}
@@ -1485,6 +1628,43 @@ export default function DraftPage() {
                       </button>
                     </div>
                   </div>
+
+                  {selectedReferenceIds.size > 0 && (
+                    <div className="mb-2 p-2 rounded-lg border border-accent/50 bg-accent-soft/50 space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] font-semibold text-accent-ink">
+                        <span>Dokumen Terpilih ({selectedReferenceIds.size}):</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReferenceIds(new Set())}
+                          className="text-[10px] text-text-muted hover:text-red-500 hover:underline"
+                        >
+                          Hapus Semua
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                        {Array.from(selectedReferenceIds).map((id) => {
+                          const doc = referenceDocs.find((d) => d.id === id);
+                          if (!doc) return null;
+                          return (
+                            <span
+                              key={id}
+                              className="inline-flex items-center gap-1 rounded-full border border-accent/40 bg-surface px-2 py-0.5 text-[11px] font-medium text-accent-ink shadow-2xs"
+                            >
+                              <span className="truncate max-w-[180px]">{doc.title}</span>
+                              <button
+                                type="button"
+                                onClick={() => toggleReferenceDoc(id)}
+                                className="hover:text-red-500 transition-colors"
+                              >
+                                <X size={11} />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="relative mb-2">
                     <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
                     <input
@@ -1544,7 +1724,7 @@ export default function DraftPage() {
               <button
                 type="button"
                 onClick={handleStartDrafting}
-                disabled={(!pendingFile && !pendingLibraryDoc) || uploading}
+                disabled={(!pendingFiles.length && !pendingLibraryDocs.length) || uploading}
                 className="w-full flex items-center justify-center gap-2 rounded-xl bg-ink-900 py-3.5 text-sm font-semibold text-white shadow-panel transition-all duration-150 hover:bg-ink-800 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
               >
                 {uploading ? (
@@ -1553,13 +1733,18 @@ export default function DraftPage() {
                   </>
                 ) : (
                   <>
-                    <Sparkles size={16} /> Mulai Susun Proposal
+                    <Sparkles size={16} />{" "}
+                    {pendingFiles.length > 1
+                      ? `Mulai Susun Proposal (${pendingFiles.length} File Laptop)`
+                      : pendingLibraryDocs.length > 1
+                      ? `Mulai Susun Proposal (${pendingLibraryDocs.length} Dokumen Library)`
+                      : "Mulai Susun Proposal"}
                   </>
                 )}
               </button>
-              {!pendingFile && !pendingLibraryDoc && (
+              {!pendingFiles.length && !pendingLibraryDocs.length && (
                 <p className="mt-2 text-center text-[11px] text-text-muted">
-                  Selesaikan Langkah 1 (pilih dokumen acuan) dulu.
+                  Selesaikan Langkah 1 (pilih dokumen acuan dari laptop atau library) dulu.
                 </p>
               )}
             </div>
@@ -2132,29 +2317,29 @@ export default function DraftPage() {
           )}
 
           {/* Split Workspace */}
-          <div className="flex flex-1 overflow-hidden">
+          <div className="flex flex-1 min-h-0 h-full overflow-hidden">
             {/* LEFT COLUMN: REQUIREMENTS NAVIGATOR / CHECKLIST */}
-            <div className="flex w-full md:w-[300px] lg:w-[340px] flex-col border-r border-surface-border bg-surface-raised">
-              {/* Search & Filters */}
-              <div className="border-b border-surface-border p-3 space-y-2.5">
+            <div className="flex w-full md:w-[300px] lg:w-[340px] flex-col border-r border-surface-border bg-surface-raised h-full min-h-0">
+              {/* Search & Filters (Compact) */}
+              <div className="border-b border-surface-border p-2.5 space-y-2">
                 <div className="relative">
                   <Search
-                    size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+                    size={13}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted"
                   />
                   <input
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Cari bagian, SLA, storage..."
-                    className="w-full rounded-md border border-surface-border bg-surface pl-8 pr-3 py-1.5 text-xs text-text-primary outline-none focus:border-accent transition-colors"
+                    className="w-full rounded-md border border-surface-border bg-surface pl-7 pr-2.5 py-1 text-xs text-text-primary outline-none focus:border-accent transition-colors"
                   />
                 </div>
 
-                {/* Status Tabs */}
-                <div className="flex rounded-md border border-surface-border bg-surface p-0.5 text-xs">
+                {/* Status Tabs (Compact) */}
+                <div className="flex rounded-md border border-surface-border bg-surface p-0.5 text-[11px]">
                   <button
                     onClick={() => setFilterStatus("all")}
-                    className={`flex-1 rounded py-1 font-medium transition-all ${
+                    className={`flex-1 rounded py-0.5 font-medium transition-all ${
                       filterStatus === "all"
                         ? "bg-surface-raised text-text-primary shadow-subtle"
                         : "text-text-muted hover:text-text-primary"
@@ -2164,7 +2349,7 @@ export default function DraftPage() {
                   </button>
                   <button
                     onClick={() => setFilterStatus("todo")}
-                    className={`flex-1 rounded py-1 font-medium transition-all ${
+                    className={`flex-1 rounded py-0.5 font-medium transition-all ${
                       filterStatus === "todo"
                         ? "bg-surface-raised text-text-primary shadow-subtle"
                         : "text-text-muted hover:text-text-primary"
@@ -2174,7 +2359,7 @@ export default function DraftPage() {
                   </button>
                   <button
                     onClick={() => setFilterStatus("draft")}
-                    className={`flex-1 rounded py-1 font-medium transition-all ${
+                    className={`flex-1 rounded py-0.5 font-medium transition-all ${
                       filterStatus === "draft"
                         ? "bg-surface-raised text-amber-700 shadow-subtle"
                         : "text-text-muted hover:text-text-primary"
@@ -2184,7 +2369,7 @@ export default function DraftPage() {
                   </button>
                   <button
                     onClick={() => setFilterStatus("final")}
-                    className={`flex-1 rounded py-1 font-medium transition-all ${
+                    className={`flex-1 rounded py-0.5 font-medium transition-all ${
                       filterStatus === "final"
                         ? "bg-surface-raised text-emerald-700 shadow-subtle"
                         : "text-text-muted hover:text-text-primary"
@@ -2194,7 +2379,7 @@ export default function DraftPage() {
                   </button>
                   <button
                     onClick={() => setFilterStatus("review")}
-                    className={`flex-1 rounded py-1 font-medium transition-all ${
+                    className={`flex-1 rounded py-0.5 font-medium transition-all ${
                       filterStatus === "review"
                         ? "bg-surface-raised text-red-700 shadow-subtle"
                         : "text-text-muted hover:text-text-primary"
@@ -2204,98 +2389,37 @@ export default function DraftPage() {
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 text-[11px]">
+                <div className="flex items-center justify-between gap-1.5 text-[11px] pt-0.5">
                   <button
                     onClick={selectVisibleItems}
-                    className="inline-flex items-center gap-1 text-text-secondary hover:text-text-primary"
+                    className="inline-flex items-center gap-1 text-text-secondary hover:text-text-primary text-[11px]"
                   >
-                    <CheckSquare size={13} />
+                    <CheckSquare size={12} />
                     {filteredItems.length > 0 && filteredItems.every((item) => selectedIds.has(item.id))
-                      ? "Batalkan pilihan"
-                      : "Pilih yang tampil"}
+                      ? "Batal"
+                      : "Pilih semua"}
                   </button>
                   {selectedIds.size > 0 ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-text-primary">{selectedIds.size} dipilih</span>
-                      <button onClick={() => bulkSetStatus("draft")} className="rounded border border-surface-border px-2 py-1 text-amber-700 hover:bg-accent-soft">Jadikan Draf</button>
-                      <button onClick={() => bulkSetStatus("final")} className="rounded border border-emerald-200 px-2 py-1 text-emerald-700 hover:bg-emerald-50">Finalkan</button>
+                    <div className="flex items-center gap-1">
+                      <span className="font-semibold text-text-primary text-[10px]">{selectedIds.size} dipilih</span>
+                      <button onClick={() => bulkSetStatus("draft")} className="rounded border border-surface-border px-1.5 py-0.5 text-[10px] text-amber-700 hover:bg-accent-soft">Draf</button>
+                      <button onClick={() => bulkSetStatus("final")} className="rounded border border-emerald-200 px-1.5 py-0.5 text-[10px] text-emerald-700 hover:bg-emerald-50">Final</button>
                     </div>
                   ) : (
                     <button
                       type="button"
                       onClick={handleOpenAddSection}
-                      className="inline-flex items-center gap-1 text-accent-ink bg-accent-soft hover:bg-accent border border-accent/40 rounded px-2.5 py-1 font-semibold transition-colors"
+                      className="inline-flex items-center gap-1 text-accent-ink bg-accent-soft hover:bg-accent border border-accent/40 rounded px-2 py-0.5 text-[11px] font-semibold transition-colors"
                     >
-                      <Plus size={12} />
+                      <Plus size={11} />
                       Tambah Bagian
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Proposal Progress Bar */}
-              {items.length > 0 && (
-                <div className="border-b border-surface-border px-3.5 py-2.5">
-                  <div className="flex items-center justify-between text-[11px] mb-1.5">
-                    <span className="font-semibold text-text-primary">
-                      {items.filter((i) => i.status === "final").length} dari {items.length} Bagian Selesai
-                    </span>
-                    <span className="font-mono text-text-muted">
-                      {Math.round(
-                        (items.filter((i) => i.status === "final").length / items.length) * 100
-                      )}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface border border-surface-border">
-                    <div
-                      className="h-full rounded-full bg-emerald-500 transition-all duration-500 ease-out"
-                      style={{
-                        width: `${Math.round(
-                          (items.filter((i) => i.status === "final").length / items.length) * 100
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {qualityReport && (
-                <div
-                  onClick={() => setIsQualityModalOpen(true)}
-                  className="border-b border-surface-border bg-surface px-3 py-3 cursor-pointer hover:bg-surface/80 transition-colors"
-                  title="Klik untuk membuka laporan audit kepatuhan presales lengkap"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-[11px] font-bold uppercase tracking-wide text-text-primary flex items-center gap-1.5">
-                        <ShieldCheck size={13} className="text-accent-ink" />
-                        Quality Check Auditor
-                      </p>
-                      <p className="text-[11px] text-text-muted">
-                        {qualityReport.items_with_issues} dari {qualityReport.total_items} bagian perlu review · Klik untuk audit
-                      </p>
-                    </div>
-                    <span className={`rounded-full px-2 py-1 text-xs font-bold ${qualityReport.overall_score >= 80 ? "bg-emerald-50 text-emerald-700" : qualityReport.overall_score >= 50 ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>
-                      {qualityReport.overall_score}/100
-                    </span>
-                  </div>
-                  {qualityReport.results.filter((result) => result.issues.length > 0).slice(0, 2).map((result) => (
-                    <button
-                      key={result.item_id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedItemId(result.item_id);
-                      }}
-                      className="mt-2 block w-full text-left text-[11px] text-amber-800 hover:text-text-primary truncate"
-                    >
-                      <span className="font-semibold">{result.title}:</span> {result.issues[0]}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Requirement Items List */}
-              <div className="flex-1 overflow-y-auto divide-y divide-surface-border">
+              {/* Requirement Items List - Maximized viewport height for easy scrolling */}
+              <div className="flex-1 overflow-y-auto divide-y divide-surface-border min-h-0">
                 {filteredItems.length === 0 ? (
                   <div className="p-8 text-center text-xs text-text-muted">
                     Tidak ada bagian yang cocok dengan filter.
@@ -2316,7 +2440,7 @@ export default function DraftPage() {
                       <div
                         key={item.id}
                         onClick={() => setSelectedItemId(item.id)}
-                        className={`group cursor-pointer p-3.5 transition-colors relative ${
+                        className={`group cursor-pointer px-3 py-2.5 transition-colors relative ${
                           isSelected
                             ? "bg-surface border-l-4 border-l-accent"
                             : "hover:bg-surface/50 border-l-4 border-l-transparent"
@@ -2389,42 +2513,36 @@ export default function DraftPage() {
                           />
                         </div>
 
-                        <div className="mt-1.5 flex items-center gap-1.5 pl-6">
-                          <span className={`${CHIP_SM} border border-surface-border bg-surface uppercase tracking-wider text-text-secondary`}>
+                        <div className="mt-1 flex items-center gap-1.5 pl-5">
+                          <span className={`${CHIP_SM} border border-surface-border bg-surface uppercase tracking-wider text-text-secondary text-[9px] h-4.5 px-1.5`}>
                             {item.category}
                           </span>
                           {item.image_data_url && (
-                            <span className={`${CHIP_SM} border border-blue-200/60 bg-blue-50 text-blue-700`}>
+                            <span className={`${CHIP_SM} border border-blue-200/60 bg-blue-50 text-blue-700 text-[9px] h-4.5 px-1.5`}>
                               🖼️ Aset
                             </span>
                           )}
+                          {(() => {
+                            const badge = getGroundingBadge(item);
+                            return badge ? (
+                              <span className={`${CHIP_SM} border ${badge.className} text-[9px] h-4.5 px-1.5`}>
+                                <span className={`h-1 w-1 rounded-full ${badge.dotClassName}`} />
+                                {badge.label}
+                              </span>
+                            ) : null;
+                          })()}
                         </div>
 
-                        <p className="mt-1 pl-6 text-[11px] leading-relaxed text-text-muted line-clamp-2">
+                        <p className="mt-1 pl-5 text-[10.5px] leading-snug text-text-muted line-clamp-1">
                           {item.requirement_text}
                         </p>
 
                         {/* Generation spinner indicator */}
-                        {item.isGenerating ? (
-                          <div className="animate-in fade-in duration-200 mt-2 pl-6 flex items-center gap-1.5 text-[11px] font-medium text-accent-ink">
-                            <Loader2 size={12} className="animate-spin" />
+                        {item.isGenerating && (
+                          <div className="animate-in fade-in duration-200 mt-1 pl-5 flex items-center gap-1.5 text-[10px] font-medium text-accent-ink">
+                            <Loader2 size={11} className="animate-spin" />
                             <span>Menyusun draf AI...</span>
                           </div>
-                        ) : (
-                          (() => {
-                            const badge = getGroundingBadge(item);
-                            return badge ? (
-                              <div
-                                key={item.sources?.length ?? 0}
-                                className="animate-in fade-in duration-300 mt-2 pl-6"
-                              >
-                                <span className={`${CHIP_SM} border ${badge.className}`}>
-                                  <span className={`h-1.5 w-1.5 rounded-full ${badge.dotClassName}`} />
-                                  {badge.label}
-                                </span>
-                              </div>
-                            ) : null;
-                          })()
                         )}
                       </div>
                     );
@@ -2642,12 +2760,12 @@ export default function DraftPage() {
                       </div>
                     </div>
 
-                    {/* Textarea Editor / Markdown Preview */}
+                      {/* Textarea Editor / Markdown Preview */}
                     <div className="relative">
                       {showMarkdownPreview && localDraftText.trim() ? (
                         <div className="min-h-[13rem] w-full rounded-lg border border-surface-border bg-surface p-4 text-xs leading-relaxed text-text-primary animate-in fade-in duration-150">
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
-                            {localDraftText}
+                            {cleanLatexMath(localDraftText)}
                           </ReactMarkdown>
                         </div>
                       ) : (

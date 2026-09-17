@@ -5,6 +5,7 @@ change (LLM_PROVIDER in .env), not a code change.
 """
 
 from abc import ABC, abstractmethod
+from typing import Any, Optional
 import json
 import logging
 import re
@@ -277,25 +278,65 @@ class ClaudeProvider(LLMProvider):
 
 
 class GeminiProvider(LLMProvider):
+    FALLBACK_MODELS = [
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-flash-latest",
+    ]
+
     def __init__(self):
         import google.generativeai as genai
 
         if not settings.google_api_key:
             raise ValueError("GOOGLE_API_KEY is not set in environment or .env")
         genai.configure(api_key=settings.google_api_key)
-        self.model_name = settings.gemini_model
+        self.model_name = settings.gemini_model if settings.gemini_model in self.FALLBACK_MODELS else "gemini-flash-latest"
         self.genai = genai
+
+    def _generate_with_fallback(
+        self,
+        prompt: Any,
+        system_instruction: Optional[str] = None,
+        generation_config: Optional[dict] = None,
+    ) -> str:
+        models_to_try = [self.model_name] + [m for m in self.FALLBACK_MODELS if m != self.model_name]
+        last_err = None
+        for m_name in models_to_try:
+            try:
+                kwargs: dict[str, Any] = {"model_name": m_name}
+                if system_instruction:
+                    kwargs["system_instruction"] = system_instruction
+                if generation_config:
+                    kwargs["generation_config"] = generation_config
+                model = self.genai.GenerativeModel(**kwargs)
+                response = model.generate_content(prompt)
+                self.model_name = m_name  # stick with working model
+                return response.text or ""
+            except Exception as e:
+                err_str = str(e).lower()
+                if any(k in err_str for k in ("429", "quota", "resource_exhausted", "not found", "404")):
+                    logger.warning(
+                        "Gemini model '%s' encountered limit/availability error (%s). Falling back...",
+                        m_name,
+                        e,
+                    )
+                    last_err = e
+                    continue
+                raise e
+        if last_err:
+            raise last_err
+        return ""
 
     def answer(self, question: str, context_chunks: list[str], mode: str = "qa") -> str:
         system_instruction = _build_system_prompt(mode)
-        model = self.genai.GenerativeModel(
-            model_name=self.model_name,
-            system_instruction=system_instruction,
-        )
         context = _format_context_chunks(context_chunks, mode)
         user_prompt = f"Konteks dari knowledge base:\n{context}\n\nPertanyaan: {question}"
-        response = model.generate_content(user_prompt)
-        return response.text or ""
+        return self._generate_with_fallback(
+            user_prompt,
+            system_instruction=system_instruction,
+        )
 
     def research_external(self, query: str) -> dict:
         """Deep external market & technology research with citations."""
@@ -308,10 +349,6 @@ class GeminiProvider(LLMProvider):
             "Di akhir jawaban, sertakan daftar referensi web/industri resmi (URL dan judul)."
         )
         try:
-            model = self.genai.GenerativeModel(
-                model_name=self.model_name,
-                system_instruction=system_instruction,
-            )
             prompt = (
                 f"Topik Riset Mendalam:\n{query}\n\n"
                 "Instruksi Khusus:\n"
@@ -319,8 +356,10 @@ class GeminiProvider(LLMProvider):
                 "2. Gunakan tabel Markdown yang lengkap dengan kolom: Parameter | Solusi A | Solusi B | Dampak Bisnis.\n"
                 "3. Berikan 'Winning Pitch' atau rekomendasi argumen presales untuk memenangkan kompetisi tender."
             )
-            response = model.generate_content(prompt)
-            answer_text = response.text or ""
+            answer_text = self._generate_with_fallback(
+                prompt,
+                system_instruction=system_instruction,
+            )
             
             import re
             urls = re.findall(r"https?://[^\s\)\>]+", answer_text)
@@ -349,13 +388,11 @@ class GeminiProvider(LLMProvider):
             "]"
         )
         try:
-            model = self.genai.GenerativeModel(
-                model_name=self.model_name,
+            cleaned = self._generate_with_fallback(
+                f"Dokumen TOR/RFP:\n\n{truncated_text}",
                 system_instruction=system_instruction,
                 generation_config={"response_mime_type": "application/json"},
-            )
-            response = model.generate_content(f"Dokumen TOR/RFP:\n\n{truncated_text}")
-            cleaned = (response.text or "").strip()
+            ).strip()
             if cleaned.startswith("```"):
                 cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
                 cleaned = re.sub(r"\s*```$", "", cleaned)
@@ -379,13 +416,12 @@ class GeminiProvider(LLMProvider):
         if not headings or not items:
             return {}
         try:
-            model = self.genai.GenerativeModel(
-                model_name=self.model_name,
+            resp_text = self._generate_with_fallback(
+                _build_mapping_prompt(headings, items),
                 system_instruction=_MAPPING_SYSTEM_PROMPT,
                 generation_config={"response_mime_type": "application/json"},
             )
-            response = model.generate_content(_build_mapping_prompt(headings, items))
-            return _clean_mapping_result(_parse_json_object(response.text or ""), headings, items)
+            return _clean_mapping_result(_parse_json_object(resp_text), headings, items)
         except Exception as e:
             logger.warning("Gemini section mapping failed, using keyword fallback: %s", e)
             return _fallback_map_items_to_sections(headings, items)
@@ -430,12 +466,11 @@ class GeminiProvider(LLMProvider):
             f"]"
         )
         try:
-            model = self.genai.GenerativeModel(
-                model_name=self.model_name,
+            resp_text = self._generate_with_fallback(
+                f"{prompt}\n\nTeks Dokumen Acuan:\n{truncated_text}",
                 generation_config={"response_mime_type": "application/json"},
             )
-            response = model.generate_content(f"{prompt}\n\nTeks Dokumen Acuan:\n{truncated_text}")
-            data = _parse_json_object(response.text or "")
+            data = _parse_json_object(resp_text)
             if isinstance(data, list) and len(data) > 0:
                 items = []
                 for i, it in enumerate(data, start=1):
@@ -561,7 +596,9 @@ def _build_system_prompt(mode: str) -> str:
             "   - Untuk Solution Brief: Sertakan pemetaan OKRs dan tabel komponen arsitektur (| Komponen | Teknologi/Perangkat | Peran/Fungsi |).\n"
             "   - Untuk Klarifikasi Teknis: Susun tanggapan teknis komprehensif berstandar CSUL Finance mencakup: analisis risiko EOL/EOS existing, rekomendasi arsitektur HLD & sizing DRR, matriks compliance teknis, rincian BOQ perangkat/lisensi, rencana implementasi & timeline, komitmen SLA 60 bulan (5 tahun), serta struktur tim proyek tersertifikasi.\n"
             "4. Identitas Perusahaan: Selalu gunakan nama resmi perusahaan: 'PT Smartnet Magna Global' (SMG), dan jika relevan sebutkan sebagai 'Member of CTI Group'.\n"
-            "5. Nilai Jual & Kepastian: Buat narasi yang meyakinkan, bernilai tambah (value proposition), dengan komitmen teknis spesifik tanpa kata tentatif (hindari kata 'akan diusahakan' atau 'sebisanya')."
+            "5. Nilai Jual & Kepastian: Buat narasi yang meyakinkan, bernilai tambah (value proposition), dengan komitmen teknis spesifik tanpa kata tentatif (hindari kata 'akan diusahakan' atau 'sebisanya').\n"
+            "6. Notasi Sizing & Simbol: DILARANG KERAS menggunakan format LaTeX matematika ($$, $, \\frac, \\text, \\times, Σ, ∑, ∏, ∆). Dokumen proposal tender tidak mendukung rendering LaTeX dan formula mentah tersebut terlihat rusak di hadapan klien. Selalu tulis perhitungan sizing, vCPU, RAM, dan kapasitas dalam notasi teks biasa Bahasa Indonesia yang bersih dan rapi (contoh: 'Total Kapasitas Efektif = (Kapasitas Raw x Rasio Reduksi Data) / Overhead Sistem' atau 'Total Compute = (Jumlah VM x vCPU Overcommit) + Hypervisor Overhead').\n"
+            "7. Cakupan Spesifik Sub-Bab: Anda HANYA menyusun narasi dan konten teknis untuk sub-bab yang sedang diminta. DILARANG KERAS merangkum atau menulis ulang seluruh isi proposal dari Bab 1 sampai Bab 8 jika yang diminta adalah satu sub-bab spesifik (misalnya: jika diminta sub-bab 3.3 Proposed High Level Design (HLD), susunlah penjelasan arsitektur, konektivitas link redundan, tiering switch-firewall-compute-storage, dan spesifikasi arsitektur teknis untuk sub-bab tersebut saja)."
         )
     if mode == "qa":
         return (
