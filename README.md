@@ -67,10 +67,16 @@ Separate from or blended with the internal knowledge base. Implemented natively 
 - **Tri-Mode High Level Design (HLD) Engine (`diagram_generator.py` & `hardware_rear_render.py`)**:
   1. **🔀 Skematik Vector Topology**: Diagram topologi logikal arsitektur multi-tier (ISP -> Firewall HA -> Core ToR -> Compute Cluster -> Storage) dengan link redundan (10G LACP, 25G RoCE, 100G MLAG).
   2. **🏢 Visual 2D Enterprise Datacenter Rack**: Elevasi rak 2D multi-layer beresolusi tinggi (1400x960) lengkap dengan jalur kabel berwarna dan ringkasan spesifikasi.
-  3. **🖥️ Tampak Belakang Perangkat & Port I/O**: Chassis tampak belakang dinamis yang disesuaikan dengan perangkat (1U Firewall FortiGate 100F dengan HA sync link & SFP+, 1U Switch Cisco Catalyst dengan StackWise-480, 2U Server/Storage).
+  3. **🖥️ Tampak Belakang Perangkat & Port I/O**: Chassis tampak belakang dinamis yang disesuaikan dengan perangkat (Pure Storage FlashArray //X / //C / RC20 dual-controller active/active dengan 32G FC / 25G NVMe-oF & dual 1600W PSUs, 1U Firewall FortiGate 100F dengan HA sync link & SFP+, 1U Switch Cisco Catalyst dengan StackWise-480, 2U Server/Storage).
 - **Official Verified Vendor Stencils & Strict Negative Filtering (`image_search.py`)**:
-  - Menyediakan stensil transparan resmi vendor untuk **Fortinet FortiGate (100F, 200F, 60F)**, **Cisco Catalyst (9300, 9200)**, **HPE ProLiant DL360 Gen10**, dan **Dell PowerEdge R750**.
+  - Menyediakan stensil transparan resmi vendor untuk **Pure Storage (FlashArray //X, //C, RC20)**, **Fortinet FortiGate (100F, 200F, 60F)**, **Cisco Catalyst (9300, 9200)**, **HPE ProLiant DL360 Gen10**, dan **Dell PowerEdge R750**.
   - Filter negatif ketat yang memblokir foto streamer/viral YouTube dan memvalidasi keaslian perangkat keras IT.
+- **Background AI Learning & Stencil Upload (`/documents`)**:
+  - Panel upload dokumen acuan (PDF, DOCX, TXT) yang otomatis memotong teks per klausul dan mengindeksnya ke PostgreSQL `pgvector`. AI mempelajari stensil, datasheet, dan proposal lampau untuk memperkaya jawaban teknis RFP/TOR secara mandiri di background.
+- **Product Breakdown Sub-Sections & 1-Click Proposal Insertion**:
+  - Fitur breakdown produk otomatis pada Bab *Proposed Solution*: spesifikasi perangkat utama (Pure Storage / HCI), rasio reduksi data (DRR 3:1 - 5:1), arsitektur redundansi SAN Fabric HA, proteksi snapshot SafeMode immutable, dan matriks kompatibilitas OS/hypervisor (VMware/KVM).
+- **Pinned Top Action Bar & Word Document Preview**:
+  - Bilah aksi draf proposal yang menempel permanen (*docked top*) tanpa efek melayang saat di-scroll, lengkap dengan pratinjau lembar kertas Microsoft Word (A4, ruler margins, letterhead, dan stabilo sitasi).
 - **Formula Sanitizer (Bebas Simbol LaTeX Rusak)**:
   - Mengonversi formula matematika LaTeX mentah (`$$\text{Total Kapasitas Efektif} = \frac{...}{...}$$`) menjadi notasi teks bersih Bahasa Indonesia: `Total Kapasitas Efektif = (Kapasitas Raw × Rasio Reduksi Data (DRR)) / (Overhead Sistem)`.
 - **A4 Pop-up Document Preview & Word Export**:

@@ -872,17 +872,39 @@ npm run dev
   - **Slide Cover & Penutup Dark Executive**: Background Slate 900 (`#0F172A`) dengan garis aksen atas `#4A86E8`, tipografi kontras tinggi (judul putih 36pt/44pt, badge amber `#F59E0B`, subtitle biru muda `#60A5FA`).
   - **Slide Konten**: Dilengkapi top corporate stripe (`#2F5FE0`), running footer di bawah (`PT Smartnet Magna Global · Dokumen Proposal Teknis & Arsitektur Solusi`), serta nomor slide `Slide X / Y`.
 
-### 11. Halaman Daftar Isi, Daftar Gambar & Daftar Tabel Otomatis (CSUL Style)
-- Di `backend/app/routers/draft.py` (`export_proposal_docx`):
-  - **Daftar Isi**: Dihasilkan otomatis tepat setelah halaman *Pengakuan Kerahasiaan* dengan dot leader tab stops (`WD_TAB_LEADER.DOTS`) rata kanan pada 6.5 inci, membedakan bab utama (bold 10pt `#111827`) dan sub-bab (indent 0.25 inci, 9.5pt `#374151`).
-  - **Daftar Gambar**: Menginventarisasi otomatis seluruh foto hardware publik & diagram topologi HLD yang tersemat pada proposal lengkap dengan nomor urut dan caption formal.
-  - **Daftar Tabel**: Menginventarisasi otomatis Tabel 1 Document Release dan tabel-tabel compliance matrix teknis pada dokumen.
-  - Diikuti page break formal menuju Bab 1.
+### 12. Stensil Vektor Resmi Pure Storage FlashArray & RC20 (`hardware_rear_render.py`)
+- Penambahan stensil SVG arsitektur sasis belakang resmi untuk **Pure Storage FlashArray //X, //C & RC20**:
+  - Dual active/active controller dengan modul ejector oranye khas Pure Storage.
+  - 4x port 32G Fibre Channel / 25GbE NVMe-oF per controller.
+  - 2x port 10GbE ETH ActiveCluster replication & Purity//OS MGMT port.
+  - Dual 1600W Titanium hot-swappable power supply unit (PSU).
+- Terintegrasi penuh ke dalam generator SVG visual studio dan preset directive proposal.
+
+### 13. Sub-Bab Breakdown Produk Solusi Teknis & Tombol 1-Klik
+- Bab 3 (*Proposed Solution*) otomatis memecah rincian produk secara komprehensif:
+  - `3.4 Spesifikasi Teknis Storage & Perangkat Utama (Pure Storage / HCI)`
+  - `3.5 Fitur Reduksi Data & Efisiensi Kapasitas (DRR 3:1 - 5:1)`
+  - `3.6 Arsitektur High Availability & Redundansi Konektivitas (SAN Fabric)`
+  - `3.7 Proteksi Data, Snapshot Immutability & Disaster Recovery`
+  - `3.8 Matriks Kompatibilitas Sistem Operasi & Hypervisor (VMware/KVM)`
+- Disediakan tombol cepat `[ + Breakdown Produk Solusi ]` di State B (Kurasi Struktur) dan State C (Navigator Checklist) untuk menyisipkan seluruh sub-bab produk sekaligus.
+
+### 14. Pinned Top Action Bar & State Interaktif HLD
+- **Bilah Aksi Draf Terpasang Mantap (*Pinned Top Header*)**: Bilah aksi draf (`Sparkles`, Judul Sub-Bab, Tag Kategori, tombol `Studio Visual`, `Edit Mentah`, `Salin`, dan `Buat Draf AI`) dipindahkan menjadi header permanen (`shrink-0 z-20 w-full border-b bg-surface-raised/95 backdrop-blur-md px-6 py-2.5`). Saat konten draf di-scroll, bilah aksi tidak lagi melayang atau tergeser di tengah-tengah card.
+- **Akses Langsung Proposed HLD**: Ketika sub-bab berunsur HLD/arsitektur dipilih, sistem menampilkan empty state interaktif dengan tombol `[ ✨ Buat Draf AI Sekarang ]` dan `[ 🎨 Buka Studio Desain HLD & Topologi ]`.
+
+### 15. Perbaikan Toggle "Lihat Selengkapnya" vs "Sembunyikan"
+- Teks tujuan sub-bab pada keadaan terlipat dibatasi dengan `line-clamp-2` (~150 karakter) sehingga teks panjang terpotong nyata dengan elipsis (`...`).
+- Tombol toggle diperbarui menjadi `▼ Lihat Selengkapnya` dan `▲ Sembunyikan Ringkasan`, serta hanya muncul jika panjang teks > 150 karakter.
+
+### 16. Background AI Learning & Stencil Upload di `/documents`
+- Area Drag & Drop upload dokumen acuan (PDF, DOCX, TXT) di halaman `/documents` yang memproses chunking klausul dan indexing ke `pgvector` secara asinkron di background, sehingga AI otomatis mempelajari proposal lama, datasheet, dan stensil acuan tanpa perlu pengulangan manual.
 
 ---
 
 *Branch aktif: `feat/proposal-visual-engine`*
 *Branch Claude (`feat/search-citation-drawer`) tetap terisolasi dan tidak tersentuh (Claude menggunakan git worktree terpisah).*
+
 
 
 
