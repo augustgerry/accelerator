@@ -279,11 +279,11 @@ class ClaudeProvider(LLMProvider):
 
 class GeminiProvider(LLMProvider):
     FALLBACK_MODELS = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
+        "gemini-flash-lite-latest",
+        "gemini-3-flash-preview",
+        "gemini-3.1-flash-lite-preview",
         "gemini-flash-latest",
+        "gemini-2.0-flash",
     ]
 
     def __init__(self):
@@ -292,7 +292,7 @@ class GeminiProvider(LLMProvider):
         if not settings.google_api_key:
             raise ValueError("GOOGLE_API_KEY is not set in environment or .env")
         genai.configure(api_key=settings.google_api_key)
-        self.model_name = settings.gemini_model if settings.gemini_model in self.FALLBACK_MODELS else "gemini-flash-latest"
+        self.model_name = settings.gemini_model if settings.gemini_model else "gemini-flash-lite-latest"
         self.genai = genai
 
     def _generate_with_fallback(

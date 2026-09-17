@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useMemo, useEffect, Fragment } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Topbar } from "@/components/topbar";
@@ -67,6 +68,7 @@ import type { RequirementItem, RequirementStatus, SourceCitation, IndexedDocumen
 import { DOC_TYPES, FORMAT_LABELS, getDocType, type DraftDocTypeId, type DraftFormat } from "@/lib/document-types";
 import { SKELETONS } from "@/lib/skeletons";
 import { VisualAssetStudio } from "@/components/draft/visual-asset-studio";
+import { cleanLatexMath } from "@/lib/utils";
 
 // Poin 4: Grounding cuplikan TOR kini diproses secara semantik oleh backend
 // menggunakan model sentence-transformers lokal. Frontend meneruskan konteks TOR
@@ -131,27 +133,6 @@ const CHIP_BASE =
 const CHIP_SM =
   "inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-2 text-[10px] font-medium leading-none";
 
-// Clean raw LaTeX math symbols ($$\text{...} = \frac{...}{...}$$) into clean human-readable text
-export function cleanLatexMath(text: string): string {
-  if (!text) return "";
-  let res = text;
-  // 1. Math symbols
-  res = res.replace(/\\times/g, "×").replace(/\\cdot/g, "·").replace(/\\pm/g, "±");
-  // 2. Strip \text{...}
-  for (let i = 0; i < 3; i++) {
-    res = res.replace(/\\text\{([^{}]+)\}/g, "$1");
-  }
-  // 3. \frac{A}{B}
-  for (let i = 0; i < 3; i++) {
-    res = res.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "($1) / ($2)");
-  }
-  // 4. Strip $$ and $
-  res = res.replace(/\$\$([^$]+)\$\$/g, "$1");
-  res = res.replace(/\$([^$]+)\$/g, "$1");
-  // 5. Clean stray backslashes before words
-  res = res.replace(/\\([a-zA-Z]+)/g, "$1");
-  return res.trim();
-}
 
 // Draft text is plain-ish markdown (bold, lists, BoQ tables from the Sizing
 // calculator) — style it with the app's own tokens instead of pulling in the
@@ -328,7 +309,31 @@ export default function DraftPage() {
   const [isVisualStudioOpen, setIsVisualStudioOpen] = useState(false);
   const [visualStudioTab, setVisualStudioTab] = useState<"search" | "hld" | "upload">("search");
   const [previewImageModal, setPreviewImageModal] = useState<{ url: string; caption: string } | null>(null);
+  const [previewModalScale, setPreviewModalScale] = useState<number>(1);
   const visualStudioRef = useRef<HTMLDivElement>(null);
+  const hiddenSubBabFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSubBabDirectUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedItem) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const cleanCap = (selectedItem.image_caption || selectedItem.title || "Visual Lampiran")
+        .replace(/^(?:Gambar|Figure)\s*\d+(?:\.\d+)*\s*[:.-]?\s*/i, "")
+        .trim();
+      const updated = {
+        ...selectedItem,
+        image_data_url: dataUrl,
+        image_caption: cleanCap,
+      };
+      setItems((prev) =>
+        prev.map((it) => (it.id === updated.id ? updated : it))
+      );
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
 
   const handleOpenStudio = (tab: "search" | "hld" | "upload") => {
     setVisualStudioTab(tab);
@@ -2840,135 +2845,170 @@ export default function DraftPage() {
                     )}
                   </div>
 
+                  {/* Hidden file input for direct local upload into current sub-bab */}
+                  <input
+                    ref={hiddenSubBabFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleSubBabDirectUpload}
+                  />
+
                   {/* Poin 1: Inline Visual Preview & Action Card */}
-                  {selectedItem.image_data_url ? (
-                    <div className="rounded-xl border border-blue-200/80 bg-gradient-to-r from-blue-50/40 via-white to-indigo-50/30 p-4 shadow-subtle">
-                      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                        {/* Thumbnail with click-to-zoom */}
-                        <div
-                          onClick={() =>
-                            setPreviewImageModal({
-                              url: selectedItem.image_data_url!,
-                              caption:
-                                selectedItem.image_caption ||
-                                `Aset Visual: ${selectedItem.title}`,
-                            })
-                          }
-                          className="relative group w-36 h-24 bg-slate-900 rounded-lg overflow-hidden flex-shrink-0 cursor-zoom-in border border-slate-200 shadow-sm transition-transform hover:scale-[1.01]"
-                          title="Klik untuk pratinjau ukuran penuh"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={selectedItem.image_data_url}
-                            alt={selectedItem.image_caption || "Visual Asset"}
-                            className="w-full h-full object-contain p-1 transition-transform duration-200 group-hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-medium gap-1">
-                            <Maximize2 size={13} />
-                            <span>Perbesar</span>
-                          </div>
-                          <span className="absolute bottom-1 right-1 bg-black/75 text-[9px] font-mono text-white px-1.5 py-0.5 rounded">
-                            Word & PPTX
-                          </span>
-                        </div>
+                  {selectedItem.image_data_url ? (() => {
+                    const itemsWithImages = items.filter((it) => Boolean(it.image_data_url));
+                    const figureIndex = itemsWithImages.findIndex((it) => it.id === selectedItem.id) + 1;
+                    const cleanCapText = (selectedItem.image_caption || "")
+                      .replace(/^(?:Gambar|Figure)\s*\d+(?:\.\d+)*\s*[:.-]?\s*/i, "")
+                      .trim();
 
-                        {/* Detail, Caption Input, & Quick Action Bar */}
-                        <div className="flex-1 min-w-0 space-y-2">
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-800">
-                                Aset Visual Terlampir
-                              </span>
-                              <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[9.5px] font-semibold border border-emerald-200">
-                                ✓ Siap Ekspor ke Word & PPTX
-                              </span>
-                            </div>
-
-                            {/* Quick Action Buttons */}
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenStudio("search")}
-                                className="rounded-md px-2.5 py-1 text-[11px] font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1 shadow-2xs"
-                                title="Ganti foto dengan pencarian perangkat publik"
-                              >
-                                <RefreshCw size={11} />
-                                <span>Ganti Foto</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenStudio("hld")}
-                                className="rounded-md px-2.5 py-1 text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors flex items-center gap-1 shadow-2xs"
-                                title="Buat atau edit topologi arsitektur di HLD Studio"
-                              >
-                                <Layers size={11} />
-                                <span>Edit HLD</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setPreviewImageModal({
-                                    url: selectedItem.image_data_url!,
-                                    caption:
-                                      selectedItem.image_caption ||
-                                      `Aset Visual: ${selectedItem.title}`,
-                                  })
-                                }
-                                className="rounded-md px-2 py-1 text-[11px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1 shadow-2xs"
-                                title="Lihat ukuran penuh"
-                              >
-                                <Maximize2 size={11} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updated = {
-                                    ...selectedItem,
-                                    image_data_url: undefined,
-                                    image_caption: undefined,
-                                  };
-                                  setItems((prev) =>
-                                    prev.map((it) =>
-                                      it.id === updated.id ? updated : it
-                                    )
-                                  );
-                                }}
-                                className="rounded-md p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
-                                title="Hapus aset visual dari bab ini"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Editable caption */}
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">
-                              Keterangan Gambar (Caption di Word & PowerPoint):
-                            </label>
-                            <input
-                              type="text"
-                              value={selectedItem.image_caption || ""}
-                              onChange={(e) => {
-                                const newCap = e.target.value;
-                                const updated = {
-                                  ...selectedItem,
-                                  image_caption: newCap,
-                                };
-                                setItems((prev) =>
-                                  prev.map((it) =>
-                                    it.id === updated.id ? updated : it
-                                  )
-                                );
-                              }}
-                              placeholder="Mis: Gambar 2.1: Server HPE ProLiant DL360 Gen10 High Density Rackmount"
-                              className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none shadow-2xs"
+                    return (
+                      <div className="rounded-xl border border-blue-200/80 bg-gradient-to-r from-blue-50/40 via-white to-indigo-50/30 p-4 shadow-subtle">
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                          {/* Thumbnail with click-to-zoom */}
+                          <div
+                            onClick={() => {
+                              setPreviewModalScale(1);
+                              setPreviewImageModal({
+                                url: selectedItem.image_data_url!,
+                                caption: `Gambar ${figureIndex}: ${cleanCapText || selectedItem.title}`,
+                              });
+                            }}
+                            className="relative group w-36 h-24 bg-slate-900 rounded-lg overflow-hidden flex-shrink-0 cursor-zoom-in border border-slate-200 shadow-sm transition-transform hover:scale-[1.01]"
+                            title="Klik untuk pratinjau ukuran penuh"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={selectedItem.image_data_url}
+                              alt={selectedItem.image_caption || "Visual Asset"}
+                              className="w-full h-full object-contain p-1 transition-transform duration-200 group-hover:scale-105"
                             />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-medium gap-1">
+                              <Maximize2 size={13} />
+                              <span>Perbesar</span>
+                            </div>
+                            <span className="absolute bottom-1 right-1 bg-black/75 text-[9px] font-mono text-white px-1.5 py-0.5 rounded">
+                              Gambar {figureIndex}
+                            </span>
+                          </div>
+
+                          {/* Detail, Caption Input, & Quick Action Bar */}
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-800">
+                                  Aset Visual Bagian Ini
+                                </span>
+                                <span className="rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-[9.5px] font-semibold border border-blue-200">
+                                  ✓ Urutan Gambar {figureIndex} (Auto-Renumbering)
+                                </span>
+                              </div>
+
+                              {/* Quick Action Buttons */}
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => hiddenSubBabFileInputRef.current?.click()}
+                                  className="rounded-md px-2.5 py-1 text-[11px] font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                  title="Ganti dengan upload gambar dari komputer"
+                                >
+                                  <UploadCloud size={11} className="text-blue-600" />
+                                  <span>Ganti File</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenStudio("search")}
+                                  className="rounded-md px-2.5 py-1 text-[11px] font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                  title="Ganti foto dengan pencarian perangkat publik"
+                                >
+                                  <RefreshCw size={11} />
+                                  <span>Cari Foto</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenStudio("hld")}
+                                  className="rounded-md px-2.5 py-1 text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                  title="Buat atau edit topologi arsitektur di HLD Studio"
+                                >
+                                  <Layers size={11} />
+                                  <span>Edit HLD</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPreviewModalScale(1);
+                                    setPreviewImageModal({
+                                      url: selectedItem.image_data_url!,
+                                      caption: `Gambar ${figureIndex}: ${cleanCapText || selectedItem.title}`,
+                                    });
+                                  }}
+                                  className="rounded-md px-2 py-1 text-[11px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                  title="Lihat ukuran penuh"
+                                >
+                                  <Maximize2 size={11} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = {
+                                      ...selectedItem,
+                                      image_data_url: undefined,
+                                      image_caption: undefined,
+                                    };
+                                    setItems((prev) =>
+                                      prev.map((it) =>
+                                        it.id === updated.id ? updated : it
+                                      )
+                                    );
+                                  }}
+                                  className="rounded-md p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                                  title="Hapus aset visual dari bab ini"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Sequential Auto-Renumbering Caption */}
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 block">
+                                  Keterangan Gambar (Caption Word & PPTX):
+                                </label>
+                                <span className="text-[9.5px] text-slate-400">
+                                  Nomor urut otomatis disesuaikan jika gambar dihapus atau ditambah
+                                </span>
+                              </div>
+
+                              <div className="flex items-center rounded-md border border-slate-300 bg-white shadow-2xs overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                                <div className="px-2.5 py-1.5 bg-slate-100 border-r border-slate-200 text-xs font-bold text-slate-700 select-none shrink-0">
+                                  Gambar {figureIndex}:
+                                </div>
+                                <input
+                                  type="text"
+                                  value={cleanCapText}
+                                  onChange={(e) => {
+                                    const newCap = e.target.value;
+                                    const updated = {
+                                      ...selectedItem,
+                                      image_caption: newCap,
+                                    };
+                                    setItems((prev) =>
+                                      prev.map((it) =>
+                                        it.id === updated.id ? updated : it
+                                      )
+                                    );
+                                  }}
+                                  placeholder="Ketik deskripsi gambar (mis: Topologi Arsitektur High Level Design)..."
+                                  className="w-full px-2.5 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none bg-transparent"
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
+                    );
+                  })() : (
                     /* Banner when no image is attached */
                     <div className="rounded-xl border border-dashed border-slate-300 bg-gradient-to-r from-slate-50 to-indigo-50/20 p-4 transition-colors hover:border-slate-400">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2980,19 +3020,27 @@ export default function DraftPage() {
                             <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                               Lampirkan Visual Perangkat / Topologi HLD
                               <span className="text-[10px] text-slate-500 font-normal">
-                                (Opsional)
+                                (Opsional per Sub-Bab)
                               </span>
                             </div>
                             <div className="text-[11px] text-slate-500 line-clamp-1">
-                              Perkuat proposal teknis dengan foto perangkat enterprise atau diagram arsitektur AI otomatis.
+                              Perkuat sub-bab ini dengan gambar sendiri, foto perangkat enterprise, atau diagram arsitektur.
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => hiddenSubBabFileInputRef.current?.click()}
+                            className="rounded-lg bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 px-3 py-1.5 text-xs font-semibold transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <UploadCloud size={13} className="text-blue-600" />
+                            <span>📁 Upload Gambar Sendiri</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleOpenStudio("search")}
-                            className="rounded-lg bg-white border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-2xs flex items-center gap-1.5"
+                            className="rounded-lg bg-white border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer"
                           >
                             <Search size={12} className="text-slate-500" />
                             <span>Cari Foto Publik</span>
@@ -3000,18 +3048,10 @@ export default function DraftPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenStudio("hld")}
-                            className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-2xs flex items-center gap-1.5"
+                            className="rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer"
                           >
                             <Sparkles size={12} className="text-indigo-600" />
                             <span>Buat Topologi HLD</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenStudio("upload")}
-                            className="rounded-lg bg-white border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors shadow-2xs"
-                            title="Upload gambar dari komputer"
-                          >
-                            <UploadCloud size={13} />
                           </button>
                         </div>
                       </div>
@@ -3586,17 +3626,17 @@ export default function DraftPage() {
         onClose={() => setIsOnboardingOpen(false)}
       />
 
-      {/* Full-resolution Image Lightbox Modal */}
-      {previewImageModal && (
+      {/* Full-resolution Image Lightbox Modal with React Portal and Zoom Controls */}
+      {previewImageModal && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-150"
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/85 p-3 sm:p-6 backdrop-blur-md animate-in fade-in duration-150 select-none overflow-hidden"
           onClick={() => setPreviewImageModal(null)}
         >
           <div
-            className="relative max-w-4xl w-full max-h-[90vh] bg-slate-900 rounded-xl overflow-hidden shadow-2xl flex flex-col border border-slate-700"
+            className="relative max-w-5xl w-full max-h-[92vh] bg-slate-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col border border-slate-700"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 bg-slate-950/80 border-b border-slate-800 text-white">
+            <div className="flex items-center justify-between px-5 py-3 bg-slate-950 border-b border-slate-800 text-white">
               <div className="flex items-center gap-2 truncate pr-4">
                 <span className="text-xs font-semibold truncate">
                   {previewImageModal.caption || "Pratinjau Visual Perangkat / Topologi"}
@@ -3605,35 +3645,75 @@ export default function DraftPage() {
                   Word & PPTX Preview
                 </span>
               </div>
-              <button
-                onClick={() => setPreviewImageModal(null)}
-                className="text-slate-400 hover:text-white rounded-md p-1 hover:bg-slate-800 transition-colors"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewModalScale((s) => Math.max(0.5, Number((s - 0.25).toFixed(2))))}
+                  className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md transition-colors font-medium cursor-pointer"
+                  title="Perkecil (-)"
+                >
+                  − Zoom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewModalScale(1)}
+                  className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md transition-colors font-medium font-mono cursor-pointer"
+                  title="Pas Layar (100%)"
+                >
+                  Fit 100%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewModalScale((s) => Math.min(2.5, Number((s + 0.25).toFixed(2))))}
+                  className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md transition-colors font-medium cursor-pointer"
+                  title="Perbesar (+)"
+                >
+                  + Zoom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewImageModal(null)}
+                  className="ml-2 px-3 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-md transition-colors cursor-pointer"
+                >
+                  ✕ Tutup
+                </button>
+              </div>
             </div>
-            <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-slate-950">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={previewImageModal.url}
-                alt={previewImageModal.caption}
-                className="max-h-[75vh] w-auto max-w-full object-contain rounded shadow-lg"
-              />
+
+            <div className="flex-1 overflow-auto flex items-center justify-center p-4 bg-slate-950/60">
+              <div className="relative flex items-center justify-center max-h-[70vh] max-w-full">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewImageModal.url}
+                  alt={previewImageModal.caption}
+                  style={{
+                    transform: `scale(${previewModalScale})`,
+                    transformOrigin: "center center",
+                    maxHeight: "68vh",
+                    maxWidth: "100%",
+                  }}
+                  className="w-auto h-auto object-contain rounded shadow-lg transition-transform duration-150 block mx-auto"
+                />
+              </div>
             </div>
-            <div className="px-4 py-2.5 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-              <span className="text-[11px] truncate max-w-lg">
+
+            <div className="px-5 py-2.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <span className="text-[11px] truncate max-w-lg font-medium">
                 {previewImageModal.caption}
               </span>
-              <a
-                href={previewImageModal.url}
-                download="visual-asset.png"
-                className="text-[11px] text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 font-medium"
-              >
-                ⬇️ Unduh PNG
-              </a>
+              <div className="flex items-center gap-3">
+                <a
+                  href={previewImageModal.url}
+                  download="visual-asset.png"
+                  className="text-xs text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1 font-semibold"
+                >
+                  ⬇️ Unduh File Resolusi Asli
+                </a>
+              </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

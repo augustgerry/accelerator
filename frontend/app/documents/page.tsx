@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { Topbar } from "@/components/topbar";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
   FileCode,
   SlidersHorizontal,
   Trash2,
+  UploadCloud,
 } from "lucide-react";
 import {
   getDocumentsSummary,
@@ -28,6 +29,7 @@ import {
   listDocuments,
   getDocumentChunks,
   deleteDocument,
+  uploadDocuments,
   type DocumentsSummary,
 } from "@/lib/api";
 import type { IndexedDocument, DocumentChunksResponse, DocumentChunkItem } from "@/lib/types";
@@ -56,6 +58,32 @@ export default function DocumentsPage() {
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
+
+  // Local File Upload / AI Background Learning state
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const [uploadDocType, setUploadDocType] = useState<"document" | "template">("document");
+
+  const handleUploadFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIsUploading(true);
+    setUploadFeedback(null);
+    setError(null);
+    try {
+      const res = await uploadDocuments(Array.from(files), uploadDocType);
+      const totalChunks = res.uploaded.reduce((acc, curr) => acc + curr.chunks, 0);
+      setUploadFeedback(
+        `Berhasil mengunggah ${res.total_uploaded} dokumen (${totalChunks} klausul/chunk diindeks ke pgvector untuk AI learning)!`
+      );
+      await loadData();
+    } catch (err: any) {
+      setError(err?.message || "Gagal mengunggah dokumen");
+    } finally {
+      setIsUploading(false);
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 250);
@@ -267,6 +295,80 @@ export default function DocumentsPage() {
               {syncing ? "Syncing..." : "Sync Drive"}
             </Button>
           </div>
+        </div>
+
+        {/* Local Document & Stencil Upload (Background AI Learning) */}
+        <div className="rounded-2xl border border-blue-200/80 bg-gradient-to-r from-blue-50/50 via-white to-indigo-50/40 p-5 shadow-sm space-y-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <UploadCloud size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  Unggah Dokumen Acuan & Stencil (Background AI Learning)
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-semibold border border-blue-200">
+                    Otomatis Diindeks ke Vector DB
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                  Unggah contoh proposal lampau, spesifikasi teknis, KAK/TOR, atau stencil datasheet. Sistem akan langsung mengekstrak teks, memotong per klausul (chunking), dan mengindeks ke <strong>pgvector</strong> di background. AI akan menjadikannya referensi faktual dan acuan penulisan otomatis!
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <input
+                ref={uploadInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.docx,.doc,.txt,.md,.json"
+                className="hidden"
+                onChange={(e) => handleUploadFiles(e.target.files)}
+              />
+
+              <select
+                value={uploadDocType}
+                onChange={(e) => setUploadDocType(e.target.value as any)}
+                className="text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 shadow-2xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="document">Tipe: Dokumen Acuan / TOR</option>
+                <option value="template">Tipe: Template Proposal / Stencil</option>
+              </select>
+
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={isUploading}
+                onClick={() => uploadInputRef.current?.click()}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs gap-1.5 shadow-sm cursor-pointer"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    Mengindeks Dokumen...
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud size={14} />
+                    Pilih File (PDF/DOCX/TXT)
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {uploadFeedback && (
+            <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between">
+              <span>{uploadFeedback}</span>
+              <button
+                onClick={() => setUploadFeedback(null)}
+                className="text-emerald-600 hover:text-emerald-900 font-semibold"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Document List Section */}

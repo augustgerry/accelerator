@@ -58,6 +58,34 @@ export async function deleteDocument(docId: string): Promise<void> {
   }
 }
 
+export async function uploadDocuments(
+  files: File[],
+  docType: string = "document",
+  division: string = "presales"
+): Promise<{
+  success: boolean;
+  uploaded: Array<{ id: string; filename: string; chunks: number; bytes: number }>;
+  failed: Array<{ filename: string; reason: string }>;
+  total_uploaded: number;
+}> {
+  const formData = new FormData();
+  for (const f of files) {
+    formData.append("files", f);
+  }
+  formData.append("doc_type", docType);
+  formData.append("division", division);
+
+  const res = await fetch(`${API_BASE}/documents/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Upload failed (${res.status}): ${detail}`);
+  }
+  return res.json();
+}
+
 export async function syncDocuments(): Promise<{ synced: string[]; skipped: string[]; unchanged: string[] }> {
   const res = await fetch(`${API_BASE}/documents/sync`, { method: "POST" });
   if (!res.ok) {

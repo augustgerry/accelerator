@@ -584,9 +584,26 @@ def search_public_images(query: str, limit: int = 8) -> list[dict]:
         if len(deduped) >= limit:
             break
 
-    # Always generate and prepend the high-fidelity 2D synthetic hardware visual
-    synthetic_asset = generate_synthetic_hardware_visual(clean_query)
-    deduped.insert(0, synthetic_asset)
+    # Always generate and prepend both official front faceplate and rear I/O stencils
+    synthetic_front = generate_synthetic_hardware_visual(clean_query)
+    deduped.insert(0, synthetic_front)
+
+    try:
+        from app.services.hardware_rear_render import render_rear_chassis_visual
+        rear_asset = render_rear_chassis_visual(clean_query)
+        rear_entry = {
+            "title": rear_asset["title"],
+            "image_url": rear_asset["data_url"],
+            "thumbnail_url": rear_asset["data_url"],
+            "data_url": rear_asset["data_url"],
+            "source": f"Official {clean_query} Rear Stencil & Port Callouts",
+            "width": rear_asset["width"],
+            "height": rear_asset["height"],
+            "is_synthetic": True,
+        }
+        deduped.insert(1, rear_entry)
+    except Exception as rear_exc:
+        logger.warning(f"Could not generate rear stencil for search query: {rear_exc}")
 
     return deduped[:limit]
 

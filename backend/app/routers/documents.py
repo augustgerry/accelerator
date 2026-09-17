@@ -1,7 +1,8 @@
+import io
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -13,6 +14,96 @@ from app.services.drive_sync import DOCX_MIME, PPTX_MIME, download_file_bytes, f
 from app.services.embeddings import chunk_text, embed_text
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+def extract_text_from_bytes(filename: str, content: bytes) -> str:
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if ext == "pdf":
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(content))
+            pages_text = []
+            for p in reader.pages:
+                t = p.extract_text()
+                if t:
+                    pages_text.append(t)
+            return "\n\n".join(pages_text)
+        except Exception as e:
+            return f"[Ekstraksi PDF gagal: {e}]"
+    elif ext in ("docx", "doc"):
+        try:
+            import docx
+            doc = docx.Document(io.BytesIO(content))
+            return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+        except Exception as e:
+            return f"[Ekstraksi DOCX gagal: {e}]"
+    else:
+        return content.decode("utf-8", errors="replace")
+
+
+@router.post("/upload")
+async def upload_documents(
+    files: list[UploadFile] = File(...),
+    doc_type: str = Form("document"),
+    division: str = Form("presales"),
+    workspace_id: str = settings.default_workspace_id,
+    session: Session = Depends(get_session),
+):
+    """Upload local reference documents (PDF, DOCX, TXT, KAK/TOR, Stencils) into the knowledge base.
+    The text is extracted, chunked, and embedded into pgvector so the LLM learns and references them in the background."""
+    uploaded = []
+    failed = []
+
+    for f in files:
+        try:
+            raw_bytes = await f.read()
+            text = extract_text_from_bytes(f.filename or "dokumen", raw_bytes)
+            if not text.strip():
+                failed.append({"filename": f.filename, "reason": "Teks dokumen kosong atau tidak terbaca"})
+                continue
+
+            doc_id = str(uuid.uuid4())
+            new_doc = Document(
+                id=doc_id,
+                workspace_id=workspace_id,
+                title=f.filename or "Dokumen Acuan",
+                doc_type=doc_type,
+                division=division,
+                source_drive_id=None,
+                source_modified_at=datetime.utcnow().isoformat(),
+                updated_at=datetime.utcnow(),
+            )
+            session.add(new_doc)
+
+            chunks = chunk_text(text)
+            for ch in chunks:
+                session.add(
+                    DocumentChunk(
+                        id=str(uuid.uuid4()),
+                        workspace_id=workspace_id,
+                        document_id=doc_id,
+                        content=ch,
+                        embedding=embed_text(ch),
+                    )
+                )
+
+            session.commit()
+            uploaded.append({
+                "id": doc_id,
+                "filename": f.filename,
+                "chunks": len(chunks),
+                "bytes": len(raw_bytes),
+            })
+        except Exception as exc:
+            session.rollback()
+            failed.append({"filename": f.filename, "reason": str(exc)})
+
+    return {
+        "success": True,
+        "uploaded": uploaded,
+        "failed": failed,
+        "total_uploaded": len(uploaded),
+    }
 
 
 @router.get("")

@@ -6,6 +6,7 @@ import os
 import re
 import urllib.request
 from typing import Optional
+import httpx
 from PIL import Image, ImageDraw, ImageFont
 
 from app.services.llm_provider import get_llm_provider

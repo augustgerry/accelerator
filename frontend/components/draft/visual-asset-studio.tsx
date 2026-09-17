@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { RequirementItem } from "@/lib/types";
 import { searchImages, downloadImage, generateHld, renderMermaid, generateHardwareVisual, renderHardwareRear } from "@/lib/api";
 
@@ -21,6 +22,18 @@ export function VisualAssetStudio({
 }: VisualAssetStudioProps) {
   const [activeTab, setActiveTab] = useState<"search" | "hardware" | "hld" | "upload">(initialTab);
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
+  const [zoomScale, setZoomScale] = useState<number>(1);
+  const [hwViewType, setHwViewType] = useState<"front" | "rear">("rear");
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && zoomImageUrl) {
+        setZoomImageUrl(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [zoomImageUrl]);
 
   useEffect(() => {
     if (initialTab) {
@@ -211,24 +224,38 @@ export function VisualAssetStudio({
     }
   };
 
-  // Handle Generate 2D Hardware Visual
-  const handleGenerateHardware = async (nameOverride?: string, ffOverride?: "1U" | "2U" | "4U") => {
+  // Handle Generate Hardware Visual (Front Faceplate or Rear I/O Stencil)
+  const handleGenerateHardware = async (
+    nameOverride?: string,
+    ffOverride?: "1U" | "2U" | "4U",
+    viewOverride?: "front" | "rear"
+  ) => {
     const devName = (nameOverride ?? hwDeviceName).trim();
     if (!devName) return;
     if (nameOverride) setHwDeviceName(nameOverride);
     const ff = ffOverride ?? hwFormFactor;
     if (ffOverride) setHwFormFactor(ffOverride);
+    const view = viewOverride ?? hwViewType;
+    if (viewOverride) setHwViewType(viewOverride);
 
     setIsGeneratingHw(true);
     try {
-      const res = await generateHardwareVisual(devName, ff);
-      setHwGeneratedAsset({
-        data_url: res.data_url || res.image_url || res.thumbnail_url,
-        title: res.title,
-      });
+      if (view === "rear") {
+        const res = await renderHardwareRear(devName);
+        setHwGeneratedAsset({
+          data_url: res.data_url,
+          title: res.title,
+        });
+      } else {
+        const res = await generateHardwareVisual(devName, ff);
+        setHwGeneratedAsset({
+          data_url: res.data_url || res.image_url || res.thumbnail_url,
+          title: res.title,
+        });
+      }
     } catch (err: any) {
       console.error("Generate hardware visual error:", err);
-      alert("Gagal generate visual chassis 2D: " + (err?.message || "Kesalahan server"));
+      alert("Gagal generate visual stencil hardware: " + (err?.message || "Kesalahan server"));
     } finally {
       setIsGeneratingHw(false);
     }
@@ -843,6 +870,36 @@ export function VisualAssetStudio({
 
               <div>
                 <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                  Sudut Pandang / Tampilan:
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setHwViewType("rear")}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-md border transition-all ${
+                      hwViewType === "rear"
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    🔌 Tampak Belakang & Port
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHwViewType("front")}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-md border transition-all ${
+                      hwViewType === "front"
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    🖥️ Tampak Depan (Faceplate)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-700 mb-1">
                   Form Factor:
                 </label>
                 <div className="flex items-center gap-1">
@@ -873,31 +930,31 @@ export function VisualAssetStudio({
                   {isGeneratingHw ? (
                     <>
                       <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Menggambar...
+                      Menggambar Stencil...
                     </>
                   ) : (
-                    "🎨 Gambar Chassis 2D"
+                    hwViewType === "rear" ? "🔌 Gambar Port Belakang" : "🎨 Gambar Faceplate Depan"
                   )}
                 </button>
               </div>
             </div>
 
-            {/* Quick Presets for Hardware */}
+            {/* Quick Presets for Official Brand Hardware */}
             <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-200/60">
-              <span className="text-[10px] text-slate-500 font-medium">Preset Cepat:</span>
+              <span className="text-[10px] text-slate-500 font-semibold">Stencil Resmi Brand:</span>
               {[
-                { name: "Pure Storage FlashArray //X20", ff: "2U" as const },
-                { name: "HPE ProLiant DL360 Gen10", ff: "1U" as const },
+                { name: "Fortinet FortiGate 100F NGFW", ff: "1U" as const },
+                { name: "Cisco Catalyst 9300-48P Switch", ff: "1U" as const },
+                { name: "Sangfor HCI aServer 2200", ff: "2U" as const },
                 { name: "Dell PowerEdge R750", ff: "2U" as const },
-                { name: "Cisco Catalyst 9300 Switch", ff: "1U" as const },
-                { name: "Sangfor HCI aSV Server Node", ff: "2U" as const },
-                { name: "DirectFlash Petabyte Array", ff: "4U" as const },
+                { name: "HPE ProLiant DL360 Gen10", ff: "1U" as const },
+                { name: "Pure Storage FlashArray //X20", ff: "2U" as const },
               ].map((p) => (
                 <button
                   key={p.name}
                   type="button"
                   onClick={() => handleGenerateHardware(p.name, p.ff)}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-white hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-white hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors font-medium"
                 >
                   {p.name} ({p.ff})
                 </button>
@@ -976,56 +1033,105 @@ export function VisualAssetStudio({
         </div>
       )}
 
-      {/* Fullscreen zoom lightbox for the HLD render preview with compact auto-sizing container */}
-      {zoomImageUrl && (
+      {/* Fullscreen zoom lightbox using React Portal to prevent clipping/overflow */}
+      {zoomImageUrl && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-6 overflow-hidden select-none"
           onClick={() => setZoomImageUrl(null)}
         >
           <div
-            className="relative inline-flex flex-col items-center max-w-[94vw] max-h-[92vh] bg-white rounded-xl p-3 shadow-2xl border border-gray-300"
+            className="relative flex flex-col w-full max-w-5xl max-h-[92vh] bg-white rounded-2xl shadow-2xl border border-slate-300 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between w-full pb-2 mb-2 border-b border-gray-100">
-              <span className="text-xs font-semibold text-gray-800">
-                🔍 Pratinjau Resolusi Penuh
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-3 bg-slate-900 text-white border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-semibold tracking-wide">
+                  🔍 Pratinjau Visual & Stencil Resolusi Penuh
+                </span>
+                <span className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">
+                  {Math.round(zoomScale * 100)}%
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((s) => Math.max(0.5, Number((s - 0.25).toFixed(2))))}
+                  className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md transition-colors font-medium cursor-pointer"
+                  title="Perkecil (-)"
+                >
+                  − Zoom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomScale(1)}
+                  className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md transition-colors font-medium font-mono cursor-pointer"
+                  title="Pas Layar (100%)"
+                >
+                  Fit 100%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((s) => Math.min(2.5, Number((s + 0.25).toFixed(2))))}
+                  className="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md transition-colors font-medium cursor-pointer"
+                  title="Perbesar (+)"
+                >
+                  + Zoom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomImageUrl(null)}
+                  className="ml-2 px-3 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-md transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Tutup (Esc)"
+                >
+                  ✕ Tutup
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Image Body with Fit & Scale */}
+            <div className="flex-1 w-full min-h-0 flex items-center justify-center p-4 bg-slate-900/5 overflow-auto">
+              <div className="relative flex items-center justify-center max-h-[70vh] max-w-full">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={zoomImageUrl}
+                  alt="HLD Diagram — pratinjau penuh"
+                  style={{
+                    transform: `scale(${zoomScale})`,
+                    transformOrigin: "center center",
+                    maxHeight: "68vh",
+                    maxWidth: "100%",
+                  }}
+                  className="w-auto h-auto object-contain rounded-lg shadow-sm transition-transform duration-150 select-none block mx-auto"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between px-5 py-2.5 bg-slate-50 border-t border-slate-200">
+              <span className="text-[11px] text-slate-500 hidden sm:inline">
+                💡 Diagram secara otomatis dipaskan dengan layar. Gunakan tombol zoom untuk melihat detail port. Tekan ESC untuk menutup.
               </span>
-              <button
-                type="button"
-                onClick={() => setZoomImageUrl(null)}
-                className="text-gray-400 hover:text-gray-700 text-sm p-1 rounded-md"
-              >
-                ✕ Tutup
-              </button>
-            </div>
-
-            <div className="flex items-center justify-center overflow-auto max-h-[78vh] max-w-[90vw] p-1 bg-slate-50 rounded">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={zoomImageUrl}
-                alt="HLD Diagram — pratinjau penuh"
-                className="max-h-[75vh] max-w-[88vw] w-auto h-auto object-contain rounded shadow-xs"
-              />
-            </div>
-
-            <div className="mt-2.5 flex items-center justify-end w-full gap-2 pt-2 border-t border-gray-100">
-              <a
-                href={zoomImageUrl}
-                download="diagram-visual.png"
-                className="rounded-md bg-gray-900 px-3 py-1 text-xs font-medium text-white hover:bg-black"
-              >
-                ⬇️ Unduh PNG
-              </a>
-              <button
-                type="button"
-                onClick={() => setZoomImageUrl(null)}
-                className="rounded-md border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
-              >
-                Tutup
-              </button>
+              <div className="flex items-center gap-2 ml-auto">
+                <a
+                  href={zoomImageUrl}
+                  download="diagram-visual-hld.png"
+                  className="rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-black transition-colors shadow-xs flex items-center gap-1.5"
+                >
+                  ⬇️ Unduh PNG
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setZoomImageUrl(null)}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

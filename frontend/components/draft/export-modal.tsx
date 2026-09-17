@@ -26,7 +26,7 @@ import {
 } from "@/lib/api";
 import type { RequirementItem, IndexedDocument } from "@/lib/types";
 import { FORMAT_LABELS, getDocType, type DraftDocTypeId, type DraftFormat } from "@/lib/document-types";
-import { cleanLatexMath } from "@/app/draft/page";
+import { cleanLatexMath } from "@/lib/utils";
 
 const EXPORT_PRESETS: Array<{ docTypeId: DraftDocTypeId; format: DraftFormat; icon: string; label: string; sub: string }> = [
   { docTypeId: "narrative", format: "docx", icon: "📄", label: "Proposal Teknis", sub: "Word (.docx)" },
@@ -207,16 +207,27 @@ export function ExportModal({
   };
 
   const generateStandardBlob = async (): Promise<{ blob: Blob; ext: "docx" | "pdf" | "pptx"; filenamePrefix: string }> => {
-    const mappedItems = targetItems.map((it) => ({
-      id: it.id,
-      title: it.title,
-      requirement_text: it.requirement_text,
-      category: it.category,
-      draft_text: it.draft_text,
-      status: it.status,
-      image_data_url: it.image_data_url,
-      image_caption: it.image_caption,
-    }));
+    let figureCounter = 0;
+    const mappedItems = targetItems.map((it) => {
+      let finalCaption = it.image_caption;
+      if (it.image_data_url) {
+        figureCounter++;
+        const rawDesc = (it.image_caption || it.title)
+          .replace(/^(?:Gambar|Figure)\s*\d+(?:\.\d+)*\s*[:.-]?\s*/i, "")
+          .trim();
+        finalCaption = `Gambar ${figureCounter}: ${rawDesc || it.title}`;
+      }
+      return {
+        id: it.id,
+        title: it.title,
+        requirement_text: it.requirement_text,
+        category: it.category,
+        draft_text: it.draft_text,
+        status: it.status,
+        image_data_url: it.image_data_url,
+        image_caption: finalCaption,
+      };
+    });
     const docType = getDocType(docTypeId);
 
     if (format === "pptx") {
@@ -1206,19 +1217,29 @@ export function ExportModal({
                           </div>
 
                           {/* Image if any */}
-                          {it.image_data_url && (
-                            <div className="my-4 text-center">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={it.image_data_url}
-                                alt={it.image_caption || cleanTitle}
-                                className="max-h-72 mx-auto rounded border border-slate-200 shadow-sm object-contain"
-                              />
-                              <p className="text-[11px] text-slate-500 italic mt-1.5 font-medium">
-                                {it.image_caption || `Gambar: ${cleanTitle}`}
-                              </p>
-                            </div>
-                          )}
+                          {it.image_data_url && (() => {
+                            const itemsWithImg = targetItems.filter((t) => Boolean(t.image_data_url));
+                            const imgIdx = itemsWithImg.findIndex((t) => t.id === it.id);
+                            const figureNumber = imgIdx >= 0 ? imgIdx + 1 : 1;
+                            const rawDesc = (it.image_caption || cleanTitle)
+                              .replace(/^(?:Gambar|Figure)\s*\d+(?:\.\d+)*\s*[:.-]?\s*/i, "")
+                              .trim();
+                            const figureCaption = `Gambar ${figureNumber}: ${rawDesc || cleanTitle}`;
+
+                            return (
+                              <div className="my-4 text-center">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={it.image_data_url}
+                                  alt={figureCaption}
+                                  className="max-h-72 mx-auto rounded border border-slate-200 shadow-sm object-contain"
+                                />
+                                <p className="text-[11px] text-slate-700 italic mt-1.5 font-semibold">
+                                  {figureCaption}
+                                </p>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
