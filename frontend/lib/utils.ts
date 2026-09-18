@@ -31,3 +31,17 @@ export function cleanLatexMath(text: string): string {
   res = res.replace(/\\([a-zA-Z]+)/g, "$1");
   return res.trim();
 }
+
+/**
+ * Pembersih karakter aneh / unescaped markdown artifacts pada teks proposal dan tabel
+ */
+export function cleanDraftMarkdown(text: string): string {
+  if (!text) return "";
+  let res = cleanLatexMath(text);
+  // Bersihkan unescaped HTML entities & non-breaking spaces
+  res = res.replace(/&nbsp;/g, " ").replace(/&#160;/g, " ");
+  // Bersihkan backslash escapes berlebih sebelum karakter biasa
+  res = res.replace(/\\([_*~`])/g, "$1");
+  return res;
+}
+

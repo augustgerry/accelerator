@@ -12,6 +12,7 @@ export type SkeletonSection = {
 
 export const SKELETONS: Record<DraftDocTypeId, SkeletonSection[]> = {
   narrative: [
+    { id: "sec-nda", title: "0. Pengakuan Kerahasiaan (Non-Disclosure & Confidentiality)", category: "Administrasi & Legal", description: "Pernyataan resmi pengakuan kerahasiaan atas seluruh informasi, data teknis, dan dokumen tender dari Klien yang diterima oleh PT Smartnet Magna Global, sesuai dengan ketentuan kerahasiaan dan regulasi perlindungan data." },
     { id: "sec-1", title: "1. Latar Belakang", category: "Umum", description: "Konteks proyek, latar belakang pengadaan, dan urgensi modernisasi infrastruktur klien." },
     { id: "sec-1-1", title: "1.1 Kondisi Existing Infrastruktur", category: "Teknis", description: "Deskripsi kondisi eksisting perangkat/sistem klien saat ini beserta keterbatasan dan bottleneck operasionalnya." },
     { id: "sec-1-2", title: "1.2 Risiko End of Life (EOL) / End of Support (EOS)", category: "Teknis", description: "Analisis risiko perangkat yang sudah/akan EOL-EOS dan dampak operasional jika tidak segera diganti." },
@@ -81,3 +82,71 @@ export const SKELETONS: Record<DraftDocTypeId, SkeletonSection[]> = {
     { id: "sec-next-steps", title: "Slide 6: Implementation Roadmap & Next Steps", category: "Manajemen Proyek", description: "Jadwal pengerjaan bertahap, alokasi sumber daya, dan ajakan tindak lanjut (Call to Action / PoC / Workshop)." },
   ],
 };
+
+export const MANAGED_SERVICES_SKELETON: SkeletonSection[] = [
+  { id: "sec-ms-nda", title: "0. Pengakuan Kerahasiaan (Non-Disclosure & Confidentiality)", category: "Administrasi & Legal", description: "Pernyataan pengakuan kerahasiaan atas seluruh data platform, arsitektur, dan informasi tender Klien yang diterima oleh PT Smartnet Magna Global, menjamin perlindungan data dan kepatuhan regulasi perbankan/finansial." },
+  { id: "sec-ms-1", title: "1. Latar Belakang & Pemahaman Kebutuhan", category: "Umum", description: "Latar belakang pengadaan managed services, profil ekosistem data platform, dan urgensi stabilitas operasional 24x7." },
+  { id: "sec-ms-1-1", title: "1.1 Profil Ekosistem Data Platform Klien", category: "Teknis", description: "Pemetaan platform eksisting (Cloudera Data Platform, Apache Airflow, Apache Flink, Qlik Replicate, Greenplum, Talend, Tableau) dan future data platform." },
+  { id: "sec-ms-1-2", title: "1.2 Urgensi Operasional 24x7 & Stabilitas Layanan", category: "Teknis", description: "Pentingnya ketersediaan platform data perbankan tanpa henti untuk integrasi data, analitik, pelaporan, dan kepatuhan regulasi." },
+  { id: "sec-ms-2", title: "2. Tujuan Proyek", category: "Umum", description: "Sasaran objektif Managed Service Provider: 24x7 monitoring, incident management, problem resolution, job monitoring, dan pemeliharaan preventif." },
+  { id: "sec-ms-3", title: "3. Proposed Solution: Metodologi Layanan & Model Operasi", category: "Teknis", description: "Metodologi komprehensif pengoperasian data platform, model rotasi shift 24x7, dan alur penanganan insiden cepat." },
+  { id: "sec-ms-3-1", title: "3.1 Model Operasi 24x7 Rotational Shift", category: "Teknis", description: "Skema pembagian shift kerja 24x7 (Shift 1, 2, 3), penempatan on-site, dan mitigasi liputan hari libur nasional." },
+  { id: "sec-ms-3-2", title: "3.2 Prosedur Deteksi, Level 1 Troubleshooting & Recovery", category: "Teknis", description: "Prosedur deteksi alert, investigasi awal, recovery L1, dan komitmen response time di bawah 5 menit." },
+  { id: "sec-ms-3-3", title: "3.3 Prosedur Eskalasi Insiden via ServiceNow", category: "Teknis", description: "Alur eskalasi tiket insiden ke tim internal (Big Data Ops / BI Ops) dengan eskalasi <5 menit serta tracking hingga tuntas." },
+  { id: "sec-ms-3-4", title: "3.4 Tata Kelola Koordinasi Multi-Tim", category: "Teknis", description: "Mekanisme koordinasi harian dengan IT Data Center Operations, IT DBA, dan IT Business Enablement." },
+  { id: "sec-ms-4", title: "4. Compliance Matrix Kebutuhan Layanan TOR", category: "Teknis", description: "Matriks kepatuhan rinci terhadap butir kebutuhan TOR (cakupan platform, jam operasional, SLA, dan kualifikasi personel)." },
+  { id: "sec-ms-5", title: "5. Manpower & Resource Plan", category: "Manajemen Proyek", description: "Rencana penugasan sumber daya manusia terdedikasi sesuai tahapan kebutuhan headcount TOR." },
+  { id: "sec-ms-5-1", title: "5.1 Alokasi Headcount Bertahap (Fase 1: 5 Personel | Fase 2: 8 Personel)", category: "Manajemen Proyek", description: "Rencana deployment 5 personel tahap awal dan peningkatan menjadi 8 personel sesuai jadwal TOR." },
+  { id: "sec-ms-5-2", title: "5.2 Skill Matrix Personel per Shift", category: "Teknis", description: "Distribusi keahlian per shift mencakup Big Data Ops dan BI & Structured Data Ops." },
+  { id: "sec-ms-5-3", title: "5.3 Penempatan Personel On-Site & Rencana Kontinuitas", category: "Manajemen Proyek", description: "Penempatan on-site dan skema cadangan personel saat cuti, sakit, atau hari libur keagamaan." },
+  { id: "sec-ms-6", title: "6. Implementation & Onboarding Plan", category: "Manajemen Proyek", description: "Rencana transisi operasional, transfer knowledge, dan onboarding sebelum tanggal go-live." },
+  { id: "sec-ms-6-1", title: "6.1 Scope of Work", category: "Manajemen Proyek", description: "Batasan tanggung jawab penyedia dalam layanan monitoring operasional 24x7 dan L1 troubleshooting." },
+  { id: "sec-ms-6-2", title: "6.2 Out of Scope", category: "Administrasi & Legal", description: "Batasan hal-hal di luar lingkup layanan operasional L1." },
+  { id: "sec-ms-6-3", title: "6.3 Timeline Transisi & Screening Onboarding", category: "Manajemen Proyek", description: "Jadwal transisi sebelum go-live, proses screening SLIK Checking, dan penandatanganan NDA." },
+  { id: "sec-ms-7", title: "7. Service Level Agreement (SLA) & Reporting Plan", category: "SLA & Support", description: "Komitmen tingkat layanan kuantitatif, standar pelaporan berkala, dan garansi operasional." },
+  { id: "sec-ms-7-1", title: "7.1 Komitmen Target SLA (Response & Escalation Time)", category: "SLA & Support", description: "Komitmen waktu deteksi/respons <5 menit, eskalasi tiket <5 menit, dan 100% ketersediaan shift." },
+  { id: "sec-ms-7-2", title: "7.2 Standar Laporan Insiden & Root Cause Analysis (RCA)", category: "SLA & Support", description: "Format incident report lengkap dengan kronologi kejadian, analisa akar masalah (RCA), dan solusi permanen." },
+  { id: "sec-ms-7-3", title: "7.3 Mekanisme Laporan Berkala (Harian, Bulanan & Ad-Hoc)", category: "SLA & Support", description: "Penyusunan laporan operasional harian, laporan bulanan manajemen, dan laporan ad-hoc." },
+  { id: "sec-ms-7-4", title: "7.4 Garansi Layanan Pasca-Implementasi", category: "SLA & Support", description: "Ketentuan garansi operasional 6 bulan sesuai kriteria evaluasi tender." },
+  { id: "sec-ms-8", title: "8. Lampiran", category: "Administrasi & Legal", description: "Kredensial perusahaan, portofolio proyek serupa, dan CV tenaga ahli." },
+  { id: "sec-ms-8-1", title: "8.1 Profil Perusahaan & Portofolio Relevan", category: "Administrasi & Legal", description: "Profil PT Smartnet Magna Global (Member of CTI Group), legalitas, dan pengalaman implementasi data platform." },
+  { id: "sec-ms-8-2", title: "8.2 Profil & CV Tenaga Ahli (Ready Resource Pool)", category: "Administrasi & Legal", description: "Daftar riwayat hidup (CV) dan sertifikasi tenaga ahli yang ditugaskan." },
+];
+
+export function getSkeletonForDoc(docTypeId: DraftDocTypeId, torText: string = ""): SkeletonSection[] {
+  let base: SkeletonSection[];
+  if (docTypeId === "narrative") {
+    const lower = torText.toLowerCase();
+    const isManagedServices = ["managed service", "24x7", "rotational shift", "level 1", "l1", "servicenow", "headcount"].some(
+      (k) => lower.includes(k)
+    );
+    base = isManagedServices ? [...MANAGED_SERVICES_SKELETON] : [...SKELETONS.narrative];
+  } else {
+    base = [...(SKELETONS[docTypeId] ?? SKELETONS.narrative)];
+  }
+
+  // Deteksi nama institusi klien dari teks TOR untuk mempersonalisasi Pengakuan Kerahasiaan
+  const lowerText = torText.toLowerCase();
+  let clientName = "Klien";
+  if (lowerText.includes("smbc") || lowerText.includes("bank smbc")) {
+    clientName = "PT Bank SMBC Indonesia Tbk";
+  } else if (lowerText.includes("csul") || lowerText.includes("chandra sakti")) {
+    clientName = "PT Chandra Sakti Utama Leasing (CSUL Finance)";
+  } else if (lowerText.includes("bni")) {
+    clientName = "PT Bank Negara Indonesia (Persero) Tbk";
+  } else if (lowerText.includes("mandiri")) {
+    clientName = "PT Bank Mandiri (Persero) Tbk";
+  }
+
+  return base.map((sec) => {
+    if (sec.id.includes("nda")) {
+      return {
+        ...sec,
+        title: `0. Pengakuan Kerahasiaan (${clientName})`,
+        description: `Pernyataan resmi pengakuan kerahasiaan atas seluruh informasi, data teknis, arsitektur data platform, dan dokumen tender ${clientName} yang diterima oleh PT Smartnet Magna Global, sesuai standar Non-Disclosure Agreement (NDA) dan kepatuhan regulasi perbankan.`,
+      };
+    }
+    return sec;
+  });
+}
+

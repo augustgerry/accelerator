@@ -157,3 +157,136 @@ def extract_pdf_with_ocr_fallback(file_bytes: bytes, enable_ocr: bool = True) ->
         "is_ocr_extracted": scanned_pages > 0,
     }
     return clean_text, meta
+
+
+def infer_document_archetype_and_client(title: str, text: str = "") -> dict:
+    """Infer tender archetype, industry, and client name from file title and text."""
+    combined = f"{title} {text[:8000]}".lower()
+
+    # Archetype detection
+    from app.services.llm_provider import detect_tender_archetype
+    archetype = detect_tender_archetype(text[:15000], title)
+
+    # Industry detection
+    industry = "general"
+    if any(k in combined for k in ["bank", "perbankan", "smbc", "btpn", "bca", "mandiri", "bri", "cimb", "bi", "ojk"]):
+        industry = "banking"
+    elif any(k in combined for k in ["finance", "multifinance", "csul", "leasing", "pembiayaan"]):
+        industry = "multifinance"
+    elif any(k in combined for k in ["telkom", "telkomsel", "indosat", "xl", "smartfren"]):
+        industry = "telco"
+    elif any(k in combined for k in ["kementerian", "dinas", "pemerintah", "bumn", "lpse"]):
+        industry = "government"
+
+    # Client name extraction
+    client_name = ""
+    client_patterns = [
+        r"(?:pt\s+)?bank\s+smbc\s+indonesia(?:\s+tbk)?",
+        r"(?:pt\s+)?smbc\s+indonesia",
+        r"(?:pt\s+)?csul\s+finance",
+        r"(?:pt\s+)?btpn(?:\s+tbk)?",
+        r"(?:pt\s+)?bank\s+[a-z0-9\s]+(?:\s+tbk)?",
+        r"(?:pt\s+)?[a-z0-9\s]+finance",
+    ]
+    for cp in client_patterns:
+        m = re.search(cp, combined, re.IGNORECASE)
+        if m:
+            client_name = m.group(0).strip().title()
+            break
+
+    if not client_name:
+        # Fallback to title words
+        clean_title = re.sub(r"(?i)\b(proposal|sow|mom|kak|tor|rfp|final|draft|teknis|v\d+|\.docx|\.pdf)\b", "", title).strip(" -_")
+    # Document category detection
+    doc_category = "proposal"
+    if any(k in combined for k in ["scope of work", " sow", "_sow", "kak", "kerangka acuan kerja"]):
+        doc_category = "sow"
+    elif any(k in combined for k in ["mom", "minutes of meeting", "notulen", "berita acara", "klarifikasi teknis", "aanwijzing"]):
+        doc_category = "mom"
+    elif any(k in combined for k in ["sla", "service level agreement", "pks", "perjanjian kerja sama", "kontrak pemeliharaan"]):
+        doc_category = "sla_contract"
+    elif any(k in combined for k in ["solution brief", "whitepaper", "arsitektur solusi", "hld", "lld"]):
+        doc_category = "solution_brief"
+    elif any(k in combined for k in ["tor", "term of reference", "rks", "rfp"]):
+        doc_category = "tor"
+
+    return {
+        "archetype": archetype,
+        "industry": industry,
+        "client_name": client_name,
+        "doc_category": doc_category,
+    }
+
+
+def extract_document_structure(file_bytes: bytes, file_name: str, raw_text: str = "") -> dict:
+    """Extract structural DNA (Table of Contents / Section Hierarchies) from DOCX or text/PDF.
+    Detects Heading 1/2/3 styles, numbered clauses (1., 1.1, Bab I), and builds a structured tree.
+    """
+    sections: list[dict] = []
+    lower_name = file_name.lower()
+
+    is_docx = lower_name.endswith(".docx") or (bool(file_bytes) and file_bytes[:4] == b"PK\x03\x04")
+    if is_docx:
+        try:
+            import docx
+            doc = docx.Document(io.BytesIO(file_bytes))
+            heading_regex = re.compile(r"^(?:(?:bab\s+[ivx0-9]+|[0-9]+(?:\.[0-9]+)*\.?|[a-z]\.)\s+|document\s+release|pengakuan\s+kerahasiaan)", re.IGNORECASE)
+
+            for p in doc.paragraphs:
+                txt = p.text.strip()
+                if not txt:
+                    continue
+                style_name = p.style.name.lower() if p.style else ""
+
+                is_heading = (
+                    "heading" in style_name
+                    or style_name in ["title", "subtitle"]
+                    or (len(txt) < 80 and heading_regex.match(txt))
+                )
+
+                if is_heading:
+                    level = 1
+                    if "heading 2" in style_name or re.match(r"^[0-9]+\.[0-9]+\b", txt):
+                        level = 2
+                    elif "heading 3" in style_name or re.match(r"^[0-9]+\.[0-9]+\.[0-9]+\b", txt):
+                        level = 3
+
+                    sections.append({
+                        "id": f"sec-{len(sections) + 1}",
+                        "title": txt,
+                        "level": level,
+                        "style": style_name,
+                    })
+        except Exception as e:
+            logger.warning(f"Failed to extract headings from docx {file_name}: {e}")
+
+    # Fallback to scanning raw text for numbered headings
+    if not sections and raw_text:
+        heading_pat = re.compile(r"^(?:(?:bab\s+[ivx0-9]+|[0-9]+(?:\.[0-9]+)*\.?)\s+[A-Za-z]|document\s+release|pengakuan\s+kerahasiaan|latar\s+belakang|tujuan|proposed\s+solution|compliance\s+matrix|bill\s+of\s+quantity|manpower|implementation\s+plan|maintenance|lampiran)", re.IGNORECASE | re.MULTILINE)
+        for line in raw_text.split("\n"):
+            line_str = line.strip()
+            if len(line_str) > 3 and len(line_str) < 90 and heading_pat.match(line_str):
+                level = 1
+                if re.match(r"^[0-9]+\.[0-9]+\b", line_str):
+                    level = 2
+                elif re.match(r"^[0-9]+\.[0-9]+\.[0-9]+\b", line_str):
+                    level = 3
+                sections.append({
+                    "id": f"sec-{len(sections) + 1}",
+                    "title": line_str,
+                    "level": level,
+                    "style": "text_pattern",
+                })
+
+    inferred = infer_document_archetype_and_client(file_name, raw_text)
+    total_main = sum(1 for s in sections if s.get("level", 1) == 1)
+
+    return {
+        "title": file_name,
+        "archetype": inferred["archetype"],
+        "industry": inferred["industry"],
+        "client_name": inferred["client_name"],
+        "doc_category": inferred.get("doc_category", "proposal"),
+        "sections": sections,
+        "total_chapters": max(total_main, 1),
+    }

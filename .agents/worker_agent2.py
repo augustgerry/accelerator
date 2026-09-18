@@ -249,8 +249,8 @@ def process_task(task: Dict[str, Any]):
         task_bus.update_task_status(task_id, "FAILED", error=str(e))
 
 
-def run_daemon(poll_interval: float = 2.0):
-    log(f"Worker daemon started. Listening for tasks assigned to '{AGENT_ID}' or 'agent-2'...")
+def run_daemon(poll_interval: float = 2.0, once: bool = False):
+    log(f"Worker daemon started (once={once}). Listening for tasks assigned to '{AGENT_ID}' or 'agent-2'...")
     while True:
         try:
             pending = task_bus.get_pending_tasks()
@@ -260,8 +260,12 @@ def run_daemon(poll_interval: float = 2.0):
         except Exception as e:
             log(f"Daemon loop error: {e}")
             
+        if once:
+            log("Single pass completed (--once). Exiting worker.")
+            break
         time.sleep(poll_interval)
 
 
 if __name__ == "__main__":
-    run_daemon()
+    once_mode = "--once" in sys.argv
+    run_daemon(once=once_mode)

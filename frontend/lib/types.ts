@@ -50,6 +50,7 @@ export type RequirementItem = {
   draft_text: string;
   status: RequirementStatus;
   rationale?: string;
+  source_clause?: string;
   sources?: SourceCitation[];
   isGenerating?: boolean;
   error?: string;
@@ -80,6 +81,7 @@ export type DraftItemApiResponse = {
   sources: SourceCitation[];
   image_data_url?: string;
   image_caption?: string;
+  source_clause?: string;
 };
 
 export type TemplateSection = {

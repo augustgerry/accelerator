@@ -62,18 +62,33 @@ async def upload_documents(
                 failed.append({"filename": f.filename, "reason": "Teks dokumen kosong atau tidak terbaca"})
                 continue
 
-            doc_id = str(uuid.uuid4())
-            new_doc = Document(
-                id=doc_id,
-                workspace_id=workspace_id,
-                title=f.filename or "Dokumen Acuan",
-                doc_type=doc_type,
-                division=division,
-                source_drive_id=None,
-                source_modified_at=datetime.utcnow().isoformat(),
-                updated_at=datetime.utcnow(),
-            )
-            session.add(new_doc)
+            existing_doc = session.execute(
+                select(Document).where(
+                    Document.workspace_id == workspace_id,
+                    Document.title == (f.filename or "Dokumen Acuan"),
+                )
+            ).scalars().first()
+
+            if existing_doc:
+                logger.info("Deduplication: replacing existing chunks for '%s' (id=%s)", f.filename, existing_doc.id)
+                session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == existing_doc.id))
+                doc_id = existing_doc.id
+                existing_doc.updated_at = datetime.utcnow()
+                existing_doc.doc_type = doc_type
+                existing_doc.division = division
+            else:
+                doc_id = str(uuid.uuid4())
+                new_doc = Document(
+                    id=doc_id,
+                    workspace_id=workspace_id,
+                    title=f.filename or "Dokumen Acuan",
+                    doc_type=doc_type,
+                    division=division,
+                    source_drive_id=None,
+                    source_modified_at=datetime.utcnow().isoformat(),
+                    updated_at=datetime.utcnow(),
+                )
+                session.add(new_doc)
 
             chunks = chunk_text(text)
             for ch in chunks:
@@ -86,6 +101,22 @@ async def upload_documents(
                         embedding=embed_text(ch),
                     )
                 )
+
+            # Autonomous Continuous Learning: Structural DNA + Domain Rules from ANY document type
+            try:
+                from app.services.learning_engine import learn_from_document
+                learn_res = learn_from_document(
+                    db=session,
+                    title=f.filename or "Dokumen Acuan",
+                    raw_text=text,
+                    file_bytes=raw_bytes,
+                    workspace_id=workspace_id,
+                    document_id=doc_id,
+                    source="user_upload",
+                )
+                logger.info(f"Learned from '{f.filename}': category={learn_res.get('doc_category')}, rules_learned={learn_res.get('rules_learned_count')}")
+            except Exception as ex_st:
+                logger.warning(f"Autonomous document learning skipped for {f.filename}: {ex_st}")
 
             session.commit()
             uploaded.append({
@@ -293,6 +324,27 @@ def sync_from_drive(
                         embedding=embed_text(chunk),
                     )
                 )
+
+            # Autonomous Continuous Learning: Structural DNA + Domain Rules from ANY Drive document
+            try:
+                from app.services.learning_engine import learn_from_document
+                file_bytes = b""
+                try:
+                    file_bytes = download_file_bytes(f["id"])
+                except Exception:
+                    pass
+                learn_res = learn_from_document(
+                    db=session,
+                    title=f["name"],
+                    raw_text=text,
+                    file_bytes=file_bytes,
+                    workspace_id=workspace_id,
+                    document_id=doc.id,
+                    source="gdrive_harvested",
+                )
+                print(f"Learned from Drive doc '{f['name']}': category={learn_res.get('doc_category')}, rules={learn_res.get('rules_learned_count')}", flush=True)
+            except Exception as ex_st:
+                print(f"Autonomous document learning skipped for {f['name']}: {ex_st}", flush=True)
 
             session.commit()
             synced.append(f["name"])

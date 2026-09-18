@@ -222,3 +222,90 @@ def audit_requirement_coverage(tor_text: str, items: List[Dict[str, Any]]) -> Di
         "uncovered_items": uncovered[:8],
         "recommendations": recommendations,
     }
+
+
+def extract_evaluation_criteria(tor_text: str) -> List[Dict[str, Any]]:
+    """Scan TOR for procurement evaluation criteria, scoring matrices, and qualification weights.
+    Maps points like (Methodology, Experience, Timeline, Vendor Profile, Compliance, Commercial)."""
+    if not tor_text or not tor_text.strip():
+        return []
+
+    eval_patterns = [
+        r"(?i)(?:kriteria\s+(?:evaluasi|penilaian)|evaluation\s+(?:approach|criteria|method))[\s\S]{10,2500}",
+    ]
+    extracted: List[Dict[str, Any]] = []
+
+    for pat in eval_patterns:
+        m = re.search(pat, tor_text)
+        if m:
+            block = m.group(0)
+            # Find list items like "a. Methodology...", "b. Delivery capability...", "1. Pengalaman..."
+            items = re.findall(r"(?:^|\n)\s*([a-zA-Z0-9]+[\.\)])\s*([^\n\r]+)", block)
+            for idx, (label, item_text) in enumerate(items, start=1):
+                clean_item = item_text.strip()
+                if len(clean_item) > 8 and not clean_item.lower().startswith("bab"):
+                    # Categorize target
+                    low = clean_item.lower()
+                    target_category = "Teknis"
+                    if any(k in low for k in ["methodology", "pendekatan", "arsitektur", "solusi"]):
+                        target_category = "Proposed Solution"
+                    elif any(k in low for k in ["experience", "pengalaman", "capability", "tenaga ahli", "delivery"]):
+                        target_category = "Delivery & Manpower"
+                    elif any(k in low for k in ["timeline", "jadwal", "waktu", "tahapan"]):
+                        target_category = "Implementation Plan"
+                    elif any(k in low for k in ["compliance", "kepatuhan", "warranty", "garansi", "sla"]):
+                        target_category = "Compliance & SLA"
+                    elif any(k in low for k in ["profile", "financial", "stabilitas", "keuangan", "legalitas"]):
+                        target_category = "Profil Perusahaan"
+                    elif any(k in low for k in ["cost", "biaya", "harga", "komersial"]):
+                        target_category = "Komersial"
+
+                    extracted.append({
+                        "id": f"crit-{idx}",
+                        "label": label,
+                        "criteria_text": clean_item,
+                        "target_category": target_category,
+                    })
+            if extracted:
+                break
+
+    # Fallback to standard enterprise scoring criteria if not explicitly spelled out
+    if not extracted:
+        extracted = [
+            {"id": "crit-1", "label": "a.", "criteria_text": "Metodologi dan pendekatan teknis pelaksanaan pekerjaan", "target_category": "Proposed Solution"},
+            {"id": "crit-2", "label": "b.", "criteria_text": "Kapabilitas delivery dan pengalaman proyek sejenis", "target_category": "Delivery & Manpower"},
+            {"id": "crit-3", "label": "c.", "criteria_text": "Kesesuaian jadwal dan timeline pelaksanaan", "target_category": "Implementation Plan"},
+            {"id": "crit-4", "label": "d.", "criteria_text": "Kepatuhan terhadap syarat teknis, SLA, dan garansi", "target_category": "Compliance & SLA"},
+            {"id": "crit-5", "label": "e.", "criteria_text": "Kredensial dan profil perusahaan", "target_category": "Profil Perusahaan"},
+        ]
+
+    return extracted
+
+
+def align_sections_to_evaluation(sections: List[Dict[str, Any]], criteria: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Enrich recommended sections with scoring target metadata to guarantee maximum score alignment."""
+    enriched = []
+    for sec in sections:
+        sec_copy = dict(sec)
+        title_low = (sec.get("title") or "").lower()
+        matched_crit = []
+
+        for c in criteria:
+            target = c.get("target_category", "").lower()
+            if target == "proposed solution" and any(k in title_low for k in ["solution", "solusi", "metodologi", "operasi"]):
+                matched_crit.append(c["criteria_text"])
+            elif target == "delivery & manpower" and any(k in title_low for k in ["manpower", "resource", "personel", "tim", "skill"]):
+                matched_crit.append(c["criteria_text"])
+            elif target == "implementation plan" and any(k in title_low for k in ["implementation", "timeline", "jadwal", "transisi", "onboarding"]):
+                matched_crit.append(c["criteria_text"])
+            elif target == "compliance & sla" and any(k in title_low for k in ["compliance", "sla", "service level", "garansi", "reporting", "laporan"]):
+                matched_crit.append(c["criteria_text"])
+            elif target == "profil perusahaan" and any(k in title_low for k in ["lampiran", "profil", "pengalaman"]):
+                matched_crit.append(c["criteria_text"])
+
+        if matched_crit:
+            sec_copy["evaluation_anchor"] = matched_crit[0]
+        enriched.append(sec_copy)
+
+    return enriched
+

@@ -52,7 +52,7 @@ export function ProgressHeader({
   const draftedPercent = total > 0 ? Math.round(((finalCount + draftCount) / total) * 100) : 0;
 
   return (
-    <div className="border-b border-surface-border bg-surface-raised px-6 py-4 shadow-subtle">
+    <div className="relative z-30 border-b border-surface-border bg-surface-raised px-6 py-4 shadow-subtle">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         {/* Document info & Progress meter */}
         <div className="flex flex-1 flex-col gap-2">
@@ -153,7 +153,9 @@ export function ProgressHeader({
               <MoreVertical size={15} />
             </button>
             {moreOpen && (
-              <div className="absolute right-0 top-10 z-20 w-56 rounded-lg border border-surface-border bg-surface-raised p-1.5 shadow-panel">
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
+                <div className="absolute right-0 top-10 z-50 w-56 rounded-lg border border-surface-border bg-surface-raised p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
                 <button
                   onClick={() => { onQualityCheck(); setMoreOpen(false); }}
                   disabled={isCheckingQuality || total === 0}
@@ -200,7 +202,8 @@ export function ProgressHeader({
                   <span>Ganti dokumen</span>
                 </button>
               </div>
-            )}
+            </>
+          )}
           </div>
         </div>
       </div>

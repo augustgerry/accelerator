@@ -232,6 +232,52 @@ export async function generateItemDraft(
   return data;
 }
 
+export type DraftStreamEvent =
+  | { type: "meta"; item_id: string; sources: SourceCitation[]; source_clause: string | null }
+  | { type: "token"; chunk: string }
+  | { type: "done"; done: true; item_id: string; sources_used: number }
+  | { type: "error"; error: string };
+
+// SSE stream from /draft/item-stream. Native fetch + ReadableStream — EventSource
+// doesn't support POST bodies, so events are parsed by hand off the raw stream.
+export async function* streamItemDraft(payload: {
+  item_id: string;
+  requirement_text: string;
+  instruction?: string;
+  tor_context?: string;
+  reference_doc_ids?: string[];
+  win_themes?: string[];
+}): AsyncGenerator<DraftStreamEvent> {
+  const res = await fetch(`${API_BASE}/draft/item-stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`API /draft/item-stream failed (${res.status}): ${detail}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() || "";
+    for (const block of blocks) {
+      const eventLine = block.split("\n").find((l) => l.startsWith("event: "));
+      const dataLine = block.split("\n").find((l) => l.startsWith("data: "));
+      if (!eventLine || !dataLine) continue;
+      const type = eventLine.slice(7).trim();
+      const data = JSON.parse(dataLine.slice(6));
+      yield { type, ...data } as DraftStreamEvent;
+    }
+  }
+}
+
 export type CriticalClauseItem = {
   clause_snippet: string;
   category: string;
@@ -312,12 +358,15 @@ export type RecommendedSection = {
   title: string;
   category: string;
   requirement_text: string;
+  source_clause?: string;
   rationale: string;
 };
 
 export type RecommendStructureResponse = {
   items: RecommendedSection[];
   summary: string;
+  archetype?: string;
+  grounding_status?: string;
 };
 
 export async function recommendStructure(payload: {
@@ -325,6 +374,8 @@ export async function recommendStructure(payload: {
   doc_type: string;
   document_title?: string;
   instruction?: string;
+  archetype?: string;
+  reference_structure?: string;
 }): Promise<RecommendStructureResponse> {
   return postJson<RecommendStructureResponse>("/draft/recommend-structure", payload);
 }

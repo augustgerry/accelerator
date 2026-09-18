@@ -104,6 +104,7 @@ class DraftItemResponse(BaseModel):
     grounding_note: Optional[str] = None
     image_data_url: Optional[str] = None
     image_caption: Optional[str] = None
+    source_clause: Optional[str] = None
 
 
 class QualityCheckInput(BaseModel):
@@ -142,6 +143,8 @@ class RecommendStructureRequest(BaseModel):
     doc_type: str = "narrative"
     document_title: str = ""
     instruction: str = ""
+    archetype: Optional[str] = None
+    reference_structure: Optional[str] = None
 
 
 class RecommendedSection(BaseModel):
@@ -149,16 +152,19 @@ class RecommendedSection(BaseModel):
     title: str
     category: str
     requirement_text: str
+    source_clause: Optional[str] = ""
     rationale: str = ""
 
 
 class RecommendStructureResponse(BaseModel):
     items: list[RecommendedSection]
     summary: str = ""
+    archetype: str = "auto"
+    grounding_status: str = "100% Berbasis Dokumen Acuan"
 
 
 @router.post("/recommend-structure", response_model=RecommendStructureResponse)
-def recommend_document_structure(payload: RecommendStructureRequest):
+def recommend_document_structure(payload: RecommendStructureRequest, db: Session = Depends(get_session)):
     """Analyze the uploaded source document (TOR/RKS/KAK) and recommend an adaptive,
     grounded section structure with specific rationales before drafting begins."""
     provider = get_llm_provider()
@@ -167,6 +173,8 @@ def recommend_document_structure(payload: RecommendStructureRequest):
         doc_type=payload.doc_type,
         document_title=payload.document_title,
         instruction=payload.instruction,
+        archetype=payload.archetype,
+        reference_structure=payload.reference_structure,
     )
     items: list[RecommendedSection] = []
     for idx, sec in enumerate(raw_sections, start=1):
@@ -175,13 +183,123 @@ def recommend_document_structure(payload: RecommendStructureRequest):
             title=str(sec.get("title") or f"Bagian {idx}"),
             category=str(sec.get("category") or "Teknis"),
             requirement_text=str(sec.get("requirement_text") or ""),
+            source_clause=str(sec.get("source_clause") or ""),
             rationale=str(sec.get("rationale") or f"Disusun berdasarkan analisis kebutuhan dokumen {payload.document_title or 'tender'}."),
         ))
+
+    from app.services.llm_provider import detect_tender_archetype
+    detected_archetype = payload.archetype or detect_tender_archetype(payload.tor_text, payload.document_title)
+
+    # Automatic continuous learning: if user supplied a specific corrective instruction, distill it
+    if payload.instruction and len(payload.instruction.strip()) > 10:
+        try:
+            from app.services.learning_engine import distill_learning_from_feedback
+            distill_learning_from_feedback(
+                db=db,
+                feedback_text=payload.instruction.strip(),
+                workspace_id=settings.default_workspace_id,
+                archetype_context=detected_archetype,
+            )
+        except Exception as e:
+            logger.debug(f"Async feedback learning skipped: {e}")
+
+    archetype_labels = {
+        "managed_services": "Managed Services 24x7",
+        "hardware_infra": "Infrastruktur & Hardware",
+        "software_dev": "Pengembangan Software & Solusi Data",
+    }
+    label = archetype_labels.get(detected_archetype, detected_archetype)
     summary = (
-        f"Berhasil menyusun {len(items)} rekomendasi sub-bab yang diselaraskan dengan kebutuhan "
-        f"'{payload.document_title or 'dokumen tender'}' ({payload.doc_type})."
+        f"Berhasil menyusun {len(items)} rekomendasi sub-bab disesuaikan dengan pola '{label}' "
+        f"untuk '{payload.document_title or 'dokumen tender'}' ({payload.doc_type})."
     )
-    return RecommendStructureResponse(items=items, summary=summary)
+    return RecommendStructureResponse(items=items, summary=summary, archetype=detected_archetype)
+
+
+class LearnFeedbackRequest(BaseModel):
+    feedback: str
+    archetype: str = "all"
+    workspace_id: str = settings.default_workspace_id
+
+
+class SaveApprovedStructureRequest(BaseModel):
+    title: str
+    items: list[dict]
+    archetype: str = "managed_services"
+    industry: str = "banking"
+    client_name: str = ""
+    workspace_id: str = settings.default_workspace_id
+
+
+@router.post("/learn-feedback")
+def learn_from_presales_feedback(payload: LearnFeedbackRequest, db: Session = Depends(get_session)):
+    """Distill presales engineer critique into a permanent PresalesRule."""
+    from app.services.learning_engine import distill_learning_from_feedback
+    rule = distill_learning_from_feedback(
+        db=db,
+        feedback_text=payload.feedback,
+        workspace_id=payload.workspace_id,
+        archetype_context=payload.archetype,
+    )
+    return {
+        "status": "learned",
+        "rule_id": rule.id,
+        "category": rule.category,
+        "instruction": rule.instruction,
+        "rule_trigger": rule.rule_trigger,
+    }
+
+
+@router.get("/learning-rules")
+def get_presales_learning_rules(
+    archetype: str = "all",
+    workspace_id: str = settings.default_workspace_id,
+    db: Session = Depends(get_session),
+):
+    """List all active persistent presales rules."""
+    from app.models import PresalesRule
+    from sqlalchemy import select, desc
+    stmt = (
+        select(PresalesRule)
+        .where(PresalesRule.workspace_id == workspace_id, PresalesRule.is_active == 1)
+        .order_by(desc(PresalesRule.confidence_score))
+    )
+    rules = db.execute(stmt).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "category": r.category,
+            "rule_trigger": r.rule_trigger,
+            "instruction": r.instruction,
+            "confidence_score": r.confidence_score,
+            "times_applied": r.times_applied,
+        }
+        for r in rules
+        if r.rule_trigger in ("all", archetype)
+    ]
+
+
+@router.post("/save-approved-structure")
+def save_approved_structure_to_memory(payload: SaveApprovedStructureRequest, db: Session = Depends(get_session)):
+    """Harvest an approved or exported proposal structure as a new winning template."""
+    from app.services.learning_engine import save_or_update_proposal_structure
+    record = save_or_update_proposal_structure(
+        db=db,
+        title=payload.title,
+        sections=payload.items,
+        archetype=payload.archetype,
+        industry=payload.industry,
+        client_name=payload.client_name,
+        workspace_id=payload.workspace_id,
+        source="user_approved",
+        win_score=1.1,
+    )
+    return {
+        "status": "saved",
+        "id": record.id,
+        "title": record.title,
+        "total_chapters": record.total_chapters,
+    }
 
 
 @router.post("/quality-check", response_model=QualityCheckResponse)
@@ -412,6 +530,14 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
         themes_formatted = "\n- ".join(payload.win_themes)
         user_prompt += f"\n\nTema Keunggulan Penawaran (Win Themes - tonjolkan nilai strategis ini):\n- {themes_formatted}"
 
+    user_prompt += (
+        "\n\nATURAN MUTLAK GROUNDING DOKUMEN SUMBER (ZERO-HALLUCINATION / ANTI-NGIDE):\n"
+        "- Seluruh fakta teknis, durasi, batasan lingkup, SLA, headcount, lokasi, dan platform WAJIB 100% "
+        "diambil dari kutipan Dokumen Acuan (TOR/RFP) dan Knowledge Base di atas.\n"
+        "- DILARANG KERAS mengarang (ngide) spesifikasi tambahan atau teknologi fiktif yang tidak tertulis pada kutipan dokumen sumber.\n"
+        "- Jika data tidak ditemukan di dokumen sumber, jelaskan batasan tersebut secara profesional tanpa mengarang angka fiktif."
+    )
+
     try:
         provider = get_llm_provider()
         draft = provider.answer(user_prompt, context, mode="draft")
@@ -425,13 +551,20 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
 
     source_models = [SourceMeta(**s) for s in sources]
 
+    source_clause = None
+    if relevant_tor:
+        cleaned_tor = re.sub(r"\s+", " ", relevant_tor).strip()
+        source_clause = cleaned_tor[:280] + ("..." if len(cleaned_tor) > 280 else "")
+
     # Auto-detect visual intent if item involves architecture or enterprise hardware
     # Note: Keep this lightweight and instant so drafting never hangs
     image_data_url = None
     image_caption = None
     lower_scope = f"{payload.requirement_text} {payload.instruction or ''} {draft[:300]}".lower()
 
-    if any(k in lower_scope for k in ("hld", "high level design", "arsitektur", "topologi", "architecture diagram")):
+    # Visual assets are now on-demand only (User explicit via Studio Visual or prompt instruction)
+    # This prevents unwanted rack server images from being automatically injected into managed services proposals
+    if payload.instruction and any(k in payload.instruction.lower() for k in ("sertakan diagram", "buatkan diagram", "hld arsitektur", "tambahkan visual")):
         try:
             hld_res = generate_hld_mermaid(
                 tor_text=payload.tor_context or payload.requirement_text,
@@ -444,31 +577,7 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
                 image_data_url = rendered.get("data_url")
                 image_caption = hld_res.get("caption", f"Gambar: Arsitektur High Level Design (HLD) Solusi {payload.requirement_text[:40]}")
         except Exception as err:
-            logger.warning("Auto HLD visual generation failed for item %s: %s", payload.item_id, err)
-
-    elif any(k in lower_scope for k in ("server", "storage", "switch", "firewall", "dl360", "pure storage", "cisco", "fortinet", "san", "nas", "flash array", "poweredge")):
-        # Instant local synthetic 2D visual generation (100% offline, zero network latency)
-        try:
-            hw_query = "Enterprise Rack Server"
-            if "dl360" in lower_scope:
-                hw_query = "HPE ProLiant DL360 Gen10 Server"
-            elif "pure storage" in lower_scope or "flasharray" in lower_scope or "rc20" in lower_scope:
-                hw_query = "Pure Storage FlashArray"
-            elif "cisco" in lower_scope:
-                hw_query = "Cisco Catalyst 9300 Switch"
-            elif "fortinet" in lower_scope or "fortigate" in lower_scope:
-                hw_query = "Fortinet FortiGate 100F Next-Gen Firewall"
-            elif "poweredge" in lower_scope:
-                hw_query = "Dell PowerEdge R750 Server"
-            elif "sangfor" in lower_scope or "hci" in lower_scope:
-                hw_query = "Sangfor HCI Enterprise Appliance"
-
-            synth = generate_synthetic_hardware_visual(hw_query)
-            if synth and synth.get("image_url"):
-                image_data_url = synth["image_url"]
-                image_caption = f"Gambar: Visualisasi Perangkat {hw_query}"
-        except Exception as err:
-            logger.warning("Auto hardware visual generation failed for item %s: %s", payload.item_id, err)
+            logger.warning("Explicit HLD visual generation failed for item %s: %s", payload.item_id, err)
 
     return DraftItemResponse(
         item_id=payload.item_id,
@@ -479,12 +588,13 @@ def draft_item(payload: DraftItemRequest, session: Session = Depends(get_session
         grounding_note=grounding_note,
         image_data_url=image_data_url,
         image_caption=image_caption,
+        source_clause=source_clause,
     )
 
 
 @router.post("/upload")
-async def upload_tor(file: UploadFile):
-    """Accepts a TOR/RFP file, extracts text, returns it for use in /draft."""
+async def upload_tor(file: UploadFile, db: Session = Depends(get_session)):
+    """Accepts a TOR/RFP file, extracts text, learns structural & domain knowledge, and returns it for use in /draft."""
     data = await file.read()
     name = (file.filename or "").lower()
 
@@ -492,7 +602,6 @@ async def upload_tor(file: UploadFile):
         from app.services.document_parser import extract_pdf_with_ocr_fallback
 
         text, meta = extract_pdf_with_ocr_fallback(data)
-        return {"text": text, "metadata": meta}
     elif name.endswith(".docx") or file.content_type == (
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ):
@@ -501,11 +610,29 @@ async def upload_tor(file: UploadFile):
 
         raw_text = _extract_docx_text_and_tables(data)
         text, has_sig = clean_signature_blocks(raw_text)
-        return {"text": text, "metadata": {"has_signature_page": has_sig}}
+        meta = {"has_signature_page": has_sig}
     else:
         raise HTTPException(status_code=400, detail="Only PDF or DOCX files are supported")
 
-    return {"text": text}
+    # Autonomous Learning: Learn structure and domain rules from the uploaded tender document
+    try:
+        from app.services.learning_engine import learn_from_document
+        learn_res = learn_from_document(
+            db=db,
+            title=file.filename or "Dokumen TOR",
+            raw_text=text,
+            file_bytes=data,
+            source="tender_upload",
+        )
+        meta["learning"] = {
+            "category": learn_res.get("doc_category"),
+            "archetype": learn_res.get("archetype"),
+            "rules_learned": learn_res.get("rules_learned_count"),
+        }
+    except Exception as ex_l:
+        logger.debug(f"Learning from uploaded TOR skipped: {ex_l}")
+
+    return {"text": text, "metadata": meta}
 
 
 @router.post("/convert-office-pdf")
@@ -3466,6 +3593,183 @@ def calculate_sizing_endpoint(payload: dict):
         requirement_text=payload.get("requirement_text", "")
     )
     return perform_sizing_calculation(req)
+
+
+# ==============================================================================
+# Enterprise Enhancements: Real-Time SSE Streaming & Async Bulk Background Queue
+# ==============================================================================
+
+import uuid
+import threading
+import json
+import time
+from fastapi.responses import StreamingResponse
+
+_BULK_JOBS: dict[str, dict] = {}
+_BULK_JOBS_LOCK = threading.Lock()
+
+
+class BulkJobRequest(BaseModel):
+    items: list[DraftItemRequest]
+    workspace_id: str = settings.default_workspace_id
+
+
+@router.post("/item-stream")
+def draft_item_stream(payload: DraftItemRequest, session: Session = Depends(get_session)):
+    """Server-Sent Events (SSE) streaming endpoint for live typewriter text drafting."""
+    from app.services.embeddings import semantic_select_tor_excerpt
+
+    query = payload.requirement_text
+    if payload.instruction:
+        query = f"{payload.requirement_text} {payload.instruction}"
+
+    kb_chunks, sources = retrieve_relevant_chunks_with_sources(
+        session, payload.workspace_id, query, top_k=5,
+        doc_ids=payload.reference_doc_ids or None,
+    )
+
+    relevant_tor = ""
+    context = []
+    if payload.tor_context and payload.tor_context.strip():
+        relevant_tor = semantic_select_tor_excerpt(payload.tor_context, query, top_k=5, max_chars=6000)
+        if relevant_tor:
+            context.append(f"Konteks TOR/RFP Terkait:\n{relevant_tor}")
+
+    context.extend(kb_chunks)
+
+    user_prompt = f"Brief/Tujuan Bagian Dokumen:\n{payload.requirement_text}"
+    req_lower = payload.requirement_text.lower()
+    if any(k in req_lower for k in ("hld", "high level design", "arsitektur", "topologi")):
+        user_prompt += "\n\nPANDUAN KHUSUS SUB-BAB HLD: Fokuslah menyusun narasi arsitektur teknis dan topologi konektivitas High Level Design untuk sub-bab ini saja. JANGAN menulis ulang seluruh proposal dari Bab 1 sampai Bab 8."
+    elif any(k in req_lower for k in ("sizing", "kapasitas", "perhitungan")):
+        user_prompt += "\n\nPANDUAN KHUSUS SUB-BAB SIZING: Fokuslah menyusun dasar kalkulasi kapasitas, rasio reduksi data (DRR), dan proyeksi growth untuk sub-bab ini saja. Tulis formula dalam notasi teks biasa Bahasa Indonesia tanpa simbol LaTeX ($$ atau \\frac)."
+
+    if payload.instruction:
+        user_prompt += f"\n\nInstruksi Spesifik:\n{payload.instruction}"
+    if payload.win_themes:
+        themes_formatted = "\n- ".join(payload.win_themes)
+        user_prompt += f"\n\nTema Keunggulan Penawaran:\n- {themes_formatted}"
+
+    user_prompt += (
+        "\n\nATURAN MUTLAK GROUNDING DOKUMEN SUMBER (ZERO-HALLUCINATION / ANTI-NGIDE):\n"
+        "- Seluruh fakta teknis, durasi, batasan lingkup, SLA, headcount, lokasi, dan platform WAJIB 100% diambil dari kutipan Dokumen Acuan dan Knowledge Base.\n"
+        "- DILARANG KERAS mengarang spesifikasi tambahan yang tidak tertulis pada dokumen sumber."
+    )
+
+    source_models = [
+        {"id": s["id"], "title": s["title"], "docType": s["docType"], "source": s.get("source", "internal")}
+        for s in sources
+    ]
+    source_clause = None
+    if relevant_tor:
+        cleaned_tor = re.sub(r"\s+", " ", relevant_tor).strip()
+        source_clause = cleaned_tor[:280] + ("..." if len(cleaned_tor) > 280 else "")
+
+    def event_generator():
+        # 1. Send metadata event
+        meta_payload = {
+            "item_id": payload.item_id,
+            "sources": source_models,
+            "source_clause": source_clause,
+        }
+        yield f"event: meta\ndata: {json.dumps(meta_payload)}\n\n"
+
+        # 2. Stream tokens progressively
+        provider = get_llm_provider()
+        accumulated = []
+        try:
+            for token in provider.stream_answer(user_prompt, context, mode="draft"):
+                accumulated.append(token)
+                yield f"event: token\ndata: {json.dumps({'chunk': token})}\n\n"
+        except Exception as e:
+            logger.error("Streaming error on %s: %s", payload.item_id, e)
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+
+        # 3. Final completion event
+        yield f"event: done\ndata: {json.dumps({'done': True, 'item_id': payload.item_id, 'sources_used': len(sources)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/bulk-generate-async")
+def start_bulk_generate_async(payload: BulkJobRequest):
+    """Initiates an asynchronous background batch generation job. Prevents Gateway 504 Timeout."""
+    job_id = f"job-{uuid.uuid4().hex[:10]}"
+    with _BULK_JOBS_LOCK:
+        _BULK_JOBS[job_id] = {
+            "job_id": job_id,
+            "status": "queued",
+            "total": len(payload.items),
+            "completed": 0,
+            "current_item_id": None,
+            "results": {},
+            "created_at": time.time(),
+        }
+
+    def _worker(jid: str, req_items: list[DraftItemRequest], ws_id: str):
+        from app.db import SessionLocal
+        with _BULK_JOBS_LOCK:
+            _BULK_JOBS[jid]["status"] = "running"
+
+        db = SessionLocal()
+        try:
+            for item_req in req_items:
+                with _BULK_JOBS_LOCK:
+                    _BULK_JOBS[jid]["current_item_id"] = item_req.item_id
+
+                try:
+                    res = draft_item(item_req, session=db)
+                    with _BULK_JOBS_LOCK:
+                        _BULK_JOBS[jid]["results"][item_req.item_id] = res.dict()
+                        _BULK_JOBS[jid]["completed"] += 1
+                except Exception as e:
+                    logger.warning("Bulk job %s failed on item %s: %s", jid, item_req.item_id, e)
+                    with _BULK_JOBS_LOCK:
+                        _BULK_JOBS[jid]["results"][item_req.item_id] = {
+                            "item_id": item_req.item_id,
+                            "draft_text": f"[Gagal generate otomatis: {e}]",
+                            "sources_used": 0,
+                        }
+                        _BULK_JOBS[jid]["completed"] += 1
+
+            with _BULK_JOBS_LOCK:
+                _BULK_JOBS[jid]["status"] = "completed"
+                _BULK_JOBS[jid]["current_item_id"] = None
+        finally:
+            db.close()
+
+    thread = threading.Thread(target=_worker, args=(job_id, payload.items, payload.workspace_id), daemon=True)
+    thread.start()
+
+    return {"job_id": job_id, "status": "queued", "total_items": len(payload.items)}
+
+
+@router.get("/bulk-job/{job_id}")
+def get_bulk_job_status(job_id: str):
+    """Poll progress and partial/full results of a background bulk generation job."""
+    with _BULK_JOBS_LOCK:
+        job = _BULK_JOBS.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Bulk job not found")
+        total = max(1, job["total"])
+        return {
+            "job_id": job["job_id"],
+            "status": job["status"],
+            "total": job["total"],
+            "completed": job["completed"],
+            "progress_pct": round((job["completed"] / total) * 100, 1),
+            "current_item_id": job["current_item_id"],
+            "results": job["results"],
+        }
+
 
 
 

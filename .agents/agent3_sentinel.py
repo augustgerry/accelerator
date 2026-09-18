@@ -39,7 +39,7 @@ def check_backend_health() -> bool:
 
 def check_frontend_health() -> bool:
     try:
-        req = urllib.request.Request("http://localhost:3000", headers={"User-Agent": "Agent3-Sentinel"})
+        req = urllib.request.Request("http://127.0.0.1:3000", headers={"User-Agent": "Agent3-Sentinel"})
         with urllib.request.urlopen(req, timeout=4) as resp:
             return resp.status in (200, 304)
     except Exception:
@@ -86,4 +86,9 @@ def run_sentinel_loop(interval_seconds: int = 60):
 
 
 if __name__ == "__main__":
+    if "--check" in sys.argv:
+        b_ok = check_backend_health()
+        f_ok = check_frontend_health()
+        log(f"[CHECK] Backend (8000): {'ONLINE' if b_ok else 'OFFLINE'} | Frontend (3000): {'ONLINE' if f_ok else 'OFFLINE'}")
+        sys.exit(0)
     run_sentinel_loop(60)

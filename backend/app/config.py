@@ -20,6 +20,11 @@ class Settings(BaseSettings):
 
     default_workspace_id: str = "smg-presales-mvp"
 
+    # Caching Layer settings (In-memory LRU fallback or Redis)
+    redis_url: str = ""
+    enable_llm_cache: bool = True
+    llm_cache_ttl_seconds: int = 86400  # 24 hours
+
     # Client-side toggle in Settings should mirror this — but the real
     # cost gate lives here, server-side, not just in the UI.
     enable_external_research: bool = False

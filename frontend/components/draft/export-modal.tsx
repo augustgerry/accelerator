@@ -15,6 +15,7 @@ import {
   ChevronUp,
   Search,
   ShieldCheck,
+  UploadCloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,11 +28,12 @@ import {
 import type { RequirementItem, IndexedDocument } from "@/lib/types";
 import { FORMAT_LABELS, getDocType, type DraftDocTypeId, type DraftFormat } from "@/lib/document-types";
 import { cleanLatexMath } from "@/lib/utils";
+import { WordIcon, PowerPointIcon, PdfIcon } from "@/components/office-icons";
 
-const EXPORT_PRESETS: Array<{ docTypeId: DraftDocTypeId; format: DraftFormat; icon: string; label: string; sub: string }> = [
-  { docTypeId: "narrative", format: "docx", icon: "📄", label: "Proposal Teknis", sub: "Word (.docx)" },
-  { docTypeId: "sow", format: "docx", icon: "📋", label: "Scope of Work", sub: "Word (.docx)" },
-  { docTypeId: "pitch_deck", format: "pptx", icon: "📊", label: "Presentation / Pitch Deck", sub: "PowerPoint (.pptx)" },
+const EXPORT_PRESETS: Array<{ docTypeId: DraftDocTypeId; format: DraftFormat; label: string; sub: string }> = [
+  { docTypeId: "narrative", format: "docx", label: "Proposal Teknis", sub: "Word (.docx)" },
+  { docTypeId: "sow", format: "docx", label: "Scope of Work", sub: "Word (.docx)" },
+  { docTypeId: "pitch_deck", format: "pptx", label: "Presentation / Pitch Deck", sub: "PowerPoint (.pptx)" },
 ];
 
 interface ExportModalProps {
@@ -96,9 +98,54 @@ export function ExportModal({
 
   // In-App Preview Popup state
   const [showPreviewPopup, setShowPreviewPopup] = useState(false);
+  const [showLogoModal, setShowLogoModal] = useState(false);
   const [reviewViewMode, setReviewViewMode] = useState<"detail" | "compact">("detail");
   const [expandedItemIds, setExpandedItemIds] = useState<Record<string, boolean>>({});
   const [reviewSearch, setReviewSearch] = useState("");
+
+  const handleProcessLogoFile = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCustomerLogoDataUrl(String(reader.result ?? ""));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePaste = (e: ClipboardEvent) => {
+      const clipItems = e.clipboardData?.items;
+      if (!clipItems) return;
+      for (let i = 0; i < clipItems.length; i++) {
+        if (clipItems[i].type.startsWith("image/")) {
+          const file = clipItems[i].getAsFile();
+          if (file) {
+            handleProcessLogoFile(file);
+            e.preventDefault();
+            break;
+          }
+        }
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (showLogoModal) {
+          setShowLogoModal(false);
+        } else if (showPreviewPopup) {
+          setShowPreviewPopup(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener("paste", handlePaste);
+    window.addEventListener("keydown", handleEsc);
+    return () => {
+      window.removeEventListener("paste", handlePaste);
+      window.removeEventListener("keydown", handleEsc);
+    };
+  }, [isOpen, showLogoModal, showPreviewPopup, onClose]);
 
   useEffect(() => {
     try {
@@ -385,7 +432,15 @@ export function ExportModal({
                               : "text-text-muted hover:text-text-primary hover:bg-surface-raised"
                           }`}
                         >
-                          <span>{preset.icon}</span>
+                          <span className="shrink-0">
+                            {preset.format === "docx" ? (
+                              <WordIcon size={16} />
+                            ) : preset.format === "pptx" ? (
+                              <PowerPointIcon size={16} />
+                            ) : (
+                              <PdfIcon size={16} />
+                            )}
+                          </span>
                           <span>{preset.label}</span>
                           <span className={`text-[10px] ${active ? "text-white/80" : "text-text-muted"}`}>
                             ({preset.sub.replace(/.*\((.*)\)/, "$1")})
@@ -416,33 +471,33 @@ export function ExportModal({
                     <div className="flex items-center gap-1.5">
                       <span className="font-semibold text-text-secondary">Logo Klien:</span>
                       {customerLogoDataUrl ? (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 rounded-md border border-surface-border bg-surface px-2 py-0.5 shadow-2xs">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={customerLogoDataUrl} alt="Logo customer" className="h-5 w-auto rounded border border-surface-border bg-white p-0.5" />
+                          <img src={customerLogoDataUrl} alt="Logo customer" className="h-5 w-auto max-w-[80px] rounded object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setShowLogoModal(true)}
+                            className="text-[11px] font-semibold text-accent-ink hover:underline"
+                          >
+                            Edit
+                          </button>
                           <button
                             type="button"
                             onClick={() => setCustomerLogoDataUrl("")}
-                            className="text-[11px] text-red-600 hover:underline"
+                            className="text-[12px] font-bold text-text-muted hover:text-red-500 px-0.5 transition-colors"
+                            title="Hapus logo"
                           >
-                            Hapus
+                            ✕
                           </button>
                         </div>
                       ) : (
-                        <label className="cursor-pointer rounded border border-dashed border-surface-border px-2 py-1 text-xs text-text-muted hover:border-accent hover:text-text-primary">
+                        <button
+                          type="button"
+                          onClick={() => setShowLogoModal(true)}
+                          className="cursor-pointer rounded border border-dashed border-surface-border px-2 py-1 text-xs text-text-muted hover:border-accent hover:text-text-primary transition-colors"
+                        >
                           + Upload logo
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              const reader = new FileReader();
-                              reader.onload = () => setCustomerLogoDataUrl(String(reader.result ?? ""));
-                              reader.readAsDataURL(file);
-                            }}
-                          />
-                        </label>
+                        </button>
                       )}
                     </div>
                   )}
@@ -618,7 +673,7 @@ export function ExportModal({
                               {/* Requirement Scope Box */}
                               <div className="rounded-lg bg-surface p-3 border-l-4 border-accent text-xs">
                                 <div className="font-semibold text-text-secondary text-[11px] uppercase tracking-wider mb-1 flex items-center gap-1">
-                                  <span>📋 Cakupan Ketentuan TOR:</span>
+                                  <span>Cakupan Ketentuan TOR:</span>
                                 </div>
                                 <p className="text-text-secondary italic leading-relaxed whitespace-pre-wrap">
                                   {it.requirement_text || "Tidak ada rincian TOR spesifik."}
@@ -781,6 +836,111 @@ export function ExportModal({
         </div>
       </div>
 
+      {/* ── MODAL UPLOAD / DRAG & DROP / PASTE LOGO ──────────────────────── */}
+      {showLogoModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-xl border border-surface-border bg-surface-raised p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-surface-border pb-3">
+              <h4 className="text-sm font-bold text-text-primary">Upload Logo Klien (Cover Proposal)</h4>
+              <button
+                type="button"
+                onClick={() => setShowLogoModal(false)}
+                className="rounded p-1 text-text-muted hover:bg-surface hover:text-text-primary"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {customerLogoDataUrl ? (
+              <div className="space-y-4 text-center">
+                <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-emerald-300/80 bg-emerald-50/40 p-5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={customerLogoDataUrl}
+                    alt="Pratinjau Logo"
+                    className="max-h-28 w-auto rounded border border-surface-border bg-white p-2 object-contain shadow-xs"
+                  />
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-800 mt-1">
+                    <CheckCircle2 size={14} className="text-emerald-600" />
+                    <span>Logo berhasil dimuat &amp; siap dipasang di Cover!</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLogoModal(false)}
+                    className="rounded-lg bg-ink-900 px-4 py-2 text-xs font-bold text-white shadow-subtle hover:bg-ink-800 transition-colors"
+                  >
+                    Gunakan Logo Ini
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerLogoDataUrl("")}
+                    className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors"
+                  >
+                    Ganti / Upload Lain
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Drag and Drop Zone */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleProcessLogoFile(file);
+                  }}
+                  className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-surface-border bg-surface/50 p-6 text-center transition-colors hover:border-accent"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-soft text-accent-ink">
+                    <UploadCloud size={20} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-text-primary">
+                      Tarik &amp; lepas file logo ke sini
+                    </p>
+                    <p className="text-[11px] text-text-muted mt-0.5">
+                      Mendukung PNG, JPEG, SVG, WebP transparan
+                    </p>
+                  </div>
+
+                  <div className="my-1 flex items-center gap-2 text-[10px] text-text-muted">
+                    <span className="h-px w-8 bg-surface-border" />
+                    <span>atau</span>
+                    <span className="h-px w-8 bg-surface-border" />
+                  </div>
+
+                  <label className="cursor-pointer rounded-md bg-[#111827] px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-black transition-colors">
+                    Pilih File dari Komputer
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleProcessLogoFile(file);
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {/* Paste Hint */}
+                <div className="rounded-lg bg-accent-soft/40 border border-accent/20 p-2.5 text-center text-xs text-accent-ink">
+                  <strong>Tips Cepat:</strong> Anda juga bisa langsung menekan <kbd className="rounded bg-surface px-1.5 py-0.5 font-mono text-[10px] font-bold shadow-xs">Ctrl + V</kbd> untuk menempel logo dari clipboard.
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── IN-APP DOCUMENT PREVIEW POPUP (No new browser tab!) ────────────── */}
       {showPreviewPopup && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-2 sm:p-6 backdrop-blur-md animate-in fade-in duration-150">
@@ -788,8 +948,8 @@ export function ExportModal({
             {/* Popup Header */}
             <div className="flex items-center justify-between border-b border-surface-border px-6 py-3 bg-white dark:bg-zinc-900">
               <div className="flex items-center gap-3">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/10 text-accent font-bold">
-                  📄
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/10">
+                  <WordIcon size={18} />
                 </span>
                 <div>
                   <h3 className="text-sm font-bold text-text-primary truncate max-w-md">
@@ -826,24 +986,27 @@ export function ExportModal({
               </div>
             </div>
 
-            {/* Quick Navigation Jump Bar */}
-            <div className="flex items-center gap-2 overflow-x-auto border-b border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 px-6 py-1.5 text-xs">
-              <span className="text-[11px] font-semibold text-text-muted shrink-0">Navigasi Cepat:</span>
+            {/* Quick Navigation Jump Bar (Comprehensive: Cover to Last Sub-Bab) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto border-b border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 px-4 sm:px-6 py-2 text-xs scrollbar-thin">
+              <span className="text-[11px] font-bold text-text-muted shrink-0 mr-1">Navigasi Cepat:</span>
               {[
                 { label: "Cover Depan", id: "preview-page-cover" },
                 { label: "Document Release", id: "preview-page-release" },
                 { label: "Pengakuan Kerahasiaan", id: "preview-page-nda" },
                 { label: "Daftar Isi", id: "preview-page-toc" },
-                { label: "Butir Solusi Teknis", id: "preview-page-content" },
+                ...targetItems.map((it) => ({
+                  label: it.title.replace(/\s*\[(teknis|umum|administrative|compliance|pricing)\]\s*/gi, "").trim(),
+                  id: `preview-item-${it.id}`,
+                })),
               ].map((link) => (
                 <button
                   key={link.id}
                   type="button"
                   onClick={() => {
                     const el = document.getElementById(link.id);
-                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
-                  className="px-2.5 py-0.5 rounded-full bg-white dark:bg-zinc-800 text-[11px] text-text-secondary hover:text-text-primary border border-slate-200 dark:border-zinc-700 hover:border-accent transition-colors shrink-0 shadow-xs"
+                  className="px-2.5 py-1 rounded-md bg-white dark:bg-zinc-800 text-[11px] text-text-secondary hover:text-text-primary hover:bg-accent-soft hover:text-accent-ink border border-slate-200 dark:border-zinc-700 hover:border-accent transition-colors shrink-0 shadow-2xs whitespace-nowrap"
                 >
                   {link.label}
                 </button>
@@ -1075,7 +1238,11 @@ export function ExportModal({
                       Dokumen Proposal Teknis ini beserta seluruh data pendukung, konfigurasi topologi perangkat, diagram arsitektur, dan spesifikasi solusi merupakan informasi rahasia serta hak kekayaan intelektual milik <strong className="text-slate-900">PT. Smartnet Magna Global</strong>.
                     </p>
                     <p>
-                      Dokumen ini diserahkan secara khusus dan terbatas kepada <strong className="text-slate-900">PT Chandra Sakti Utama Leasing (CSUL Finance)</strong> hanya untuk keperluan evaluasi teknis pengadaan. Pihak penerima dilarang keras menggandakan, menyebarluaskan, memperlihatkan kepada pihak ketiga, atau memanfaatkan sebagian maupun seluruh isi dokumen ini di luar tujuan evaluasi resmi tanpa persetujuan tertulis terlebih dahulu dari <strong className="text-slate-900">PT. Smartnet Magna Global</strong>.
+                      Dokumen ini diserahkan secara khusus dan terbatas kepada <strong className="text-slate-900">{
+                        documentTitle.toLowerCase().includes("smbc") ? "PT Bank SMBC Indonesia Tbk" :
+                        documentTitle.toLowerCase().includes("csul") ? "PT Chandra Sakti Utama Leasing (CSUL Finance)" :
+                        "Klien / Calon Pengguna Jasa"
+                      }</strong> hanya untuk keperluan evaluasi teknis pengadaan. Pihak penerima dilarang keras menggandakan, menyebarluaskan, memperlihatkan kepada pihak ketiga, atau memanfaatkan sebagian maupun seluruh isi dokumen ini di luar tujuan evaluasi resmi tanpa persetujuan tertulis terlebih dahulu dari <strong className="text-slate-900">PT. Smartnet Magna Global</strong>.
                     </p>
                     <p className="italic text-slate-500 pt-3 border-t border-slate-100">
                       Seluruh komitmen teknis, tata kelola SLA, dan metodologi implementasi yang diajukan tunduk pada ketentuan kontrak final yang akan disepakati bersama antara para pihak.
