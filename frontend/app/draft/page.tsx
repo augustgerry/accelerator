@@ -253,8 +253,6 @@ export default function DraftPage() {
         setPreviewImageModal(null);
         setIsRevisionMenuOpen(false);
         setIsExportOpen(false);
-        setIsAddSectionOpen(false);
-        setIsEditSectionOpen(false);
         setIsSizingOpen(false);
         setIsSectionModalOpen(false);
         setIsCoverageModalOpen(false);
@@ -351,6 +349,8 @@ export default function DraftPage() {
     summary: string;
   } | null>(null);
   const [previewingSection, setPreviewingSection] = useState<RequirementItem | null>(null);
+  const [modalRevisionPrompt, setModalRevisionPrompt] = useState("");
+  const [inlineEditorOpen, setInlineEditorOpen] = useState(false);
 
   // Real-time Drafting Progress Bar
   const [draftingProgress, setDraftingProgress] = useState<{ current: number; total: number; title: string } | null>(null);
@@ -2141,118 +2141,175 @@ export default function DraftPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {/* AI Discussion & Revision Input */}
-              <div className="rounded-xl border border-surface-border bg-surface-raised p-4 shadow-subtle">
-                <label className="block text-xs font-bold text-text-primary mb-1">
-                  Diskusikan / Minta Revisi AI terhadap Susunan Sub-Bab
-                </label>
-                <p className="text-[11px] text-text-muted mb-2.5">
-                  Ingin menambah fokus khusus? Berikan instruksi seperti: <span className="italic text-text-secondary">&ldquo;Tambahkan bab Disaster Recovery multi-cloud dan pisahkan SLA ke bab mandiri&rdquo;</span>
-                </p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={structureInstruction}
-                    onChange={(e) => setStructureInstruction(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleRefineStructure();
-                      }
-                    }}
-                    placeholder="Ketik instruksi revisi struktur di sini..."
-                    disabled={isRevisingStructure || isRecommendingStructure}
-                    className="flex-1 rounded-lg border border-surface-border bg-surface px-3.5 py-2 text-xs text-text-primary outline-none focus:border-accent transition-colors disabled:opacity-60"
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!structureInstruction.trim() || isRevisingStructure || isRecommendingStructure}
-                    onClick={handleRefineStructure}
-                    className="shrink-0 flex items-center gap-1.5 text-xs font-medium border-surface-border hover:border-accent"
-                  >
-                    {isRevisingStructure ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      <RefreshCw size={13} />
-                    )}
-                    <span>{isRevisingStructure ? "Menganalisis..." : "Sesuaikan AI"}</span>
-                  </Button>
+            {/* AI Discussion & Structure Customization Card */}
+            <div className="rounded-xl border border-surface-border bg-surface-raised p-4 shadow-subtle space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-text-primary">
+                    Diskusikan / Minta Revisi AI terhadap Susunan Sub-Bab
+                  </label>
+                  <p className="text-[11px] text-text-muted mt-0.5">
+                    Contoh: <span className="italic text-text-secondary">&ldquo;Tambahkan bab Disaster Recovery multi-cloud dan pisahkan SLA ke bab mandiri&rdquo;</span>
+                  </p>
                 </div>
-
-                {/* Hasil Perubahan AI / Structure Diff Alert (Poin 2) */}
-                {structureDiff && (
-                  <div className="mt-3 rounded-lg border border-emerald-300/80 bg-emerald-50/70 p-3 text-xs text-emerald-950 space-y-1.5 animate-in fade-in duration-200">
-                    <div className="flex items-center justify-between font-semibold">
-                      <span className="flex items-center gap-1.5 text-emerald-800">
-                        <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                        <span>Hasil Penyesuaian AI: &ldquo;{structureDiff.instruction}&rdquo;</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setStructureDiff(null)}
-                        className="text-[10px] text-emerald-700 hover:text-emerald-900 font-medium"
-                      >
-                        Tutup
-                      </button>
-                    </div>
-                    <div className="text-[11px] text-emerald-900 space-y-1">
-                      {structureDiff.added.length > 0 && (
-                        <p><strong>+ Sub-Bab Ditambahkan ({structureDiff.added.length}):</strong> {structureDiff.added.join(", ")}</p>
-                      )}
-                      {structureDiff.removed.length > 0 && (
-                        <p><strong>- Sub-Bab Disesuaikan/Digabung ({structureDiff.removed.length}):</strong> {structureDiff.removed.join(", ")}</p>
-                      )}
-                      <p className="text-emerald-800 italic mt-0.5">{structureDiff.summary}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Custom Reference Proposal Accordion */}
-              <div className="rounded-xl border border-surface-border bg-surface-raised shadow-subtle overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setReferenceAccordionOpen((open) => !open)}
-                  className="w-full flex items-center justify-between gap-2 p-4 text-left"
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all shrink-0 ${
+                    referenceAccordionOpen
+                      ? "border-accent bg-accent-soft text-accent-ink shadow-2xs"
+                      : "border-surface-border bg-surface text-text-secondary hover:border-accent hover:text-text-primary"
+                  }`}
                 >
-                  <span className="text-xs font-bold text-text-primary">Gunakan Pola Proposal Acuan (Opsional)</span>
+                  <FileText size={13} className="text-accent-ink" />
+                  <span>{referenceAccordionOpen ? "Tutup Acuan" : "+ Gunakan Pola Acuan"}</span>
                   <ChevronDown
-                    size={15}
-                    className={`shrink-0 text-text-muted transition-transform ${referenceAccordionOpen ? "rotate-180" : ""}`}
+                    size={13}
+                    className={`transition-transform duration-200 ${referenceAccordionOpen ? "rotate-180" : ""}`}
                   />
                 </button>
-                {referenceAccordionOpen && (
-                  <div className="border-t border-surface-border p-4 space-y-2.5 animate-in fade-in slide-in-from-bottom-1 duration-200">
-                    <p className="text-[11px] text-text-muted">
-                      Tempel outline proposal sebelumnya (mis. pola proposal CSUL) sebagai acuan gaya &amp; susunan bab.
-                    </p>
-                    <textarea
-                      value={customOutlineText}
-                      onChange={(e) => setCustomOutlineText(e.target.value)}
-                      placeholder={"1. Pendahuluan\n2. Lingkup Pekerjaan\n3. Metodologi\n..."}
-                      rows={5}
-                      disabled={isRecommendingStructure || isRevisingStructure}
-                      className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-accent transition-colors disabled:opacity-60 resize-y"
-                    />
+              </div>
+
+              {/* Input Revisi AI */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={structureInstruction}
+                  onChange={(e) => setStructureInstruction(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleRefineStructure();
+                    }
+                  }}
+                  placeholder="Ketik instruksi revisi struktur di sini..."
+                  disabled={isRevisingStructure || isRecommendingStructure}
+                  className="flex-1 rounded-lg border border-surface-border bg-surface px-3.5 py-2 text-xs text-text-primary outline-none focus:border-accent transition-colors disabled:opacity-60"
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!structureInstruction.trim() || isRevisingStructure || isRecommendingStructure}
+                  onClick={handleRefineStructure}
+                  className="shrink-0 flex items-center gap-1.5 text-xs font-medium border-surface-border hover:border-accent"
+                >
+                  {isRevisingStructure ? (
+                    <Loader2 size={13} className="animate-spin" />
+                  ) : (
+                    <RefreshCw size={13} />
+                  )}
+                  <span>{isRevisingStructure ? "Menganalisis..." : "Sesuaikan AI"}</span>
+                </Button>
+              </div>
+
+              {/* Custom Reference Proposal Dropdown Panel */}
+              {referenceAccordionOpen && (
+                <div className="rounded-lg border border-surface-border bg-surface p-3.5 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+                      <FileText size={13} className="text-accent-ink" /> Pola Outline Acuan Proposal (Opsional)
+                    </span>
+                    <span className="text-[10.5px] text-text-muted">
+                      Tempel outline proposal tender sebelumnya
+                    </span>
+                  </div>
+                  <textarea
+                    value={customOutlineText}
+                    onChange={(e) => setCustomOutlineText(e.target.value)}
+                    placeholder={"1. Pendahuluan & Gambaran Umum\n2. Solusi Teknis & Arsitektur\n3. Metodologi Implementasi\n4. SLA & Garansi Layanan\n..."}
+                    rows={4}
+                    disabled={isRecommendingStructure || isRevisingStructure}
+                    className="w-full rounded-lg border border-surface-border bg-surface-raised px-3 py-2 text-xs text-text-primary outline-none focus:border-accent transition-colors disabled:opacity-60 resize-y font-mono text-[11px]"
+                  />
+                  <div className="flex items-center justify-end gap-2">
                     <Button
                       variant="secondary"
                       size="sm"
+                      onClick={() => setReferenceAccordionOpen(false)}
+                      className="text-xs h-7 px-2.5"
+                    >
+                      Batal
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
                       disabled={!customOutlineText.trim() || isRecommendingStructure || isRevisingStructure}
                       onClick={handleApplyReferenceStructure}
-                      className="flex items-center gap-1.5 text-xs font-medium border-surface-border hover:border-accent"
+                      className="flex items-center gap-1.5 text-xs font-semibold h-7 px-3 bg-ink-900 text-white hover:bg-ink-800"
                     >
                       {isRecommendingStructure ? (
-                        <Loader2 size={13} className="animate-spin" />
+                        <Loader2 size={12} className="animate-spin" />
                       ) : (
-                        <RefreshCw size={13} />
+                        <RefreshCw size={12} />
                       )}
                       <span>Terapkan Acuan</span>
                     </Button>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* Hasil Perubahan AI / Structure Diff Alert — Pill Badges */}
+              {structureDiff && (
+                <div className="rounded-lg border border-emerald-300/80 bg-emerald-50/70 dark:bg-emerald-950/30 p-3 text-xs text-emerald-950 dark:text-emerald-200 space-y-2 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between font-semibold">
+                    <span className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300">
+                      <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                      <span>Hasil Penyesuaian AI: &ldquo;{structureDiff.instruction}&rdquo;</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setStructureDiff(null)}
+                      className="text-[10px] text-emerald-700 hover:text-emerald-900 font-medium px-1.5 py-0.5 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+                    >
+                      ✕ Tutup
+                    </button>
+                  </div>
+
+                  {structureDiff.added.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-[10.5px] font-semibold text-emerald-900 dark:text-emerald-300 flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-600"></span>
+                        <span>Sub-Bab Ditambahkan ({structureDiff.added.length}):</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {structureDiff.added.map((item, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 shadow-2xs"
+                          >
+                            + {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {structureDiff.removed.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-[10.5px] font-semibold text-amber-900 dark:text-amber-300 flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-600"></span>
+                        <span>Sub-Bab Disesuaikan / Digabung ({structureDiff.removed.length}):</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {structureDiff.removed.map((item, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-100/80 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700 shadow-2xs"
+                          >
+                            − {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {structureDiff.summary && (
+                    <p className="text-emerald-800 dark:text-emerald-400 italic text-[11px] pt-0.5">
+                      {structureDiff.summary}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Recommended Sub-Bab Cards */}
@@ -2267,15 +2324,6 @@ export default function DraftPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleAddProductBreakdownToCuration}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors shadow-subtle"
-                    title="Sisipkan sub-bab spesifikasi teknis produk (Pure Storage / HCI, DRR, HA SAN Fabric, dll.)"
-                  >
-                    <Boxes size={13} className="text-amber-600 dark:text-amber-400" />
-                    <span>+ Breakdown Produk Solusi</span>
-                  </button>
                   <button
                     type="button"
                     onClick={handleOpenAddCurationSection}
@@ -2674,7 +2722,7 @@ export default function DraftPage() {
           {/* Split Workspace */}
           <div className="flex flex-1 min-h-0 h-full overflow-hidden">
             {/* LEFT COLUMN: REQUIREMENTS NAVIGATOR / CHECKLIST */}
-            <div className="flex w-full md:w-[300px] lg:w-[340px] flex-col border-r border-surface-border bg-surface-raised h-full min-h-0">
+            <div className="flex w-full md:w-[360px] lg:w-[420px] xl:w-[450px] flex-col border-r border-surface-border bg-surface-raised h-full min-h-0 shrink-0">
               {/* Search & Filters (Compact) */}
               <div className="border-b border-surface-border p-2.5 space-y-2">
                 <div className="relative">
@@ -2916,24 +2964,15 @@ export default function DraftPage() {
                 )}
               </div>
 
-              {/* Bottom Add Section affordance — Compact 2-column layout */}
-              <div className="p-2 border-t border-surface-border bg-surface/50 grid grid-cols-2 gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleAddProductBreakdownSections}
-                  className="flex items-center justify-center gap-1 rounded-md border border-amber-300 dark:border-amber-700/60 bg-amber-50/70 dark:bg-amber-950/20 py-1.5 px-1 text-[11px] font-semibold text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all shadow-2xs truncate"
-                  title="Sisipkan sub-bab spesifikasi teknis produk (Pure Storage RC20, DRR, SAN HA Fabric)"
-                >
-                  <Boxes size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                  <span className="truncate">+ Pure/HCI</span>
-                </button>
+              {/* Bottom Add Section affordance */}
+              <div className="p-2 border-t border-surface-border bg-surface/50 shrink-0">
                 <button
                   type="button"
                   onClick={handleOpenAddSection}
-                  className="flex items-center justify-center gap-1 rounded-md border border-dashed border-surface-border bg-surface py-1.5 px-1 text-[11px] font-semibold text-text-secondary hover:border-accent hover:text-text-primary hover:bg-accent-soft/30 transition-all truncate"
+                  className="w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed border-surface-border bg-surface py-2 px-3 text-xs font-semibold text-text-secondary hover:border-accent hover:text-text-primary hover:bg-accent-soft/30 transition-all shadow-2xs"
                 >
-                  <Plus size={12} className="text-accent-ink shrink-0" />
-                  <span className="truncate">+ Bagian Baru</span>
+                  <Plus size={13} className="text-accent-ink shrink-0" />
+                  <span>+ Tambah Bagian Baru</span>
                 </button>
               </div>
             </div>
@@ -2951,7 +2990,7 @@ export default function DraftPage() {
                         <select
                           value={selectedItem.id}
                           onChange={(e) => selectItem(e.target.value)}
-                          className="rounded-md border border-surface-border bg-surface px-2 py-1 text-xs text-text-primary font-semibold outline-none focus:border-accent max-w-[220px] sm:max-w-[320px] truncate"
+                          className="rounded-md border border-surface-border bg-surface px-2 py-1 text-[11px] text-text-primary font-semibold outline-none focus:border-accent w-40 sm:w-52 truncate"
                           title="Navigasi Cepat Bab: Lompat langsung ke sub-bab manapun"
                         >
                           {items.map((it, idx) => (
@@ -3251,49 +3290,96 @@ export default function DraftPage() {
                             </div>
                           </div>
                         ) : (
-                          <div className="relative">
-                            {showMarkdownPreview && localDraftText.trim() ? (
-                              <div className="min-h-[13rem] w-full rounded-lg border border-surface-border bg-surface p-4 text-xs leading-relaxed text-text-primary animate-in fade-in duration-150">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
-                                  {cleanLatexMath(localDraftText)}
-                                </ReactMarkdown>
+                          <div className="space-y-3">
+                            {!inlineEditorOpen ? (
+                              <div className="rounded-lg border border-surface-border bg-surface p-3.5 space-y-3">
+                                {/* Snippet Preview with subtle fade */}
+                                <div className="relative max-h-28 overflow-hidden rounded-md text-xs leading-relaxed text-text-primary">
+                                  <div className="line-clamp-4 font-normal text-text-primary">
+                                    {cleanDraftMarkdown(localDraftText)}
+                                  </div>
+                                  <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-surface to-transparent pointer-events-none" />
+                                </div>
+
+                                {/* Action Buttons: Full Modal Preview & Revision vs Inline Edit */}
+                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-surface-border/60">
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={() => setPreviewingSection(selectedItem)}
+                                      className="bg-ink-900 text-white hover:bg-ink-800 text-xs font-semibold h-7 px-3 flex items-center gap-1.5 shadow-2xs"
+                                    >
+                                      <Eye size={13} className="text-accent" />
+                                      <span>Lihat Selengkapnya &amp; Review Penuh</span>
+                                    </Button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setInlineEditorOpen(true)}
+                                      className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary px-2 py-1 rounded hover:bg-surface-raised transition-colors"
+                                    >
+                                      <Pencil size={11} />
+                                      <span>Edit Teks Langsung</span>
+                                    </button>
+                                  </div>
+                                  <span className="text-[11px] text-text-muted">
+                                    {localDraftText.split(/\s+/).filter(Boolean).length} kata · {localDraftText.length} karakter
+                                  </span>
+                                </div>
                               </div>
                             ) : (
-                              <textarea
-                                value={localDraftText}
-                                onChange={(e) => {
-                                  const text = e.target.value;
-                                  setLocalDraftText(text);
-                                  draftDebounceRef.current.itemId = selectedItem.id;
-                                  draftDebounceRef.current.text = text;
-                                  if (draftDebounceRef.current.timer) clearTimeout(draftDebounceRef.current.timer);
-                                  draftDebounceRef.current.timer = setTimeout(() => {
-                                    handleTextChange(selectedItem.id, text);
-                                    draftDebounceRef.current.timer = null;
-                                    draftDebounceRef.current.itemId = null;
-                                  }, 200);
-                                }}
-                                onBlur={() => {
-                                  if (draftDebounceRef.current.timer) {
-                                    clearTimeout(draftDebounceRef.current.timer);
-                                    draftDebounceRef.current.timer = null;
-                                    draftDebounceRef.current.itemId = null;
-                                    handleTextChange(selectedItem.id, localDraftText);
-                                  }
-                                }}
-                                placeholder="Klik 'Buat Draf AI' atau ketik langsung konten bagian proposal di sini..."
-                                rows={10}
-                                className={`w-full rounded-lg border p-4 text-xs leading-relaxed text-text-primary outline-none focus:border-accent font-sans transition-colors duration-700 resize-y ${
-                                  justGeneratedId === selectedItem.id
-                                    ? "border-accent bg-accent-soft/30"
-                                    : "border-surface-border bg-surface"
-                                }`}
-                              />
-                            )}
-                            {localDraftText && (
-                              <div className="mt-1 flex justify-end text-[11px] text-text-muted">
-                                {localDraftText.split(/\s+/).filter(Boolean).length} kata ·{" "}
-                                {localDraftText.length} karakter
+                              <div className="relative space-y-2">
+                                <div className="flex items-center justify-between px-1">
+                                  <span className="text-[11px] font-semibold text-text-muted">Editor Teks Langsung</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setInlineEditorOpen(false)}
+                                    className="text-[11px] text-accent-ink hover:underline font-medium"
+                                  >
+                                    Ciutkan Tampilan ↑
+                                  </button>
+                                </div>
+                                {showMarkdownPreview ? (
+                                  <div className="min-h-[13rem] w-full rounded-lg border border-surface-border bg-surface p-4 text-xs leading-relaxed text-text-primary animate-in fade-in duration-150">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
+                                      {cleanLatexMath(localDraftText)}
+                                    </ReactMarkdown>
+                                  </div>
+                                ) : (
+                                  <textarea
+                                    value={localDraftText}
+                                    onChange={(e) => {
+                                      const text = e.target.value;
+                                      setLocalDraftText(text);
+                                      draftDebounceRef.current.itemId = selectedItem.id;
+                                      draftDebounceRef.current.text = text;
+                                      if (draftDebounceRef.current.timer) clearTimeout(draftDebounceRef.current.timer);
+                                      draftDebounceRef.current.timer = setTimeout(() => {
+                                        handleTextChange(selectedItem.id, text);
+                                        draftDebounceRef.current.timer = null;
+                                        draftDebounceRef.current.itemId = null;
+                                      }, 200);
+                                    }}
+                                    onBlur={() => {
+                                      if (draftDebounceRef.current.timer) {
+                                        clearTimeout(draftDebounceRef.current.timer);
+                                        draftDebounceRef.current.timer = null;
+                                        draftDebounceRef.current.itemId = null;
+                                        handleTextChange(selectedItem.id, localDraftText);
+                                      }
+                                    }}
+                                    placeholder="Klik 'Buat Draf AI' atau ketik langsung konten bagian proposal di sini..."
+                                    rows={8}
+                                    className={`w-full rounded-lg border p-4 text-xs leading-relaxed text-text-primary outline-none focus:border-accent font-sans transition-colors duration-700 resize-y ${
+                                      justGeneratedId === selectedItem.id
+                                        ? "border-accent bg-accent-soft/30"
+                                        : "border-surface-border bg-surface"
+                                    }`}
+                                  />
+                                )}
+                                <div className="flex justify-end text-[11px] text-text-muted">
+                                  {localDraftText.split(/\s+/).filter(Boolean).length} kata · {localDraftText.length} karakter
+                                </div>
                               </div>
                             )}
                           </div>
@@ -4219,117 +4305,213 @@ export default function DraftPage() {
       )}
 
       {/* Eye Preview Modal Portal for Sub-Bab (Point 3) */}
-      {previewingSection && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div
-            className="fixed inset-0"
-            onClick={() => setPreviewingSection(null)}
-          />
-          <div className="relative z-10 flex flex-col w-full max-w-2xl max-h-[85vh] rounded-xl border border-surface-border bg-surface-raised shadow-panel overflow-hidden animate-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-surface-border px-5 py-3.5 bg-surface">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-ink text-xs font-bold">
-                  <Eye size={15} />
-                </span>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-bold text-text-primary truncate">
-                    {previewingSection.title}
-                  </h3>
-                  <div className="flex items-center gap-2 text-[11px] text-text-muted">
-                    <span className="font-mono">{previewingSection.id.toUpperCase()}</span>
-                    <span>·</span>
-                    <span>{previewingSection.category}</span>
+      {/* Eye Preview Modal Portal for Sub-Bab with Live AI Revision Studio (Poin 5) */}
+      {previewingSection && typeof document !== "undefined" && (() => {
+        const liveSection = items.find((i) => i.id === previewingSection.id) || previewingSection;
+        return createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+            <div
+              className="fixed inset-0"
+              onClick={() => setPreviewingSection(null)}
+            />
+            <div className="relative z-10 flex flex-col w-full max-w-3xl max-h-[90vh] rounded-xl border border-surface-border bg-surface-raised shadow-panel overflow-hidden animate-in zoom-in-95 duration-150">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-surface-border px-5 py-3.5 bg-surface">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-ink text-xs font-bold">
+                    <Eye size={15} />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-text-primary truncate">
+                      {liveSection.title}
+                    </h3>
+                    <div className="flex items-center gap-2 text-[11px] text-text-muted">
+                      <span className="font-mono">{liveSection.id.toUpperCase()}</span>
+                      <span>·</span>
+                      <span>{liveSection.category}</span>
+                      {liveSection.isGenerating && (
+                        <>
+                          <span>·</span>
+                          <span className="inline-flex items-center gap-1 text-accent-ink font-semibold animate-pulse">
+                            <Loader2 size={11} className="animate-spin" /> Sedang Streaming AI...
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewingSection(null)}
-                className="rounded-lg p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary transition-colors cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs text-text-primary">
-              {/* Tujuan Bagian Ini */}
-              <div className="rounded-lg border border-surface-border bg-surface p-3.5 space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                  Tujuan & Ruang Lingkup Bagian Ini
-                </span>
-                <p className="text-xs text-text-primary leading-relaxed">
-                  {previewingSection.requirement_text}
-                </p>
-              </div>
-
-              {/* Draf Isi Proposal */}
-              <div className="rounded-lg border border-surface-border bg-surface p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
-                    <Sparkles size={12} className="text-accent-ink" /> Isi Draf Proposal
-                  </span>
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                    previewingSection.status === "final"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : previewingSection.status === "draft"
-                      ? "bg-amber-50 text-amber-700 border border-amber-200"
-                      : "bg-slate-100 text-slate-600 border border-slate-200"
-                  }`}>
-                    Status: {previewingSection.status.toUpperCase()}
-                  </span>
-                </div>
-
-                {previewingSection.draft_text ? (
-                  <div className="prose prose-xs max-w-none text-text-primary font-normal leading-relaxed overflow-x-auto">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={markdownPreviewComponents}
-                    >
-                      {cleanDraftMarkdown(previewingSection.draft_text)}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  <div className="py-6 text-center text-text-muted italic bg-surface-raised/50 rounded border border-dashed border-surface-border">
-                    Draf untuk bagian ini belum digenerate oleh AI.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex items-center justify-between border-t border-surface-border px-5 py-3 bg-surface">
-              <span className="text-[11px] text-text-muted">
-                {previewingSection.sources?.length ? `${previewingSection.sources.length} sumber grounding` : "Belum ada grounding"}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
+                <button
+                  type="button"
                   onClick={() => setPreviewingSection(null)}
-                  className="text-xs h-8 px-3"
+                  className="rounded-lg p-1.5 text-text-muted hover:bg-surface-raised hover:text-text-primary transition-colors cursor-pointer"
+                  title="Tutup (Esc)"
                 >
-                  Tutup
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    selectItem(previewingSection.id);
-                    setPreviewingSection(null);
-                  }}
-                  className="bg-ink-900 text-white hover:bg-ink-800 text-xs font-semibold h-8 px-3.5 shadow-subtle flex items-center gap-1.5"
-                >
-                  <Pencil size={12} className="text-accent" />
-                  Buka &amp; Edit di Studio
-                </Button>
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs text-text-primary">
+                {/* Interactive AI Revision Input Card inside Modal */}
+                <div className="rounded-xl border border-accent/40 bg-accent-soft/25 p-3.5 space-y-2.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+                      <Sparkles size={13} className="text-accent-ink" /> Minta Revisi AI untuk Bab Ini
+                    </span>
+                    {liveSection.isGenerating && (
+                      <span className="flex items-center gap-1.5 text-[11px] font-semibold text-accent-ink">
+                        <Loader2 size={12} className="animate-spin" /> Menulis revisi langsung...
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={modalRevisionPrompt}
+                      onChange={(e) => setModalRevisionPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey && modalRevisionPrompt.trim() && !liveSection.isGenerating) {
+                          e.preventDefault();
+                          handleStreamGenerate(liveSection.id, modalRevisionPrompt);
+                          setModalRevisionPrompt("");
+                        }
+                      }}
+                      placeholder="Instruksi revisi, misal: 'Tambahkan tabel matriks SLA dan rincian garansi 3 tahun'..."
+                      disabled={liveSection.isGenerating}
+                      className="flex-1 rounded-lg border border-surface-border bg-surface px-3 py-2 text-xs text-text-primary outline-none focus:border-accent transition-colors disabled:opacity-60"
+                    />
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={!modalRevisionPrompt.trim() || liveSection.isGenerating}
+                      onClick={() => {
+                        handleStreamGenerate(liveSection.id, modalRevisionPrompt);
+                        setModalRevisionPrompt("");
+                      }}
+                      className="shrink-0 bg-ink-900 text-white hover:bg-ink-800 text-xs font-semibold h-8 px-3.5 flex items-center gap-1.5"
+                    >
+                      {liveSection.isGenerating ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={12} />
+                      )}
+                      <span>Revisi AI</span>
+                    </Button>
+                  </div>
+
+                  {/* Quick revision pills */}
+                  <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                    <span className="text-[10px] text-text-muted mr-1">Revisi Cepat:</span>
+                    {[
+                      "Perdalam Teknis & Komponen",
+                      "Buat Format Tabel Matriks",
+                      "Perjelas SLA & Garansi",
+                      "Gaya Bahasa Formal BUMN",
+                      "Ringkas & Padat",
+                    ].map((pill) => (
+                      <button
+                        key={pill}
+                        type="button"
+                        disabled={liveSection.isGenerating}
+                        onClick={() => {
+                          handleStreamGenerate(liveSection.id, pill);
+                        }}
+                        className="rounded-full border border-surface-border bg-surface px-2 py-0.5 text-[10px] text-text-secondary hover:border-accent hover:text-text-primary hover:bg-accent-soft/40 transition-colors disabled:opacity-50"
+                      >
+                        + {pill}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tujuan Bagian Ini */}
+                <div className="rounded-lg border border-surface-border bg-surface p-3.5 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                    Tujuan &amp; Ruang Lingkup Bagian Ini
+                  </span>
+                  <p className="text-xs text-text-primary leading-relaxed">
+                    {liveSection.requirement_text}
+                  </p>
+                </div>
+
+                {/* Draf Isi Proposal */}
+                <div className="rounded-lg border border-surface-border bg-surface p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
+                      <Sparkles size={12} className="text-accent-ink" /> Hasil Draf Proposal (Live Update)
+                    </span>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                      liveSection.status === "final"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : liveSection.status === "draft"
+                        ? "bg-amber-50 text-amber-700 border border-amber-200"
+                        : "bg-slate-100 text-slate-600 border border-slate-200"
+                    }`}>
+                      Status: {liveSection.status.toUpperCase()}
+                    </span>
+                  </div>
+
+                  {liveSection.draft_text ? (
+                    <div className="prose prose-xs max-w-none text-text-primary font-normal leading-relaxed overflow-x-auto">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={markdownPreviewComponents}
+                      >
+                        {cleanDraftMarkdown(liveSection.draft_text)}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center text-text-muted italic bg-surface-raised/50 rounded border border-dashed border-surface-border space-y-2">
+                      <p>Draf untuk bagian ini belum digenerate oleh AI.</p>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleStreamGenerate(liveSection.id, customPrompt)}
+                        className="bg-ink-900 text-white hover:bg-ink-800 text-xs font-semibold px-3 py-1.5"
+                      >
+                        <Sparkles size={12} className="mr-1.5" />
+                        Buat Draf Sekarang
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-between border-t border-surface-border px-5 py-3 bg-surface">
+                <span className="text-[11px] text-text-muted">
+                  {liveSection.draft_text ? `${liveSection.draft_text.split(/\s+/).filter(Boolean).length} kata · ` : ""}
+                  {liveSection.sources?.length ? `${liveSection.sources.length} sumber grounding` : "Belum ada grounding"}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setPreviewingSection(null)}
+                    className="text-xs h-8 px-3"
+                  >
+                    Selesai / Tutup
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      selectItem(liveSection.id);
+                      setPreviewingSection(null);
+                    }}
+                    className="bg-ink-900 text-white hover:bg-ink-800 text-xs font-semibold h-8 px-3.5 shadow-subtle flex items-center gap-1.5"
+                  >
+                    <Pencil size={12} className="text-accent" />
+                    Buka &amp; Edit di Studio
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body
+        );
+      })()}
     </div>
   );
 }
